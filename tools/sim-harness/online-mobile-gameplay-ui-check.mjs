@@ -160,6 +160,12 @@ try {
       [],
       `${width}px 順位表の見出しが1文字ずつに割れる`,
     );
+    // ⚠ ゲーム差の列は幅の狭いスマホ（370px 以下）では出さない（長い球団名が割れる。監査 2026-11-20）
+    assert.equal(
+      await page.locator('.online-standings thead th.online-standings-gap').first().isVisible(),
+      width > 370,
+      `${width}px 順位表の「差」の列の出し分けが違う`,
+    );
     await page.getByRole('button', { name: '打順', exact: true }).click();
     await page.getByRole('button', { name: '方針・采配', exact: true }).click();
     let panel = page.getByRole('dialog', { name: '方針・采配', exact: true });
@@ -358,6 +364,19 @@ try {
       ),
       `${width}px 個人成績に経過切替を追加しても縦に収まる（スコアボードの分を除く）`,
     );
+    // ⚠ 個人成績の高さの床（タブを変えても高さを変えない）は**PCだけ**。スマホはページ送りで
+    //    行数が決まっているので当てない（2026-11-20 監査: 測った床がスマホにも当たっていた。
+    //    床は描き直したときに測るので、球団を切り替えてから見る）
+    {
+      const teamTabs = box.locator('[aria-label="試合成績の球団"] button');
+      await teamTabs.last().click();
+      await teamTabs.first().click();
+      assert.equal(
+        await box.locator('.online-record-area').evaluate((n) => n.style.minHeight),
+        '',
+        `${width}px スマホの個人成績に高さの床が当たっている`,
+      );
+    }
     await box.getByRole('button', { name: '試合経過', exact: true }).click();
     const progress = box.getByRole('region', { name: '試合経過', exact: true });
     await progress.waitFor();

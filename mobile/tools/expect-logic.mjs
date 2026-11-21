@@ -8,6 +8,8 @@ import {
   plannedPicks, weightedRanked, DEFAULT_WEIGHTS, addToPlan, removeFromPlan, shiftInPlan, moveInPlan, planSummary,
   signTotal, wishedCount, minimumShort,
 } from '../../src/online/tryoutPlan.js';
+import { pitchingFromLineup, reliefGroups, moveRelief, reliefOrderOf } from '../../src/online/pitchingEdit.js';
+import { planRest } from '../../src/online/restPlan.js';
 
 const view = JSON.parse(fs.readFileSync(new URL('../shared/src/jvmTest/resources/view-running.json', import.meta.url)));
 const roster = view.roster;
@@ -46,7 +48,66 @@ const fewPitchers = (() => {
   const pool = roster.slice(11);
   return planSummary(weightedRanked(pool, DEFAULT_WEIGHTS, own), pool, pool.length, own);
 })();
-const text = JSON.stringify({ camp, wish, recommended, tryout: { ranked, picks, added, removed, shifted, moved, totals, shorts, blocking: summary.blocking, warnings: summary.warnings, warningCases: [fullStaff.warnings, fewPitchers.warnings] } });
+// 救援の同じ役割の中の順番（いしだ 2026-11-20。PC の投手起用の▲▼）。見本の球団は役割が1人ずつなので、
+// 同じ役割に3人・2人を置き、保存した順（名簿に居ない id を混ぜる）から始める
+const reliefIds = (state) => reliefGroups(state, roster).map((g) => [g.role, g.players.map((p) => p.id)]);
+const relief = (() => {
+  const roles = { ...view.lineup.pitcherRoles };
+  const byRole = (role) => Object.keys(roles).filter((id) => roles[id] === role).map(Number);
+  const [setupA] = byRole('setup');
+  const [aceRelief] = byRole('ace_relief');
+  const [long] = byRole('long');
+  const [behind] = byRole('behind');
+  const [mopup] = byRole('mopup');
+  roles[aceRelief] = 'setup';
+  roles[long] = 'setup';
+  roles[mopup] = 'behind';
+  const lineup = { ...view.lineup, pitcherRoles: roles, pitcherOrder: [long, 1, mopup] };
+  const plain = pitchingFromLineup(view.lineup, roster);
+  const start = pitchingFromLineup(lineup, roster);
+  const moves = [
+    [setupA, -1], [long, -1], [long, 1], [aceRelief, 1], [behind, -1], [mopup, 1], [setupA, 1],
+  ];
+  let state = start;
+  const steps = moves.map(([id, delta]) => {
+    state = moveRelief(state, id, delta, roster);
+    return { id, delta, order: state.order, groups: reliefIds(state) };
+  });
+  return {
+    roles,
+    saved: lineup.pitcherOrder,
+    plainOrder: plain.order,
+    startOrder: start.order,
+    startGroups: reliefIds(start),
+    steps,
+    // 保存の順の整え方（名簿に居ない id は落とし、載っていない選手は名簿の並びで後ろへ）
+    tidy: [reliefOrderOf(undefined, roster.slice(0, 4)), reliefOrderOf([roster[3].id, 5, roster[1].id], roster.slice(0, 4))],
+  };
+})();
+// 疲れた野手を休ませる守備の組み直し（`planRest`）。保存済みの打順の野手8人のうち、
+// 1人ずつ疲労100・2人ずつ疲労100と130・全員疲労90 にした場面（ほかの先発は疲労0、控えはそのまま）
+const field = view.lineup.battingOrder.filter((e) => e.position !== 'pitcher');
+const inOrder = new Set(view.lineup.battingOrder.map((e) => e.playerId));
+const restBench = roster.filter((p) => !inOrder.has(p.id));
+const restCase = (levels, leaving = null) => {
+  const starters = field.map((e, i) => ({
+    player: { ...roster.find((p) => p.id === e.playerId), fatigue: levels[i] ?? 0 },
+    position: e.position,
+  }));
+  const plan = planRest(starters, restBench, leaving);
+  return plan && { resting: plan.resting, assign: Object.fromEntries([...plan.assign].map(([id, pos]) => [String(id), pos])) };
+};
+const restPlans = [];
+for (let i = 0; i < field.length; i += 1) restPlans.push(restCase(field.map((_, j) => (j === i ? 100 : 0))));
+for (let i = 0; i < field.length; i += 1)
+  for (let j = i + 1; j < field.length; j += 1) restPlans.push(restCase(field.map((_, k) => (k === i ? 100 : k === j ? 130 : 0))));
+restPlans.push(restCase(field.map(() => 90)));
+// 二刀流の先発の日（i 番目の野手がその日の先発として抜け、j 番目が疲労100）
+const restPlansTwoWay = [];
+for (let i = 0; i < field.length; i += 1)
+  for (let j = 0; j < field.length; j += 1)
+    if (i !== j) restPlansTwoWay.push(restCase(field.map((_, k) => (k === j ? 100 : 0)), field[i].playerId));
+const text = JSON.stringify({ restPlans, restPlansTwoWay, camp, wish, recommended, relief, tryout: { ranked, picks, added, removed, shifted, moved, totals, shorts, blocking: summary.blocking, warnings: summary.warnings, warningCases: [fullStaff.warnings, fewPitchers.warnings] } });
 // --check: 書き出し済みの期待値が今の Web 版の答えと同じか（CI で、Web 版だけ直したときに気づく）
 if (process.argv.includes('--check')) {
   const file = new URL('../shared/src/jvmTest/resources/logic-expected.json', import.meta.url);

@@ -1668,7 +1668,7 @@ const DateProgressContent = ({ seasonData, setSeasonData, onForceEvent, onSetupM
       reports.push({ icon: '💨', text: `チーム盗塁${totalSB}個と機動力が武器になっている。足を活かした攻撃を続けたい。`, color: 'text-green-300' });
     }
 
-    // --- 疲労蓄積の警告（疲労50超で出場すると成長率が下がる） ---
+    // --- 疲労蓄積の警告（疲労41以上で出場すると出場による変動が下がり、自然成長が早く衰える側へずれる。`getFatigueGrowthPenalty`） ---
     const fatigueWarnings = [];
     players.forEach(p => {
       const fatigue = p.fatigue || 0;
@@ -1684,15 +1684,15 @@ const DateProgressContent = ({ seasonData, setSeasonData, onForceEvent, onSetupM
 
     if (fatigueWarnings.some(w => w.level === 'critical')) {
       const names = fatigueWarnings.filter(w => w.level === 'critical').map(w => w.name).join('、');
-      reports.push({ icon: '🚨', text: `${names}の疲労が限界を超えている。出場させると成長率が大幅に低下する。`, color: 'text-red-500' });
+      reports.push({ icon: '🚨', text: `${names}の疲労が限界を超えている。出場させると自然成長が大きく下がる。`, color: 'text-red-500' });
     }
     if (fatigueWarnings.some(w => w.level === 'danger')) {
       const names = fatigueWarnings.filter(w => w.level === 'danger').map(w => w.name).join('、');
-      reports.push({ icon: '⚠️', text: `${names}の疲労が蓄積している。出場ごとに成長率が低下している。`, color: 'text-orange-400' });
+      reports.push({ icon: '⚠️', text: `${names}の疲労が蓄積している。出場ごとに自然成長が下がっている。`, color: 'text-orange-400' });
     }
     if (fatigueWarnings.some(w => w.level === 'warning')) {
       const names = fatigueWarnings.filter(w => w.level === 'warning').map(w => w.name).join('、');
-      reports.push({ icon: '💤', text: `${names}の疲労が蓄積しつつある。もうすぐ成長率低下ラインに達する。`, color: 'text-yellow-400' });
+      reports.push({ icon: '💤', text: `${names}の疲労が蓄積しつつある。もうすぐ出場で自然成長が下がる段に入る。`, color: 'text-yellow-400' });
     }
 
     return reports;

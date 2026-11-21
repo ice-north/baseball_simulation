@@ -47,6 +47,15 @@ class EventNoticeTest {
         assertTrue(camp.body.contains("第2クール / 全4クール"))
     }
 
+    /** 年度更新の通知は「その年のまとめ」へ案内する（オフの成長の画面は 2026-11-20 にやめた。2026-11-20 監査） */
+    @Test
+    fun yearEndPointsToYearSummary() {
+        val notice = events(""""lastOffseason":{"year":2027,"departed":[{"name":"a"},{"name":"b"}]}""").single()
+        assertEquals("年度更新が終わりました", notice.title)
+        assertEquals("引退・退団 2人\n順位・入退団は手続きの「その年のまとめ」で見られます", notice.body)
+        assertTrue("伸び" !in notice.body && "オフの成長" !in notice.body)
+    }
+
     @Test
     fun tradeOffersAndCounters() {
         val offer = events(""""trades":[{"id":"t1","mine":false,"fromTeam":"美瑛","toTeam":"津田沼","myTurn":true,

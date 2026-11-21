@@ -97,3 +97,17 @@ private val SHORT_LABELS = mapOf(
 )
 
 fun shortLabel(text: String): String = SHORT_LABELS[text] ?: if (text.length > 5) text.take(4) else text
+
+/** 生成のときに積んでいた仮の高校の名前。Web 版 `src/utils/careerHistory.js` の `PLACEHOLDER_HIGH_SCHOOL` と同じ */
+const val PLACEHOLDER_HIGH_SCHOOL = "高校卒"
+
+/**
+ * 経歴から、名前の付いた高校と並んでいる仮の「高校卒」を外す（Web 版 `withoutPlaceholderHighSchool` の写し）。
+ * ⚠ 古いリーグには「〇〇高 → 高校卒」と2つ並んだ経歴が残っている（保存は直さず、出すときに外す）。
+ *    高校が仮の1つだけなら残す。
+ */
+fun <T> withoutPlaceholderHighSchool(history: List<T>, type: (T) -> String?, label: (T) -> String?): List<T> {
+    val placeholder = { h: T -> type(h) == "highschool" && label(h) == PLACEHOLDER_HIGH_SCHOOL }
+    val named = history.any { type(it) == "highschool" && !placeholder(it) }
+    return if (named) history.filterNot(placeholder) else history
+}

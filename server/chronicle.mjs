@@ -13,6 +13,7 @@ import {
   PYRAMID_LEAGUES,
   standingsByLeague,
   compareLeagueStanding,
+  withWinRate,
   PROMOTION_PLACES,
   RELEGATION_FROM_BOTTOM,
 } from '../src/online/pyramidLeague.js';
@@ -482,7 +483,7 @@ export function teamSeasons(league, teamName) {
       //    保存の並びのままだと、同率で終わった年に「5位・降格」のように食い違う
       const table = h.standings
         .filter((s) => h.leagues[s.team] === leagueId)
-        .map((s) => ({ ...s, winRate: s.winRate ?? (s.wins + s.losses > 0 ? s.wins / (s.wins + s.losses) : 0) }))
+        .map(withWinRate)
         .sort(compareLeagueStanding);
       rank = table.findIndex((s) => s.team === teamName) + 1;
     }

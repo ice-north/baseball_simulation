@@ -383,13 +383,14 @@ export function pyramidSeasonSchedule(teams, { year, turns = SEASON_TURNS } = {}
 }
 
 /**
- * 順位表をリーグごとの並び（1位から最下位）に分ける。
- *
- * ⚠ **順位表は全球団を通した並び**（勝率順）なので、そのままでは
- *    「2部の1位」が分からない。リーグで絞り直してから順位を見ること。
- * ⚠ 最後に球団名まで見て並びを決める。勝率も勝利数も並んだとき、
- *    順序が実行のたびに変わると昇降格の相手が変わってしまう。
+ * 勝率の無い行（古い年度の記録）に勝率を補う。並べる前に通すこと（`compareLeagueStanding` は勝率で並べる）。
+ * ⚠ 画面（リーグ史）とサーバー（球団史の年表）で同じものを使う（監査 2026-11-20）
  */
+export const withWinRate = (s) => ({
+  ...s,
+  winRate: s.winRate ?? (s.wins + s.losses > 0 ? s.wins / (s.wins + s.losses) : 0),
+});
+
 /**
  * 部の中の並べ方（昇降格を決める順）。勝率→勝利数→球団名。
  * ⚠ 順位表の画面もこれで並べること。全体の並び（勝率→勝利数）のまま出すと、
@@ -405,6 +406,14 @@ export function compareLeagueStanding(sa = {}, sb = {}) {
   );
 }
 
+/**
+ * 順位表をリーグごとの並び（1位から最下位）に分ける。
+ *
+ * ⚠ **順位表は全球団を通した並び**（勝率順）なので、そのままでは
+ *    「2部の1位」が分からない。リーグで絞り直してから順位を見ること。
+ * ⚠ 最後に球団名まで見て並びを決める。勝率も勝利数も並んだとき、
+ *    順序が実行のたびに変わると昇降格の相手が変わってしまう。
+ */
 export function standingsByLeague(teams, standings = []) {
   const leagueOf = Object.fromEntries(teams.map((t) => [t.name, t.league]));
   const byName = Object.fromEntries(standings.map((s) => [s.team, s]));

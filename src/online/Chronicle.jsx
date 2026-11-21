@@ -541,7 +541,7 @@ export function LeagueTopics({ view, full = false, bare = false }) {
 
 export default function Chronicle({ view }) {
   return (
-    <TeamRoster view={view} always>
+    <TeamRoster view={view} always title="球団史・記録">
       {(shown, selector) => {
         const c = shown.chronicle || {};
         return (

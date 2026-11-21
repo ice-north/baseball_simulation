@@ -40,6 +40,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import jp.icenorth.baseball.app.AppViewModel
 import jp.icenorth.baseball.shared.COACH_ABILITY_ITEMS
+import jp.icenorth.baseball.shared.SERVER_UPDATE_PENDING
 import jp.icenorth.baseball.shared.CoachCard
 import jp.icenorth.baseball.shared.Commands
 import jp.icenorth.baseball.shared.LeagueView
@@ -131,10 +132,13 @@ fun StaffPanel(model: AppViewModel, view: LeagueView) {
  */
 @Composable
 private fun LeagueCoachName(model: AppViewModel, team: String, brief: StaffBrief, suffix: String, small: Boolean = false) {
-    var open by remember { mutableStateOf(false) }
-    var card by remember { mutableStateOf<CoachCard?>(null) }
+    // ⚠ 人が替わったら（監督の交代など）前の人のカードを捨てる。キーなしで持つと、同じ席の名前を押すと
+    //   前の人の小窓が開いた（2026-11-20 監査）
+    val who: Any = brief.id ?: brief.name
+    var open by remember(team, who) { mutableStateOf(false) }
+    var card by remember(team, who) { mutableStateOf<CoachCard?>(null) }
     var failure by remember { mutableStateOf<String?>(null) }
-    LaunchedEffect(open) {
+    LaunchedEffect(open, team, who) {
         if (!open || card != null) return@LaunchedEffect
         try {
             val staff = model.read("team", mapOf("team" to team))["staff"]?.takeUnless { it is JsonNull }
@@ -469,11 +473,20 @@ fun CoachDialog(coach: CoachCard, onClose: () -> Unit) {
                     }
                 }
                 Caption("これまでの指導チームと役職")
-                if (coach.stints.isEmpty()) Muted("まだ指導した球団はありません。")
-                coach.stints.forEach { Text(it.text, style = MaterialTheme.typography.bodySmall) }
+                // ⚠ 項目が無い（null＝古いサーバー）のと空（まだ指導していない）を分ける（判断6、2026-11-20 監査）
+                val stints = coach.stints
+                when {
+                    stints == null -> Muted(SERVER_UPDATE_PENDING)
+                    stints.isEmpty() -> Muted("まだ指導した球団はありません。")
+                    else -> stints.forEach { Text(it.text, style = MaterialTheme.typography.bodySmall) }
+                }
                 Caption("主な指導選手")
-                if (coach.pupils.isEmpty()) Muted("まだいません（このリーグで指導した年の記録から挙げます）。")
-                coach.pupils.forEach { Text(it.text, style = MaterialTheme.typography.bodySmall) }
+                val pupils = coach.pupils
+                when {
+                    pupils == null -> Muted(SERVER_UPDATE_PENDING)
+                    pupils.isEmpty() -> Muted("まだいません（このリーグで指導した年の記録から挙げます）。")
+                    else -> pupils.forEach { Text(it.text, style = MaterialTheme.typography.bodySmall) }
+                }
                 if (coach.views.isNotEmpty() || coach.traits.isNotEmpty()) {
                     Caption("考え方・性格")
                     coach.views.forEach { ScaleRow(it) }

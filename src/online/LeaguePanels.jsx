@@ -210,7 +210,7 @@ export function Standings({ view, action = null }) {
               <th>分</th>
               <th>勝率</th>
               {/* ゲーム差（すぐ上の球団との。先方要望 2026-11-20「勝率と打率の間に」） */}
-              <th title="すぐ上の順位の球団とのゲーム差">差</th>
+              <th className="online-standings-gap" title="すぐ上の順位の球団とのゲーム差">差</th>
               {/* ⚠ チーム打率・チーム防御率は**サーバーが選手成績から足し上げる**
                   （`teamSeasonStats`）。順位表は勝敗しか持っていない */}
               <th>打率</th>

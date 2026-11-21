@@ -53,6 +53,73 @@ export function placeholderPitcherId(players = [], starters = [], index = 0, fie
     ?? players.find(p => free(p) && p.position === 'pitcher')?.id;
 }
 
+/** 守備位置の適性（登録の守備位置は100、記録の無い位置は0） */
+export const fieldFitness = (player, position) =>
+  player?.position === position ? 100 : (player?.positionFitness?.[position] ?? 0);
+
+/**
+ * 守備位置の割り当てを**まとめて**決める（いちばん良い組み合わせを全部の中から選ぶ）。
+ *
+ * `required` は必ずどこかを守る選手、`optional` は入れても入れなくてもよい選手。
+ * `positions` の全部を1人ずつで埋める。`score(player, position)` が大きいほど良い。
+ * 返すのは `{ total, assign: Map(選手id → 守備位置) }`。埋められなければ null。
+ *
+ * ⚠ 1か所ずつ前から決めないこと。前から決めると、遊撃も守れる捕手が遊撃に取られて
+ *    捕手が空き、外野手が捕手に入る、のように後ろの守備位置ほど穴になる。
+ *    ここは守備位置の組（最大8か所＝256通り）ごとに最善を持ち回すので、
+ *    人数が20人でも数万回の計算で済む。
+ */
+export function bestFieldAssignment(required, optional, positions, score) {
+  const players = [...required, ...optional];
+  const need = required.length;
+  const k = positions.length;
+  if (need > k || players.length < k) return null;
+  const size = 1 << k;
+  const NONE = -Infinity;
+  let dp = new Float64Array(size).fill(NONE);
+  dp[0] = 0;
+  // choice[i][mask] = i番目の選手が取った守備位置（-1 = 入らない）、-2 = 届かない
+  const choice = [];
+  for (let i = 0; i < players.length; i += 1) {
+    const next = new Float64Array(size).fill(NONE);
+    const pick = new Int8Array(size).fill(-2);
+    const player = players[i];
+    const values = positions.map(pos => score(player, pos));
+    for (let mask = 0; mask < size; mask += 1) {
+      const base = dp[mask];
+      if (base === NONE) continue;
+      if (i >= need && base > next[mask]) {
+        next[mask] = base;
+        pick[mask] = -1;
+      }
+      for (let j = 0; j < k; j += 1) {
+        if (mask & (1 << j)) continue;
+        const to = mask | (1 << j);
+        const value = base + values[j];
+        if (value > next[to]) {
+          next[to] = value;
+          pick[to] = j;
+        }
+      }
+    }
+    choice.push(pick);
+    dp = next;
+  }
+  const full = size - 1;
+  if (dp[full] === NONE) return null;
+  const assign = new Map();
+  let mask = full;
+  for (let i = players.length - 1; i >= 0; i -= 1) {
+    const j = choice[i][mask];
+    if (j === -2) return null;
+    if (j >= 0) {
+      assign.set(players[i].id, positions[j]);
+      mask &= ~(1 << j);
+    }
+  }
+  return { total: dp[full], assign };
+}
+
 // 日付進行前に打順・守備位置・先発投手を揃える。既存の有効な指定を優先する。
 export function ensureCompleteLineup(team, useDH = false) {
   if (!team) return true;
@@ -127,18 +194,29 @@ export function ensureCompleteLineup(team, useDH = false) {
     usedPositions.add(position);
   }
 
-  for (let order = 1; order <= (useDH ? 9 : 8); order++) {
-    if (usedOrders.has(order)) continue;
-    const position = FIELD_POSITIONS.find(candidate => !usedPositions.has(candidate)) || (useDH ? 'dh' : null);
-    const bench = players.find(player => player.isActive !== false && player.position !== 'pitcher'
-      && !usedPlayers.has(player.id) && player.position === position)
-      || players.find(player => player.isActive !== false && player.position !== 'pitcher'
-        && !usedPlayers.has(player.id));
-    if (!position || !bench) return false;
-    lineup.push({ playerId: bench.id, position, battingOrder: order });
-    usedOrders.add(order);
-    usedPlayers.add(bench.id);
-    usedPositions.add(position);
+  // ⚠ 空いた枠は、空いた守備位置と控えの組み合わせを**まとめて**決める（適性の合計が
+  //    いちばん高い組。同じなら疲れていない控え）。以前は名簿の並びで最初の控えを
+  //    最初の空いた位置に入れていたので、外野手が捕手に入ることがあった
+  const missingOrders = [];
+  for (let order = 1; order <= (useDH ? 9 : 8); order++) if (!usedOrders.has(order)) missingOrders.push(order);
+  if (missingOrders.length) {
+    const open = FIELD_POSITIONS.filter(position => !usedPositions.has(position));
+    if (useDH && !usedPositions.has('dh')) open.push('dh');
+    if (open.length !== missingOrders.length) return false;
+    const candidates = players.filter(player => player.isActive !== false && player.position !== 'pitcher'
+      && !usedPlayers.has(player.id));
+    const plan = bestFieldAssignment([], candidates, open, (player, position) =>
+      (position === 'dh' ? 100 : fieldFitness(player, position)) * 1000 - (player.fatigue || 0));
+    if (!plan) return false;
+    const comers = candidates.filter(player => plan.assign.has(player.id));
+    missingOrders.forEach((order, i) => {
+      const bench = comers[i];
+      const position = plan.assign.get(bench.id);
+      lineup.push({ playerId: bench.id, position, battingOrder: order });
+      usedOrders.add(order);
+      usedPlayers.add(bench.id);
+      usedPositions.add(position);
+    });
   }
   team.lineupSettings.battingOrder = lineup.sort((a, b) => a.battingOrder - b.battingOrder);
   return lineup.length === 9 && usedOrders.size === 9 && usedPositions.size === (useDH ? 9 : 8);

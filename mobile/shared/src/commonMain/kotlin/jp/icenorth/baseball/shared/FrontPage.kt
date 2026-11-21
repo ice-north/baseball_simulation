@@ -143,7 +143,8 @@ internal fun GameDate.dayKey(): Int = dayKey(year, month, day)
  *                ⚠ ビューの results は**リーグ全体の直近14試合**しか無い（自球団は2〜3試合）ので、連勝・連敗や
  *                相手との対戦成績はこれで数える。無ければビューの分だけで数え、対戦成績は書かない
  * @param historyComplete [history] が今季の自球団の試合を全部含むか（対戦成績を書いてよいか）
- * @param app 入っているアプリが最新かの記事と、いちばん上に置くか（[appVersionArticle]）
+ * @param app アプリの版の記事（古い版・試作版のときだけ。最新版なら null で記事を出さない）と、いちばん上に置くか
+ *            （古いときだけ上。[appVersionArticle]）
  * @param opponent 次の相手の名簿（「team」の窓口）。警戒選手を書く。無ければ書かない
  */
 fun buildFrontPage(
@@ -519,7 +520,7 @@ fun buildFrontPage(
     }.orEmpty()
 
     column?.let { articles += it }
-    // アプリの版: 古いときは記事のいちばん上（全幅の1本目）、最新・試作版は紙面の終わり
+    // アプリの版: 古いときは記事のいちばん上（全幅の1本目）、試作版は紙面の終わり（最新版は記事を出さない）
     app?.let { (article, top) -> if (top) articles.add(0, article) else articles += article }
     val standing = listOfNotNull(
         leagueName.ifEmpty { null },

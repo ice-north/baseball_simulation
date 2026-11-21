@@ -66,6 +66,7 @@ import {
   advanceBackgroundTournaments,
 } from '../src/game/backgroundProgression.js';
 import { generatePitchingRotation } from '../src/game/lineupGenerator.js';
+import { reliefOrderOf, isPitcher, isStaffableFielder } from '../src/online/pitchingEdit.js';
 import { setRecommendedLineup, withFielderGameFatigue } from '../src/game/autoSimulation.js';
 import { ensureCompleteLineup } from '../src/game/lineup.js';
 import { prepareDailyLineup, benchTwoWayStarter } from './dailyLineup.mjs';
@@ -112,6 +113,9 @@ import { tradeJudgeForLeague } from './tradeJudge.mjs';
 import { tradeStrengthGap } from '../src/online/tradeSearch.js';
 import {
   planCpuTrade,
+  CPU_OFFER_VALUE_FLOOR,
+  liveOfferMemo,
+  rememberOffer,
   partnerOrder,
   dayRoll,
   offerExpiry,
@@ -187,6 +191,7 @@ import {
 import {
   assertMemberCount,
   assignmentOrder,
+  clearTeamSplitName,
 } from '../src/online/membership.js';
 import {
   nextFromPlan,
@@ -905,21 +910,46 @@ function runCpuTrades(league, now) {
     if (!names.includes(teamName) || !cpus.length) continue;
     if (league.trades.some((t) => t.from === null && t.to === userId)) continue;
     if (dayRoll(league, `cpu-offer:${teamName}`) >= 1 / CPU_OFFER_EVERY) continue;
-    const from = [...cpus].sort(
+    // ⚠ 釣り合う案を持たない球団も多い（その日の名簿で3〜4割）ので、その日の順にCPUを見て
+    //    最初に案が見つかった球団が言い出す（1回の判断は数十ミリ秒）
+    const order = [...cpus].sort(
       (a, b) => dayRoll(league, `cpu-offer-from:${teamName}:${a}`) - dayRoll(league, `cpu-offer-from:${teamName}:${b}`),
-    )[0];
+    );
     fresh();
-    const plan = planCpuTrade({
-      from,
-      teams,
-      partners: [teamName],
-      valueOf: (p) => judge.valueOf(p),
-      // 人がこの内容で出したら、CPUが受けるか（受けたときも同じ判断を通す。`respondTrade`）
-      accept: (partner, give, get) =>
-        allowed(from, partner, give, get) &&
-        cpuDecisionFor(league, TEAMS_DATA[partner], from, get, give, judge).action === 'accept',
-    });
+    let from = null;
+    let plan = null;
+    // ⚠ 人の同じ選手を続けて求めない。どのCPUからでも、求めてから `CPU_OFFER_MEMO_DAYS` 日は
+    //    その選手を求める提案を出さない（以前は同じCPUだけを避けたので、別のCPUが人の同じ主力を
+    //    続けて欲しがれた。判断7、いしだ 2026-11-20）。覚えは `league.cpuOfferMemo`（日付つき）
+    const avoid = new Set(liveOfferMemo(league).filter((m) => m.team === teamName).map((m) => m.id));
+    for (const cpu of order) {
+      plan = planCpuTrade({
+        from: cpu,
+        avoid,
+        teams,
+        partners: [teamName],
+        valueOf: (p) => judge.valueOf(p),
+        // ⚠ 人の側から見ても釣り合う案だけ（戦力の開きを両向きに見る・値段が見合う）。
+        //    以前は人の一番手を若い控え1人で取る案ばかり届いた（いしだ 2026-11-20）
+        balanced: true,
+        fair: (partner, give, get) => {
+          const pick = (team, ids) => TEAMS_DATA[team].players.filter((p) => ids.includes(p.id));
+          const offered = pick(cpu, give).reduce((a, p) => a + judge.valueOf(p), 0);
+          const lost = judge.setValuesOf(pick(partner, get), partner).reduce((a, v) => a + v, 0);
+          return offered >= lost * CPU_OFFER_VALUE_FLOOR;
+        },
+        // 人がこの内容で出したら、CPUが受けるか（受けたときも同じ判断を通す。`respondTrade`）
+        accept: (partner, give, get) =>
+          allowed(cpu, partner, give, get) &&
+          cpuDecisionFor(league, TEAMS_DATA[partner], cpu, get, give, judge).action === 'accept',
+      });
+      if (plan) {
+        from = cpu;
+        break;
+      }
+    }
     if (!plan) continue;
+    rememberOffer(league, teamName, plan.get);
     const id = `trade-${(league.tradeSeq = (league.tradeSeq || 0) + 1)}`;
     league.trades.push({
       id,
@@ -1060,7 +1090,12 @@ export function releaseMember(league, adminId, targetUserId, now) {
   loadLeagueWorld(league);
   league.members.splice(index, 1);
   const team = (league.teams || []).find((t) => t.name === member.teamName);
-  if (team) team.displayName = team.name;
+  if (team) {
+    team.displayName = team.name;
+    // ⚠ 分けた名前（地域名・チーム名・地方）も消す。表示名だけ戻すと略称・地元が前の人の
+    //    ままで、次に入った人に引き継がれていた（2026-11-20 監査）
+    clearTeamSplitName(team);
+  }
   if (league.phase) {
     delete league.phase.submissions?.[targetUserId];
     delete league.phase.camp?.[targetUserId];
@@ -1613,8 +1648,15 @@ function refreshTeamPlan(league, name, { force = false } = {}) {
   const modes = human ? effectiveStaffModes(league, member) : null;
   const ownLineup = human && modes.lineup !== 'delegate';
   const ownPitching = human && modes.pitching !== 'delegate';
+  // ⚠ 任せている間は**指導者が考えて並べた順**（能力の順）を `pitcherOrder` に写して、
+  //    画面の順も同じにする（`recordCoachReliefOrder`。いしだ 2026-11-20 判断4「おすすめで」）
+  const delegated = human && !ownPitching;
   if (human && !force && ownLineup !== ownPitching) {
-    if (!ownPitching) generatePitchingRotation(name);
+    if (!ownPitching) {
+      generatePitchingRotation(name);
+      recordCoachReliefOrder(team);
+      alignReliefOrder(team);
+    }
     if (!ownLineup) {
       const registered = new Map(team.players.map((p) => [p.id, p.position]));
       setRecommendedLineup(team, name);
@@ -1639,10 +1681,13 @@ function refreshTeamPlan(league, name, { force = false } = {}) {
     undoTwoWay?.();
     if (complete) {
       syncRelievers(team);
+      alignReliefOrder(team);
       return;
     }
   }
   generatePitchingRotation(name);
+  if (delegated) recordCoachReliefOrder(team);
+  if (human) alignReliefOrder(team);
   // ⚠ **守備位置の登録を書き換えさせない**。CPUの打順作り（`generateAILineup`）は
   //    スタメンに入れた選手の登録をその日の守備位置に書き換える（一人用の試合の
   //    写しでの作り）。保存する名簿に当てると、二刀流の投手が「右翼手」になって
@@ -1701,6 +1746,80 @@ function syncRelievers(team) {
   if (rotation.pitcherRoles)
     for (const id of Object.keys(rotation.pitcherRoles))
       if (!present.has(Number(id))) delete rotation.pitcherRoles[id];
+}
+
+/** 投手起用の画面に出る投手陣（`pitchingFromLineup` と同じ。投手登録＋加えた野手） */
+function reliefStaffOf(team) {
+  const rotation = team.pitchingRotation || {};
+  const starters = rotation.starters || [];
+  return team.players.filter(
+    (p) =>
+      isPitcher(p) ||
+      (isStaffableFielder(p) &&
+        (starters.includes(p.id) ||
+          Object.hasOwn(rotation.pitcherRoles || {}, String(p.id)))),
+  );
+}
+
+/**
+ * 投手起用を**指導者に任せた**人の球団: 指導者が並べた救援の順（`generatePitchingRotation` の
+ * 能力の順の欄。守護神・セットアッパー・中継ぎの順）を `pitcherOrder` に写す。
+ *
+ * ⚠ いしだ 2026-11-20 判断4「おすすめで」。`alignReliefOrder` だけだと、任せた球団も
+ *    同じ役割の中を名簿の並び（または任せる前に人が並べた古い順）で起用していた。
+ *    任せている間は指導者の考えた順で投げ、画面にもその順で出す。
+ *    自分で起用している球団（`pitcherOrder` は人の▲▼の順）には呼ばない。
+ *    任せる→自分で、に切り替えたときは、ここで書いた順がそのまま初めの順になる。
+ * ⚠ 形は保存（`lineupTactics` の `reliefOrderOf`）と同じにする（画面に出る投手陣だけ・
+ *    欄に無い投手は名簿の並びで後ろ）。違う形だと、任せたまま打順だけ保存したときに
+ *    順番が「変わった」に数えられ、投手起用が「意見を聞く」に戻ってしまう（`saveLineup`）。
+ *    同じ順なら書き直しても形は変わらない（画面の編集が 409 で弾かれない）。
+ */
+function recordCoachReliefOrder(team) {
+  const rotation = team.pitchingRotation;
+  if (!rotation) return;
+  const coachOrder = [
+    ...(rotation.closer != null ? [rotation.closer] : []),
+    ...(rotation.setupMen || []),
+    ...(rotation.middleRelievers || []),
+  ];
+  const order = reliefOrderOf(coachOrder, reliefStaffOf(team));
+  const before = rotation.pitcherOrder || [];
+  if (order.length === before.length && order.every((id, i) => id === before[i])) return;
+  rotation.pitcherOrder = order;
+}
+
+/**
+ * 人の球団の救援の欄（`setupMen` / `middleRelievers` / `relievers`）を、投手起用の画面に
+ * 出る「同じ役割の中の順」に並べ直す。
+ *
+ * ⚠ 2026-11-20 監査。画面（`pitchingFromLineup` → `reliefOrderOf`）は保存した
+ *    `pitcherOrder`、無ければ名簿の並びで役割の中を並べ、試合（`autoSimulation`）は
+ *    `middleRelievers` / `setupMen` の並びの先頭から使う。保存（`lineupTactics`）は
+ *    その順で欄を作るが、**作り直す経路**（投手起用を任せた球団・守備位置の変更の
+ *    `force`・一度も保存していない球団）は `generatePitchingRotation` の**能力の順**の
+ *    欄のままで、画面の▲▼の順と別の投手が先に出ていた。
+ *    役割は変えない。並びの決め方は画面と同じ関数（`reliefOrderOf`）を使う。
+ * ⚠ `pitcherOrder` は書き足さない（並べ替えたことのない球団の画面へ返す形を変えない。
+ *    `lineupTactics.mjs` の注）。ただし投手起用を任せた球団は、先に `recordCoachReliefOrder`
+ *    で指導者の順を書いてから呼ぶ（判断4）。
+ */
+function alignReliefOrder(team) {
+  const rotation = team.pitchingRotation;
+  if (!rotation) return;
+  const starters = rotation.starters || [];
+  const staff = reliefStaffOf(team);
+  const order = reliefOrderOf(rotation.pitcherOrder, staff);
+  const rank = (id) => {
+    const at = order.indexOf(id);
+    return at === -1 ? Number.MAX_SAFE_INTEGER : at;
+  };
+  const byOrder = (ids) => [...ids].sort((a, b) => rank(a) - rank(b));
+  rotation.setupMen = byOrder(rotation.setupMen || []);
+  rotation.middleRelievers = byOrder(rotation.middleRelievers || []);
+  rotation.relievers = byOrder(
+    staff.map((p) => p.id).filter((id) => !starters.includes(id)),
+  );
 }
 
 /**
@@ -2555,6 +2674,18 @@ function advanceOneDay(league, key, now) {
     // ⚠ 人の球団は**確定したときに控えた先発**で投げる（`lockStarters`。相手に見えた先発と同じにする）。
     //    控えが無い試合（この作りの前に確定した試合）だけ、今の指名を見る
     lockStarters(league, TEAMS_DATA);
+    // ⚠ 人の球団の救援の欄を画面の順に揃える（`alignReliefOrder`。2026-11-20 監査）。
+    //    手続きの作り直しは揃えるが、この直しより前に作り直した保存は能力の順のまま
+    //    残っているので、試合の前にも揃える（揃っていれば何も変わらない）
+    // ⚠ 投手起用を任せた球団は、欄（指導者の能力の順）を正本にして `pitcherOrder` へ写す
+    //    （判断4。この直しより前に任せた保存は、古い順や名簿の並びのまま残っている）
+    for (const member of league.members || []) {
+      const team = TEAMS_DATA[member.teamName];
+      if (!playingTeams.has(member.teamName) || !team) continue;
+      if (effectiveStaffModes(league, member).pitching === 'delegate')
+        recordCoachReliefOrder(team);
+      alignReliefOrder(team);
+    }
     const pickReports = [];
     const restoreRotations = league.season.settings.teamNames
       .filter((name) => playingTeams.has(name))

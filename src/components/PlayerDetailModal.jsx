@@ -7,6 +7,7 @@ import { buildPlayerStory, fameLabel } from './playerStory.js';
 import AbilityHistoryChart from './AbilityHistoryChart.jsx';
 import PotentialBadge from './PotentialBadge.jsx';
 import { useEscapeToClose } from './useEscapeToClose.js';
+import { withoutPlaceholderHighSchool } from '../utils/careerHistory.js';
 import { TEAMS_DATA } from '../teams-data.js';
 import { getZoneProfile, zoneHeatmap, describeZoneProfile } from '../game/batterZone.js';
 import { getDeception, describeDeception } from '../game/deception.js';
@@ -102,6 +103,15 @@ const isEnrolledStudent = (player) => {
   return !(player.careerHistory || []).some(h => AFTER_UNIVERSITY.has(h.type));
 };
 
+// その選手が名簿に居る球団（居なければ null。自由契約・大学プール・引退した選手）
+const teamOfPlayer = (player) => {
+  if (player?.id == null) return null;
+  for (const team of Object.values(TEAMS_DATA)) {
+    if (team?.players?.some(p => p.id === player.id)) return team;
+  }
+  return null;
+};
+
 export default function PlayerDetailModal({ player, onClose, scoutAccuracy = 1 }) {
   const [detailTab, setDetailTab] = useState('ability');
   useEscapeToClose(onClose, !!player);
@@ -120,6 +130,9 @@ export default function PlayerDetailModal({ player, onClose, scoutAccuracy = 1 }
   const formName = PITCHING_FORM_EFFECTS[player.pitching?.form]?.name || player.pitching?.form || '-';
   const catcherLead = player.catching?.lead;
   const positionFit = player.positionFitness || {};
+  // 自然成長は所属球団の区分・格で決まる（`naturalGrowthOf`）。一覧から渡る選手は写しのことがあるので id で引く
+  const ownTeam = teamOfPlayer(player);
+  const naturalGrowth = naturalGrowthOf(player, ownTeam);
 
   const StatBar = ({ label, value, max = 99, isVel = false, isSta = false }) => {
     // 球速・スタミナは 0-100 に正規化してからバー長・色を決める（生値だと常に最大色になる）
@@ -176,7 +189,9 @@ export default function PlayerDetailModal({ player, onClose, scoutAccuracy = 1 }
 
         {/* 経歴 */}
         {(() => {
-          const history = player.careerHistory || [];
+          // ⚠ 名前の付いた高校と並んでいる仮の「高校卒」は出さない（下で高校の名前に書き換えるので、
+          //    残すと同じ高校が2つ並ぶ。`careerHistory.js`）
+          const history = withoutPlaceholderHighSchool(player.careerHistory);
           const steps = [];
           if (history.length > 0) {
             // 全国大会成績(achievement)は経路チップではなく物語タブで表示するため除外
@@ -287,9 +302,9 @@ export default function PlayerDetailModal({ player, onClose, scoutAccuracy = 1 }
                   <div>体格: <span className="text-white">{player.physical?.build === 'large' ? '大柄' : player.physical?.build === 'small' ? '小柄' : '中肉'}</span></div>
                   {/* ⚠ 「来季の年度替わりで主要な能力が1つあたり何点動くか」。
                       素の成長係数（年齢が入らない）はもう出さない（`src/utils/naturalGrowth.js`） */}
-                  <div>自然成長: <span className={`font-bold ${naturalGrowthColor(naturalGrowthOf(player))}`} title={naturalGrowthTitle(player)}>
-                    {naturalGrowthText(naturalGrowthOf(player))}
-                  </span><span className="text-gray-400">/年</span></div>
+                  <div>自然成長: <span className={`font-bold ${naturalGrowthColor(naturalGrowth)}`} title={naturalGrowthTitle(player, ownTeam)}>
+                    {naturalGrowthText(naturalGrowth)}
+                  </span>{naturalGrowth !== null && <span className="text-gray-400">/年</span>}</div>
                 </div>
               </div>
 

@@ -1,5 +1,6 @@
 package jp.icenorth.baseball.shared
 
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
@@ -19,6 +20,8 @@ data class PlanDraft(
     val pitching: PitchingState,
     val strategy: Map<String, String>,
     val tactics: Map<String, String>,
+    /** 編集を始めたときの救援の順番（並べ替えたかを見分ける。`toPayload` の `pitcherOrder`） */
+    val startOrder: List<Long> = pitching.order,
 ) {
     private fun withSlots(op: LineupDraft.() -> LineupDraft) = copy(slots = LineupDraft(base, slots, emptyList()).op().slots)
 
@@ -63,6 +66,11 @@ data class PlanDraft(
         return buildJsonObject {
             lineup.forEach { (k, v) -> put(k, v) }
             put("pitcherRoles", buildJsonObject { pitching.roles.forEach { (id, role) -> put(id.toString(), role) } })
+            // ⚠ **救援の同じ役割の中の順番**（いしだ 2026-11-20。PC の投手起用の▲▼と同じ `pitcherOrder`）。
+            //    元から持っているか、並べ替えたときだけ送る。並べ替えたことのない球団に足すと、画面へ返す
+            //    編成の形が増えて、ほかの画面で編集中の人の保存が edit_conflict で弾かれる（Web 版で踏んだ）
+            if (base["pitcherOrder"] != null || pitching.order != startOrder)
+                put("pitcherOrder", JsonArray(pitching.order.map { JsonPrimitive(it) }))
             put("strategy", buildJsonObject { STRATEGY_FIELDS.forEach { f -> put(f.key, strategy[f.key] ?: f.default) } })
             // ⚠ 自動采配は、元から持っているか既定から変えたときだけ送る（Web 版と同じ。無い球団に既定の塊を増やさない）
             if (hadTactics || tacticsChanged) {
@@ -100,7 +108,9 @@ data class PlanDraft(
             // ⚠ 投手は空きにしない（二刀流で野手の枠に入れられる）
             val eligible = roster.filter { it.isActive }.map { it.id }.toSet()
             val slots = if (roster.isEmpty()) order.slots else normalizeSlots(order.slots, eligible)
-            return PlanDraft(lineup, slots, PitchingState.from(order.starters, saved, roster), strategy, tactics)
+            // 救援の順番。無ければ名簿の並び（＝今までの順。Web 版 pitchingFromLineup と同じ）
+            val savedOrder = (lineup["pitcherOrder"] as? JsonArray)?.mapNotNull { it.num()?.toLong() }
+            return PlanDraft(lineup, slots, PitchingState.from(order.starters, saved, roster, savedOrder), strategy, tactics)
         }
     }
 }

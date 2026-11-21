@@ -1,8 +1,7 @@
 import React, { useMemo, useState } from 'react';
-import TeamRoster from './TeamRoster.jsx';
 import { CompactRoster, TeamPlayerButton } from './PlayerPerformance.jsx';
 import { formatStat } from './statsView.js';
-import { teamShort } from './gameText.js';
+import { teamShort, formatRate as rate3 } from './gameText.js';
 import { Page } from './Page.jsx';
 
 // ============================================================
@@ -19,7 +18,7 @@ import { Page } from './Page.jsx';
 //    こと**——打率・防御率は率なので合計の足し算では作れず、年ごとの率を
 //    平均しても正しくない。サーバーが合計から出し直した値を受け取る。
 //    ⚠ 選手の詳細が出す期間と**同じものを読む**（同じ数字を2通り持たない）。
-// ⚠ 自球団も**サーバーから読み直す**（`TeamRoster` の `always`）。通算は
+// ⚠ 自球団も**サーバーから読み直す**（チーム分析が `TeamRoster` の `always` で包む）。通算は
 //    ビューに載せていないので、読み直さないと自分の選手だけ空欄になる。
 // ⚠ 記録が1年も無い選手（今季の新人など）は**出さない**。0が並ぶと
 //    「記録が無い」のか「打てていない」のか分からない。
@@ -43,39 +42,17 @@ const careerRoster = (roster = []) =>
       catcherStats: career.catcherStats,
     }));
 
-export default function CareerStats({ view }) {
-  // ⚠ 先方指摘「各チームごとの通算成績しか見られない。全チームの選手をランキング化した通算成績も」。
-  //    球団ごとの表（いままで）と、リーグ全体の上位（サーバーの `careerLeaders`）を切り替える
-  const [mode, setMode] = useState('team');
-  const modes = (
-    <div className="online-segments" role="group" aria-label="通算成績の見方">
-      {[
-        ['team', '球団ごと'],
-        ['league', 'リーグ全体ランキング'],
-      ].map(([id, label]) => (
-        <button key={id} aria-pressed={mode === id} onClick={() => setMode(id)}>
-          {label}
-        </button>
-      ))}
-    </div>
-  );
-  if (mode === 'league') return <CareerLeagueBoard view={view} modes={modes} />;
-  return (
-    <TeamRoster view={view} always>
-      {(shown, selector) => <CareerTeamBoard shown={shown} selector={selector} modes={modes} />}
-    </TeamRoster>
-  );
-}
-
+// ⚠ 球団ごとの表（`CareerTeamBoard`）はチーム分析の「通算成績」、リーグ全体の上位
+//    （`CareerLeagueBoard`）はリーグ史の「通算成績ランキング」の切り替え（先方要望 2026-11-20）。
+//    以前は1つのページの中で「球団ごと／リーグ全体ランキング」を切り替えていた
 /** リーグ全体の通算ランキング（項目ごとの上位50人。退団した選手も残す） */
-export function CareerLeagueBoard({ view, modes = null }) {
+export function CareerLeagueBoard({ view }) {
   const [side, setSide] = useState('batting');
   const shown = (view.careerLeaders || []).filter((f) => f.side === side);
   return (
     <Page
       title="通算成績"
       sub="リーグ全球団の選手の、このリーグを始めてからの合計の上位です（今季を含む・退団・引退した選手も灰色で残します）。自球団の選手は黄色で出します。"
-      actions={modes}
     >
       <section className="online-card">
         <div className="online-segments" role="group" aria-label="区分">
@@ -131,7 +108,7 @@ export function CareerLeagueBoard({ view, modes = null }) {
   );
 }
 
-export function CareerTeamBoard({ shown, selector, modes = null }) {
+export function CareerTeamBoard({ shown, selector }) {
   const roster = useMemo(() => careerRoster(shown.roster), [shown.roster]);
   // ⚠ 1年でも欠けている年があれば**そう書く**。記録を始める前の成績は
   //    入っていないので、黙って出すと「少ない」と誤解される
@@ -145,12 +122,7 @@ export function CareerTeamBoard({ shown, selector, modes = null }) {
           ? `このリーグを始めてからの合計です（${years}シーズン・今季を含む）。列の見出しを押すと並べ替えます。${partial ? '記録の無い試合があった年は、その分が入っていません。' : ''}`
           : 'このリーグでの記録がまだありません。1シーズン目が進むと出ます。'
       }
-      actions={
-        <>
-          {modes}
-          <div className="online-team-selector">{selector}</div>
-        </>
-      }
+      actions={<div className="online-team-selector">{selector}</div>}
     >
       <section className="online-card">
         {roster.length ? (
@@ -175,8 +147,6 @@ export function CareerTeamBoard({ shown, selector, modes = null }) {
     </Page>
   );
 }
-
-const rate3 = (v) => (v == null ? '—' : v >= 1 ? v.toFixed(3) : v.toFixed(3).replace(/^0/, ''));
 
 /**
  * 引退・解雇・退団した選手の通算（その球団で最後に記録を残した人）。

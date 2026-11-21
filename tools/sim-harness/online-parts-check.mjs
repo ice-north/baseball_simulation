@@ -18,6 +18,7 @@ import {
   SNAPSHOT_FORMAT,
   PAST_GAMES,
   SAME_AS_SCHEDULE,
+  isSplitSnapshot,
 } from '../../server/storage/snapshotParts.mjs';
 
 const store = createTestStore('parts-check');
@@ -138,6 +139,68 @@ assert.equal(store.lastMode, 'light', 'ログインは世界を読まない');
     run.bundle.league.records.seasons[year - 1].games = {};
     assert.equal(run.inspect(run.bundle), null, '終わった年の試合を差し替えたのに軽い読みのまま保存した');
   }
+}
+
+// --- 前の形（形式2・3）の保存も、そのまま全体・軽い読みで戻る（監査 2026-11-20）
+//     形式3 … `@schedule` の印が無い芯（今季の試合結果を日程と結果の両方に書いていた）
+//     形式2 … それに加えて、終わった年の試合の記録も記録の部分に入ったまま（pastGames が無い）
+//     ⚠ 印を戻す側（`unpackResults`）は印の無い芯をそのまま通すこと。日程に同じ id の試合が
+//        2つあり、後の方に結果が無くても、結果のある方を引くこと（印にする側と同じ引き方）
+{
+  const bundle = await store.read();
+  const season = bundle.league.season;
+  const year = season.year;
+  const games = season.schedule.slice(0, 2);
+  games[0].result = { homeScore: 4, awayScore: 2, decisions: {}, pitcherChanges: [] };
+  games[1].result = { homeScore: 1, awayScore: 0, decisions: {}, pitcherChanges: [] };
+  season.results = games.map((g) => ({ gameId: g.id, date: g.date, home: g.home, away: g.away, result: g.result }));
+  const past = (y) => ({ year: y, players: {}, games: { 1: { gameId: 1, teams: {} } }, complete: true });
+  bundle.league.records ||= { version: 1, seasons: {} };
+  bundle.league.records.seasons = { [year - 1]: past(year - 1), ...bundle.league.records.seasons };
+  const text = JSON.stringify(bundle);
+  const split = splitBundle(bundle);
+  // 形式3の芯: 印を中身に戻して書いてあった形
+  const core3 = JSON.parse(JSON.stringify(split.core));
+  core3.league.season.results = core3.league.season.results.map((entry, i) =>
+    entry.result === SAME_AS_SCHEDULE ? { ...entry, result: JSON.parse(JSON.stringify(games[i].result)) } : entry,
+  );
+  assert.equal(JSON.stringify(core3).includes(SAME_AS_SCHEDULE), false, '前提: 形式3の芯に印が無い');
+  const parts3 = JSON.parse(JSON.stringify(split.parts));
+  assert.ok(parts3.pastGames, '前提: 形式3は終わった年の試合を分けてある');
+  const parts2 = JSON.parse(JSON.stringify({ ...split.parts, records: bundle.league.records }));
+  delete parts2.pastGames;
+  for (const [format, parts] of [[3, parts3], [2, parts2]]) {
+    assert.ok(isSplitSnapshot({ snapshotFormat: format }), `形式${format}を分けた形として読む`);
+    const back = assembleBundle(JSON.parse(JSON.stringify(core3)), split.order, JSON.parse(JSON.stringify(parts)));
+    assert.equal(JSON.stringify(back), text, `形式${format}を全体で戻すと1文字も違わない`);
+    const refs = Object.fromEntries(Object.keys(parts).map((n) => [n, {}]));
+    const run = assembleLight(
+      JSON.parse(JSON.stringify(core3)),
+      split.order,
+      { records: JSON.parse(JSON.stringify(parts.records)) },
+      refs,
+    );
+    assert.deepEqual(
+      run.bundle.league.season.results.map((r) => r.result),
+      games.map((g) => g.result),
+      `形式${format}の軽い読みで今季の結果がそのまま読める`,
+    );
+    if (format === 2)
+      assert.deepEqual(run.bundle.league.records.seasons[year - 1].games, past(year - 1).games, '形式2の軽い読みで終わった年の試合が読める');
+    // 保存し直すと今の形（印で1回だけ書く）になる
+    const saved = run.inspect(run.bundle);
+    assert.ok(saved, `形式${format}を軽い読みのまま保存できる`);
+    assert.deepEqual(
+      saved.core.league.season.results.map((r) => r.result),
+      [SAME_AS_SCHEDULE, SAME_AS_SCHEDULE],
+      `形式${format}を保存し直すと二重持ちを印にする`,
+    );
+  }
+  // 日程に同じ id の試合が2つ（後の方は結果なし）でも、印は結果のある方へ戻す
+  const dup = JSON.parse(JSON.stringify(split.core));
+  dup.league.season.schedule.push({ ...dup.league.season.schedule[0], result: null });
+  const back = assembleBundle(dup, split.order, JSON.parse(JSON.stringify(split.parts)));
+  assert.deepEqual(back.league.season.results[0].result, games[0].result, '同じ id の後の試合（結果なし）を引いた');
 }
 
 // --- 軽い読みの番人

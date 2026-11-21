@@ -7,6 +7,7 @@
 //    記録がどちらの選手のものか分からなくなる。
 import assert from 'node:assert/strict';
 import { mkdtemp, rm } from 'node:fs/promises';
+import { createHash } from 'node:crypto';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { FileStore } from '../../server/storage/fileStore.mjs';
@@ -40,6 +41,7 @@ import {
   PACK_RANK_SHIFT_V2,
   PACK_STYLE,
   LEGACY_PACK_STYLE,
+  rosterPacksFor,
 } from '../../src/online/rosterPack.js';
 
 // --- セットそのもの ---------------------------------------------------
@@ -697,6 +699,25 @@ try {
   await rm(dir, { recursive: true, force: true });
 }
 
+// --- 種と版から作り直したセットは、いつ作っても同じ選手（2026-11-20 監査）---
+// ⚠ 選んだ後に待っている人のセットは種と版から作り直す。作るときに外の乱数を1つ多く引くと
+//    （出身を付けたとき `Math.random` を引いていた）後ろの選手が全部入れ替わり、選んだのと
+//    違う24人が入る。出身などを足すときは別の種で引くこと。指紋は出身を付ける前の作り方の値。
+{
+  const golden = {
+    '1:12345': 'f2b62955bc118cdf', '1:777': '6668fff3d99f3fde',
+    '2:12345': '0426be6e70fa8ff9', '2:777': '42728cf65ef562e2',
+    '3:12345': '00ddcd4ac7129af0', '3:777': '81de8e3d1bf3cfe3',
+  };
+  for (const [key, want] of Object.entries(golden)) {
+    const [style, seed] = key.split(':').map(Number);
+    const body = JSON.stringify(rosterPacksFor(seed, style).map((p) =>
+      p.players.map((x) => [x.name, x.age, x.position, x.batting, x.pitching, x.physical, x.fielding])));
+    const got = createHash('sha256').update(body).digest('hex').slice(0, 16);
+    assert.equal(got, want, `版${style}・種${seed} のセットの中身が前と変わった（作り直すと待っている人の選手が入れ替わる）`);
+  }
+}
+
 console.log(
-  `■ 初期メンバーセット: OK（${PACK_COUNT}セット×${PACK_SIZE}人 / 出身の高校・大学（在学の印は付けない）/ 構成と格の型がばらけ、型の決まりを守る / 同じ枠の平均からの開きが3%以内 / 19〜32歳（衰える年齢も混ざる）/ 版1・版2は前の作り方のまま / 取り合いを解く / 288人が重複しない / 途中参加は次のキャンプで入れ替わる）`,
+  `■ 初期メンバーセット: OK（${PACK_COUNT}セット×${PACK_SIZE}人 / 出身の高校・大学（在学の印は付けない）/ 構成と格の型がばらけ、型の決まりを守る / 同じ枠の平均からの開きが3%以内 / 19〜32歳（衰える年齢も混ざる）/ 版1・版2は前の作り方のまま / 作り直しても同じ24人 / 取り合いを解く / 288人が重複しない / 途中参加は次のキャンプで入れ替わる）`,
 );

@@ -47,6 +47,8 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -75,6 +77,8 @@ import jp.icenorth.baseball.shared.STRATEGY_EFFECTS
 import jp.icenorth.baseball.shared.STRATEGY_FIELDS
 import jp.icenorth.baseball.shared.SUBSTITUTE_MIN_FITNESS
 import jp.icenorth.baseball.shared.SUBSTITUTE_FRESH_FATIGUE
+import jp.icenorth.baseball.shared.FIELDER_FORCE_REST_FATIGUE
+import jp.icenorth.baseball.shared.RestPlan
 import jp.icenorth.baseball.shared.TACTIC_FIELDS
 import jp.icenorth.baseball.shared.at
 import jp.icenorth.baseball.shared.conditionIcon
@@ -299,7 +303,11 @@ private fun OrderEditor(
         haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
     }
     val bench = benchOf(view, draft)
-    val notes = orderNotes(draft, players, bench)
+    // ⚠ RestPlan.plan は守備の組み合わせを全部数えるので重い。ドラッグ中の再描画のたびに数えず、
+    //    守備の顔ぶれ（打順の並びは見ない）・名簿・控え・次の先発が変わったときだけ数える（2026-11-20 監査）
+    val fieldSet = draft.slots.toSet()
+    val restingIds = remember(fieldSet, players, bench, nextId) { restingOf(draft.slots, players, bench, nextId) }
+    val notes = orderNotes(draft, players, restingIds, nextId)
     val pickedStarter = (picked as? OrderPick.Starter)?.index?.let { draft.slots.getOrNull(it) }
     val pickedBench = (picked as? OrderPick.Bench)?.id?.let { players[it] }
     /** 選んでいる行と入れ替えたら、この行の人はどこをどの適性で守るか */
@@ -526,8 +534,17 @@ private fun Player.bestFieldPosition(): String? = FIELD_POSITIONS.maxByOrNull { 
 private class OrderNote(val position: String, val text: String, val action: String, val pick: OrderPick, val color: androidx.compose.ui.graphics.Color? = null)
 
 /** 「気になる所」: 試合の日に休養に入る選手と、適性の低い守備（押すと直すためのシートを開く） */
+/**
+ * 試合の日に誰が休むか（サーバーと同じ計算 RestPlan。ほかの先発が守備を移って休める場合もある）。
+ * ⚠ 次の先発（nextId）が野手の枠にも居る二刀流なら、その日は抜けた形で数える（Web 版 lineupNotes と同じ）
+ */
+private fun restingOf(slots: List<BatterSlot>, players: Map<Long, Player>, bench: List<Player>, nextId: Long?): Set<Long> {
+    val field = slots.mapNotNull { s -> players[s.playerId]?.takeIf { it.isActive }?.let { RestPlan.Starter(it, s.position) } }
+    return (if (field.size == slots.size) RestPlan.plan(field, bench, nextId) else null)?.resting?.toSet().orEmpty()
+}
+
 @Composable
-private fun orderNotes(draft: PlanDraft, players: Map<Long, Player>, bench: List<Player>): List<OrderNote> {
+private fun orderNotes(draft: PlanDraft, players: Map<Long, Player>, resting: Set<Long>, nextId: Long?): List<OrderNote> {
     val notes = mutableListOf<OrderNote>()
     draft.slots.forEachIndexed { index, slot ->
         val p = players[slot.playerId]
@@ -536,13 +553,12 @@ private fun orderNotes(draft: PlanDraft, players: Map<Long, Player>, bench: List
             return@forEachIndexed
         }
         val fatigue = p.fatigue ?: 0
-        if (fatigue >= FIELDER_REST_FATIGUE) {
-            // サーバー（server/dailyLineup.mjs）と同じ条件: 控えはその位置の適性60以上、かつ疲労40未満
-            val canRest = bench.any { it.fitness(slot.position) >= SUBSTITUTE_MIN_FITNESS && (it.fatigue ?: 0) < SUBSTITUTE_FRESH_FATIGUE }
+        // その日に投げる二刀流の選手には休養の注意を出さない（野手の枠を抜ける）
+        if (fatigue >= FIELDER_REST_FATIGUE && p.id != nextId) {
             notes += OrderNote(
                 slot.position,
-                if (canRest) "${p.name} 疲労$fatigue。試合の日は控えと入れ替わって休みます"
-                else "${p.name} 疲労$fatigue。${positionLabel(slot.position)}を守れる控えが居ないので休めません",
+                if (p.id in resting) "${p.name} 疲労$fatigue。試合の日は控えと入れ替わって休みます"
+                else "${p.name} 疲労$fatigue。守備を組み直しても代わりが居ないので休めません",
                 "交代",
                 OrderPick.Starter(index),
                 MaterialTheme.colorScheme.error,
@@ -611,7 +627,10 @@ private fun PitchingEditor(
         edit { d -> d.withPitching(swapInRotation(dragBase?.takeIf { dragFrom == d.base }, d.pitching, id, target) ?: dropPitcher(d.pitching, id, target)) }
         haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
     }
-    PitchingList(view, draft, players, nextId, reorder, listState, { dragBase = currentPitching; dragFrom = currentBase; onDragStart() }, open, onSheet) { p ->
+    PitchingList(
+        view, draft, players, nextId, reorder, listState, { dragBase = currentPitching; dragFrom = currentBase; onDragStart() }, open, onSheet,
+        onMove = { id, delta -> clickEdit { it.withPitching(it.pitching.moveRelief(id, delta, view.roster)) } },
+    ) { p ->
         clickEdit { it.withPitching(it.pitching.addToStaff(p)) }
         haptic.performHapticFeedback(HapticFeedbackType.LongPress)
     }
@@ -670,6 +689,8 @@ private fun PitchingList(
     onDragStart: () -> Unit,
     open: (Long) -> Unit,
     onSheet: (PlanSheet) -> Unit,
+    /** 救援を同じ役割の中で1つ上（-1）・下（+1）へ */
+    onMove: (Long, Int) -> Unit,
     onAdd: (Player) -> Unit,
 ) {
     val haptic = LocalHapticFeedback.current
@@ -677,7 +698,8 @@ private fun PitchingList(
     // 投手起用に加えていない野手（ふだんは畳む。野手は多い）
     var fieldersOpen by rememberSaveable { mutableStateOf(false) }
     val candidates = state.staffCandidates(view.roster)
-    val relievers = RELIEF_ORDER.map { role -> role to state.roles.filter { (id, r) -> r == role && id !in state.starters }.keys.mapNotNull { players[it] } }
+    // ⚠ 同じ役割の中は決めた順（`pitcherOrder`、無ければ名簿の並び）。試合でもこの順に使われる
+    val relievers = state.reliefGroups(view.roster)
     LazyColumn(
         state = listState,
         contentPadding = PaddingValues(start = 12.dp, end = 12.dp, bottom = 16.dp),
@@ -722,7 +744,27 @@ private fun PitchingList(
                 ReorderableItem(reorder, key = "p:${p.id}") { dragging ->
                     PitcherCard(dragging, Modifier.longPressDraggableHandle(onDragStarted = { onDragStart(); haptic.performHapticFeedback(HapticFeedbackType.LongPress) })) {
                         // ⚠ 救援は役割の札を出さない（すぐ上の見出しと同じ印が二重に並んでいた）
-                        PitcherRow("", p, null, starter = false, next = false, onRole = { onSheet(PlanSheet.Role(p.id)) }, onInfo = { open(p.id) })
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Box(Modifier.weight(1f)) {
+                                PitcherRow("", p, null, starter = false, next = false, onRole = { onSheet(PlanSheet.Role(p.id)) }, onInfo = { open(p.id) })
+                            }
+                            // ⚠ **同じ役割の中の順番**（いしだ 2026-11-20「リリーフ投手が同じロールだった場合、
+                            //    並びが上の選手が優先して使われてしまいます。同じロール内で順番を入れ替えられる
+                            //    ようにしてほしいです」。PC の投手起用の▲▼と同じ）。1人だけの役割には出さない。
+                            //    役割をまたぐ移動はしない（役割は長押しのドラッグか、押して選び直す）
+                            if (list.size > 1) {
+                                Column {
+                                    listOf(Triple("▲", -1, "上へ"), Triple("▼", 1, "下へ")).forEach { (mark, delta, what) ->
+                                        TextButton(
+                                            onClick = { onMove(p.id, delta) },
+                                            enabled = state.canMoveRelief(p.id, delta),
+                                            contentPadding = PaddingValues(0.dp),
+                                            modifier = Modifier.size(36.dp, 30.dp).semantics { contentDescription = "${p.name}を${RELIEF_ROLES[role] ?: role}の中で$what" },
+                                        ) { Text(mark) }
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -894,13 +936,13 @@ private val ORDER_HELP = listOf(
     "選手（守備の札か名前）を押して選び、ほかのスタメンを押すと守備位置を入れ替え、控えを押すと交代します。控えから選んでスタメンを押しても交代です。選んでいる間は、各行の名前の下に「入れ替えたら誰がどこをどの適性で守るか」が出ます。",
     "行はふだん名前と今季成績の2段です。右上の「成績のみ」を押すと能力（ミ パ 眼 走｜守 肩）の段も出ます（端末に覚えます）。成績の段の右端は、ほかに守れる位置の適性です。",
     "守備の札の下の「適」は、守っている位置での適性です（${SUBSTITUTE_MIN_FITNESS}未満は赤、90以上は緑）。",
-    "試合の日に疲労${FIELDER_REST_FATIGUE}以上の野手は、その位置の適性${SUBSTITUTE_MIN_FITNESS}以上・疲労${SUBSTITUTE_FRESH_FATIGUE}未満の控えが居れば、その日だけ入れ替わって休みます。",
+    "試合の日に疲労${FIELDER_REST_FATIGUE}以上の野手は、その日だけ控え（疲労${SUBSTITUTE_FRESH_FATIGUE}未満）と入れ替わって休みます。ほかの先発の守備を移すこともあり、どの守備も適性${SUBSTITUTE_MIN_FITNESS}以上で組めるときだけ休みます（疲労${FIELDER_FORCE_REST_FATIGUE}以上は組めなくても休みます）。",
     "疲労は41以上で黄（成長が鈍り始める）、${FIELDER_REST_FATIGUE}以上で赤です。",
 )
 
 /** 投手起用の説明（役割の目安も、行には出さずここに） */
 private fun pitchingHelp(): List<String> = listOf(
-    "長押しでつかみ、ほかの先発の上で離すと2人の登板順が入れ替わります。救援の役割の見出しへ落とすと持ち場が変わります。行を押すと先発の型・救援の役割を選べます。",
+    "長押しでつかみ、ほかの先発の上で離すと2人の登板順が入れ替わります。救援の役割の見出しへ落とすと持ち場が変わります。行を押すと先発の型・救援の役割を選べます。同じ役割の救援が2人以上いるときは▲▼で順番を入れ替えられます（上の投手から先に使われます）。",
     "疲労${STARTER_SKIP_FATIGUE}以上の先発は順番を飛ばし、疲労${RELIEF_REST_FATIGUE}以上の救援は休ませます。クローザーは1人まで。",
     "先発の型: " + STARTER_ORDER.joinToString("、") { "${STARTER_ROLES[it] ?: it}＝${ROLE_HINT[it].orEmpty()}" },
     "救援の役割: " + RELIEF_ORDER.joinToString("、") { "${RELIEF_ROLES[it] ?: it}＝${ROLE_HINT[it].orEmpty()}" },

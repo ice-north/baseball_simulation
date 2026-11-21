@@ -271,10 +271,15 @@ const startTwoWay = (live) => {
     (p) => p.id === day.find((e) => e.position === 'right')?.playerId,
   );
   assert.ok(right && right.id !== twoWay, '野手の控えが居ない日に右翼が空いた');
-  assert.equal(right.position, 'pitcher', '右翼を埋めたのが投手でない');
+  // ⚠ 守備はまとめて組み直すので、入った投手が右翼とは限らない（中堅手が右翼へ回り、
+  //    投手が中堅に入ることもある）。入ったのが投手であることを見る
+  const comer = live.players.find(
+    (p) => day.some((e) => e.playerId === p.id && e.position !== 'pitcher') && !inOrder.has(p.id),
+  );
+  assert.equal(comer?.position, 'pitcher', '野手の枠を埋めたのが投手でない');
   assert.ok(
-    !live.pitchingRotation.starters.includes(right.id),
-    'ローテの投手を右翼に回した',
+    !live.pitchingRotation.starters.includes(comer.id),
+    'ローテの投手を野手の枠に回した',
   );
   assert.equal(new Set(day.map((e) => e.playerId)).size, 9, '同じ選手が2回いる');
   restore();

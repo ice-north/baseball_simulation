@@ -5,6 +5,7 @@ import { POS } from './api.js';
 import { getZoneProfile, zoneHeatmap } from '../game/batterZone.js';
 import { getAbilityRank, getRankColor } from '../utils/constants.js';
 import { teamLabel } from './gameText.js';
+import { withoutPlaceholderHighSchool } from '../utils/careerHistory.js';
 
 // ============================================================
 // 選手の詳細（1画面）。
@@ -33,7 +34,8 @@ const CAREER_LABEL = {
 
 /** 経歴を1行で。⚠ 新しい順。古い順だと「いま何処か」が末尾になって読みにくい */
 export function CareerLine({ player }) {
-  const history = player.careerHistory || [];
+  // ⚠ 名前の付いた高校と並んでいる仮の「高校卒」は出さない（古いリーグに残っている。`careerHistory.js`）
+  const history = withoutPlaceholderHighSchool(player.careerHistory);
   if (!history.length) {
     // ⚠ 空のときに欄ごと消さない。「経歴が無い」のか「出し忘れ」なのか
     //    分からなくなる
