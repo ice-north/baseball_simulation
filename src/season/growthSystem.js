@@ -345,7 +345,16 @@ export function naturalAgeCoef(effAge) {
 //    **以前は `makeGrower` が `growthPotential` しか読んでおらず、変動は
 //    年度替わりの成長にまったく効いていなかった**（精神力・体幹だけが見ていた）。
 const GP_AGE_SHIFT = 8;    // 素質1.4→+3.2歳 / 0.6→-3.2歳
-const DISC_AGE_SHIFT = 5;  // プロ意識90→+2.0歳 / 20→-1.5歳
+// プロ意識によるずらしは**上下で幅が違う**（いしだ 2026-11-21「低いプロ意識による
+// 成長係数の下落をもう2年程早めたい。高プロ意識はそのままでOK」）。
+//   意識90→+2.0歳 / 70→+1.0歳 / 50→±0 / 35→-1.7歳 / 20→-3.5歳 / 10→-4.6歳
+// ⚠ 50 を境に折れている。50 は**指定の表が当たる基準**なので動かせない。
+const DISC_AGE_SHIFT_HI = 5;    // 意識50より上（手を付けない）
+const DISC_AGE_SHIFT_LO = 11.5; // 意識50より下（練習しない選手は早く終わる）
+const discAgeShift = (discipline) => {
+  const t = (discipline ?? 50) - 50;
+  return (t / 100) * (t >= 0 ? DISC_AGE_SHIFT_HI : DISC_AGE_SHIFT_LO);
+};
 /**
  * 素質が**伸びる側だけ**に掛かる倍率（0.3→0.69 / 1.0→1.00 / 1.8→1.36）。
  * ⚠ ずらしだけでは足りない。ずらしは「いつまで伸びるか」しか変えないので、
@@ -365,7 +374,7 @@ const PEAK_REF = 26.5;
  */
 export function naturalCoefOf(age, gpEff = 1.0, discipline = 50, peakAge = PEAK_REF) {
   const shift = (gpClamp(gpEff) - 1) * GP_AGE_SHIFT
-    + ((discipline ?? 50) - 50) / 100 * DISC_AGE_SHIFT
+    + discAgeShift(discipline)
     + ((peakAge ?? PEAK_REF) - PEAK_REF);
   return naturalAgeCoef((age || 25) - shift);
 }
@@ -410,7 +419,7 @@ const declineWeight = (decline) =>
 const ACT_REF = 1.50;
 
 // ⚠ 【かつてここにあった練習成長のプロ意識倍率（`disciplineTrainMult`）】は
-//    2026-11-20に落とした。プロ意識は**年齢曲線のずらし**（`DISC_AGE_SHIFT`）に移した。
+//    2026-11-20に落とした。プロ意識は**年齢曲線のずらし**（`discAgeShift`）に移した。
 //    練習の項に足して基礎の負を打ち消す形だと、プロ意識が高い選手が
 //    **いつまでも衰えない**（それが「ベテランが居座る」原因だった）。
 
