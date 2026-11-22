@@ -1401,8 +1401,10 @@ const ManualContent = ({ category }) => {
                   <th className="text-right py-1 px-2">下限</th>
                 </tr></thead>
                 <tbody className="text-gray-300">
-                  <tr><td className="py-0.5 px-2 text-yellow-300">技術系（ミート・パワー・選球眼・制球・守備・盗塁）</td>
-                    <td className="text-right px-2 text-yellow-300">75</td><td className="text-right px-2">-4%</td><td className="text-right px-2">15%</td></tr>
+                  <tr><td className="py-0.5 px-2 text-yellow-300">技術系（ミート・パワー・選球眼・制球・盗塁・バント）</td>
+                    <td className="text-right px-2 text-yellow-300">50</td><td className="text-right px-2">-3%</td><td className="text-right px-2">15%</td></tr>
+                  <tr><td className="py-0.5 px-2 text-yellow-300">守備（努力で上がる能力）</td>
+                    <td className="text-right px-2 text-yellow-300">70</td><td className="text-right px-2">-5%</td><td className="text-right px-2">15%</td></tr>
                   <tr><td className="py-0.5 px-2 text-green-300">フィジカル系（走力・肩・スタミナ・体力・回復）</td>
                     <td className="text-right px-2">80</td><td className="text-right px-2">-3%</td><td className="text-right px-2">10%</td></tr>
                   <tr><td className="py-0.5 px-2 text-blue-300">球速</td>
@@ -1411,14 +1413,14 @@ const ManualContent = ({ category }) => {
               </table>
             </div>
             <ul className="list-disc list-inside text-sm space-y-1 mt-2">
-              <li>技術系は85で60%、95で15%（下限）まで落ちる</li>
+              <li>技術系は60で70%、70で40%、79で15%（下限）まで落ちる。守備は80で50%、87で15%（下限）</li>
               <li>球速は156km/hで80%、157km/hで60%…と急激に伸びにくくなる。
                   さらに<b>肩力による上限</b>があり、そちらを超えることはできない</li>
             </ul>
           </Entry>
           <h3 className="text-yellow-300 font-bold text-sm border-b border-yellow-800 pb-1 mt-6">覚醒システム</h3>
           <Entry title="覚醒とは">
-            メイン練習中に一定確率で発生する大幅な追加成長（+3〜6）。覚醒分は成長減衰の影響を受けない。
+            メイン練習中に一定確率で発生する大幅な追加成長（+3〜6）。覚醒分は上の成長減衰とは別の抑えで、能力70以上では1ポイントごとに5%小さくなる（下限30%）。
           </Entry>
           <Entry title="覚醒は「経験値 × プロ意識」で決まる">
             <b className="text-yellow-300">経験値だけでは覚醒しない。</b>努力する姿勢がなければ飛躍は起きない。
@@ -1577,7 +1579,7 @@ const ManualContent = ({ category }) => {
       return (
         <div className="space-y-4">
           {/* ⚠ 数字は src/season/growthSystem.js の定数から計算したもの（2026-11-20 の年齢曲線）。
-              曲線（NATURAL_*）・ずらし（GP_AGE_SHIFT・DISC_AGE_SHIFT）・peakAge・decline を変えたら直す */}
+              曲線（NATURAL_*）・ずらし（GP_AGE_SHIFT・discAgeShift）・peakAge・decline を変えたら直す */}
           <Entry title="年度替わりの自然成長は年齢の曲線で決まる">
             シーズンをまたぐときに、練習しなくても自然に動く分。主な能力1つあたりの点で、
             素質1.0・プロ意識50・独立リーグ（ランクC）・レギュラー出場の選手なら次のとおり。

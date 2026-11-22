@@ -8,6 +8,7 @@
 //    （新球種習得）があり、実測で画面に出ていた。選べるのに提出で弾かれる。
 import assert from 'node:assert/strict';
 import { mkdtemp, rm } from 'node:fs/promises';
+import { readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { FileStore } from '../../server/storage/fileStore.mjs';
@@ -1297,7 +1298,7 @@ assert.ok(
   // ⚠ **ノックは守備が伸びる**（いしだ 2026-11-20「ノックの守備の伸びが弱い」）。
   //    守備60で4クール平均+2.5以上。
   // ⚠ 守備は**努力で上がる能力**なので、技術系（50から3%）ではなく専用の天井
-  //    （70から2%・下限25%。`EFFORT_DAMP`）を持つ。いしだ 2026-11-21「体力や守備、
+  //    （70から5%・下限15%。`EFFORT_DAMP`）を持つ。いしだ 2026-11-21「体力や守備、
   //    スタミナ、体幹、サブポジなどの努力で上がるものに関しては、制限をゆるくしたい」。
   //    **ここを技術系に戻すと守備60の伸びが3割落ちる**（実測 +2.6 → +2.2）
   const knock = fourRounds(60, 'fielding', defOf);
@@ -1307,12 +1308,25 @@ assert.ok(
     knockLow.mean >= 2.5,
     `しきい値の下のノックまで弱くなっている: 守備40で平均+${knockLow.mean.toFixed(2)}`,
   );
-  // ⚠ ただし**青天井ではない**。守備85では鈍る（下限25%）
+  // ⚠ ただし**青天井ではない**。守備85では鈍る（25%。87で下限15%）
   const knockHigh = fourRounds(85, 'fielding', defOf);
   assert.ok(
     knockHigh.mean < knock.mean * 0.7,
     `高い守備が鈍っていない: 守備85で平均+${knockHigh.mean.toFixed(2)} / 守備60で+${knock.mean.toFixed(2)}`,
   );
+  // ⚠ マニュアル（ManualScreen の「成長減衰」）の表が式と合うこと。以前は技術系75・-4%のまま
+  //    残り、守備の別枠も無かった（2026-11-21 の監査）。しきい値を変えたら表も直す
+  {
+    const manual = readFileSync(new URL('../../src/components/ManualScreen.jsx', import.meta.url), 'utf8');
+    const rowOf = (label) => {
+      const i = manual.indexOf(label);
+      assert.ok(i >= 0, `マニュアルの成長減衰の表に「${label}」の行が無い`);
+      return manual.slice(i, manual.indexOf('</tr>', i)).replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
+    };
+    assert.match(rowOf('技術系（ミート・パワー・選球眼・制球・盗塁・バント）'), / 50 -3% 15% /, 'マニュアルの技術系の減衰（50から3%・下限15%）が式と違う');
+    assert.match(rowOf('守備（努力で上がる能力）'), / 70 -5% 15% /, 'マニュアルの守備の減衰（70から5%・下限15%）が式と違う');
+    assert.ok(!manual.includes('覚醒分は成長減衰の影響を受けない'), 'マニュアルに「覚醒は減衰を受けない」が残っている（awakeningHighStatDamp がある）');
+  }
   // ⚠ ノックは**今の守備位置の適性**も上げる（確定で+4〜8/クール）
   assert.ok(knock.fit >= 16, `ノックで守備位置の適性が上がっていない: +${knock.fit.toFixed(1)}`);
 }
