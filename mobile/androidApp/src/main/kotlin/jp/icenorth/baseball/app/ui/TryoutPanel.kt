@@ -279,8 +279,13 @@ private fun originOf(p: JsonObject): String? {
 private fun ListedByChips(p: JsonObject, short: (String) -> String) {
     val rows = p.at("listedBy").list().mapNotNull { it.obj() }
     if (rows.isEmpty()) return
+    // ⚠ 折り返さない行なので、札は先に指名する球団（赤）から3枚まで、残りは「+N」（監査 2026-11-21）。
+    //    CPU はどこも同じ選び方で標準案を作るので、上位の候補にはほぼ全球団の札が付き、名前を押し潰していた。
+    //    Web 版は折り返して全部出す
+    val sorted = rows.sortedByDescending { it.at("first").bool() == true }
+    val shown = sorted.take(LISTED_BY_MAX)
     Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-        rows.forEach { r ->
+        shown.forEach { r ->
             val first = r.at("first").bool() == true
             Text(
                 short(r.at("team").str().orEmpty()) + if (r.at("cpu").bool() == true) "?" else "",
@@ -294,8 +299,12 @@ private fun ListedByChips(p: JsonObject, short: (String) -> String) {
                 maxLines = 1,
             )
         }
+        if (rows.size > shown.size)
+            Text("+${rows.size - shown.size}", fontSize = 9.sp, lineHeight = 12.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
     }
 }
+
+private const val LISTED_BY_MAX = 3
 
 /** 甲子園で名を上げた人（「2年目の夏の甲子園 ○○高のエース（ベスト4）」。サーバーが付ける。`koshienNoteOf`） */
 @Composable

@@ -3,6 +3,9 @@ package jp.icenorth.baseball.app.ui
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.border
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.runtime.withFrameNanos
@@ -721,18 +724,15 @@ private fun ReleasePanel(model: AppViewModel, raw: JsonObject, plan: JsonObject,
                 positionLabel(p.at("position").str()) + " " + handLabel(p)
             },
             trailingHeader = "解雇・打診",
-            trailingWidth = 172.dp,
+            // ⚠ 幅は名前の列（118dp）と合わせて狭い端末に収まるように（監査 2026-11-21。172dp だと 360dp の端末で
+            //    成績の列が1列も見えなかった）。ふつうのボタンは最小幅 58dp なので、小さな札の形にする
+            trailingWidth = 108.dp,
             trailing = { p ->
-                Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(3.dp), verticalAlignment = Alignment.CenterVertically) {
                     val on = p.pid in releases
-                    val toggle = { setPlan(Commands.withRelease(plan, p.pid, !on)) }
-                    if (on) Button(onClick = toggle, enabled = editable, contentPadding = PaddingValues(horizontal = 6.dp)) { Text("予定", fontSize = 12.sp) }
-                    else OutlinedButton(onClick = toggle, enabled = editable, contentPadding = PaddingValues(horizontal = 6.dp)) { Text("解雇", fontSize = 12.sp) }
+                    MiniToggle(if (on) "予定" else "解雇", on, editable) { setPlan(Commands.withRelease(plan, p.pid, !on)) }
                     COACH_OFFER_ROLES.forEach { (role, short) ->
-                        val picked = offers[role] == p.pid
-                        val pick = { setPlan(Commands.withCoachOffer(plan, p.pid, role)) }
-                        if (picked) Button(onClick = pick, enabled = editable, contentPadding = PaddingValues(horizontal = 4.dp)) { Text(short, fontSize = 11.sp) }
-                        else OutlinedButton(onClick = pick, enabled = editable, contentPadding = PaddingValues(horizontal = 4.dp)) { Text(short, fontSize = 11.sp) }
+                        MiniToggle(short, offers[role] == p.pid, editable) { setPlan(Commands.withCoachOffer(plan, p.pid, role)) }
                     }
                 }
             },
@@ -750,6 +750,22 @@ private fun ReleasePanel(model: AppViewModel, raw: JsonObject, plan: JsonObject,
                 )
             }
         }
+    }
+}
+
+/** 表の右端の小さな切り替え（解雇・投C・野C）。選んでいると塗り、選んでいないと枠だけ */
+@Composable
+private fun MiniToggle(label: String, on: Boolean, enabled: Boolean, onClick: () -> Unit) {
+    val color = MaterialTheme.colorScheme.primary
+    Box(
+        Modifier
+            .height(28.dp)
+            .then(if (on) Modifier.background(color, RoundedCornerShape(4.dp)) else Modifier.border(1.dp, color.copy(alpha = if (enabled) 1f else 0.4f), RoundedCornerShape(4.dp)))
+            .clickable(enabled = enabled, onClick = onClick)
+            .padding(horizontal = 5.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(label, fontSize = 11.sp, fontWeight = FontWeight.Bold, color = if (on) MaterialTheme.colorScheme.onPrimary else color, maxLines = 1)
     }
 }
 

@@ -754,12 +754,23 @@ export function projectLeague(bundle, userId, sessionId, adminId) {
                 ? tryoutInterest({
                     ownTeam: member.teamName,
                     order: tryoutPickOrder(l.season.standings),
+                    // ⚠ 指導者に任せた人の提出は使われない（`resolvePhase` は標準案で決める）ので札にしない（監査 2026-11-21）
                     humanLists: Object.fromEntries(
                       l.members
-                        .filter((m) => m.userId !== userId && phase.submissions[m.userId]?.plan?.rankedIds)
+                        .filter(
+                          (m) =>
+                            m.userId !== userId &&
+                            phase.submissions[m.userId]?.plan?.rankedIds &&
+                            !phaseDelegated(l, { ...m, away: false }),
+                        )
                         .map((m) => [m.teamName, phase.submissions[m.userId].plan.rankedIds]),
                     ),
-                    cpuLists: phase.cpuLists || {},
+                    // ⚠ 開いた後に人が入った球団は CPU の見込みを出さない（同じ球団の札が2つ並んでいた）
+                    cpuLists: Object.fromEntries(
+                      Object.entries(phase.cpuLists || {}).filter(
+                        ([teamName]) => !l.members.some((m) => m.teamName === teamName),
+                      ),
+                    ),
                   })
                 : new Map();
             return phase.candidates.map((c) => {

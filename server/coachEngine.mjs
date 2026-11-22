@@ -405,9 +405,10 @@ export function staffCommand(league, userId, payload) {
  *   （`leanFromPlayer`）、恩師は今の監督、出身は現役の球団。⚠ 能力のバフは付けない（監督・コーチは采配の肩代わり）
  * - 監督へは、キャンプの間の指導者の画面で「入れ替え」（`staffCommand` の swap）で上げられる
  * - 乱数（名前の重なりを避ける・考え方の揺れ）はリーグの種×年×球団×役職で決める
+ * `career`: このリーグでの { seasons, line }（`chronicle.mjs` の `careerSummaryOf`）
  * @returns 新しい指導者
  */
-export function hirePlayerAsCoach(league, teamName, player, role) {
+export function hirePlayerAsCoach(league, teamName, player, role, career = null) {
   requireOnline(role === 'pitching' || role === 'batting', 'コーチの役職が不正です');
   const c = ensureCoaches(league);
   const year = league.season.year;
@@ -424,8 +425,10 @@ export function hirePlayerAsCoach(league, teamName, player, role) {
         kind: 'player',
         team: teamName,
         teamLabel: label,
-        seasons: (player.careerHistory || []).filter((h) => h.type === 'independent').length,
-        line: null,
+        // ⚠ 年数と成績の行はこのリーグの記録から（呼ぶ側が `careerSummaryOf` で渡す。引退して指導者に
+        //    なる道と同じ数え方）。以前は経歴の「入団」の行を数えていて、在籍年数でなく入団の回数になっていた
+        seasons: career?.seasons || 0,
+        line: career?.line || null,
         playerName: player.name,
         legend: false,
       },
@@ -577,6 +580,7 @@ export function coachOffseason(league, { rows = {}, retirees = [] } = {}) {
     Object.entries(c.teams).map(([team, seats]) => [team, seats.manager]),
   );
   const leaders = leadersOf(entry, rows);
+  let seated = [];
   seededIn(league, `offseason:${year}`, () => {
     // 1) 成績を残す（部で1位だった成績は `leads` に。称号に使う）
     for (const [team, seats] of Object.entries(c.teams)) {
@@ -704,6 +708,10 @@ export function coachOffseason(league, { rows = {}, retirees = [] } = {}) {
       if (managers[r.team]) coach.mentor = managers[r.team];
       events.push({ year: nextYear, kind: 'turn', team: r.team, role: null, coachId: coach.id, name: coach.name });
     }
+    // 契約更改でコーチ打診を受けた人が席に就く（成績を足し・辞任を決めた**後**。`hirePlayerAsCoach`）。
+    // ⚠ 市場の人数を整える**前**に（監査 2026-11-21）。後だと、席を譲った前任が市場へ戻ったぶん
+    //    その年の市場が `MARKET_MAX` を超えていた
+    seated = seatReserved(c, nextYear);
     // 5) 市場の人数を整える
     const free = () => Object.values(c.people).filter((p) => p.status === 'free');
     while (free().length < MARKET_MIN) {
@@ -713,8 +721,7 @@ export function coachOffseason(league, { rows = {}, retirees = [] } = {}) {
     const extra = free().sort((a, b) => b.age - a.age).slice(0, Math.max(0, free().length - MARKET_MAX));
     for (const coach of extra) coach.status = 'retired';
   });
-  // 契約更改でコーチ打診を受けた人が席に就く（成績を足し・辞任を決めた**後**。`hirePlayerAsCoach`）
-  events.unshift(...seatReserved(c, nextYear).reverse());
+  events.unshift(...seated.reverse());
   // 記録の無い引退者は残さない（保存を太らせない）
   for (const [id, coach] of Object.entries(c.people))
     if (coach.status === 'retired' && !coach.career?.length) delete c.people[id];

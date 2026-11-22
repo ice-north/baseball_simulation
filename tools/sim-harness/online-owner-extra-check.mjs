@@ -68,6 +68,13 @@ import { diagnoseTeam, DIAGNOSIS_MIN_GAMES, DIAGNOSIS_MAX_ITEMS } from '../../sr
     const team = makeTeam('自', { tired: 2 });
     team.players[2].fatigue = 85;
     assert.ok(!run(team).items.some((x) => x.kind === 'fatigue'), '自動で休む疲労80以上を「疲れたまま」と挙げた');
+    // 監査（2026-11-21）: 休養の目安（`restLine`）を選べるようになった。「早め」（60）なら疲労75も休む、
+    //    「遅め」（100）なら疲労85は休まず出る
+    const early = makeTeam('自', { tired: 2 });
+    early.onlineTactics = { restLine: 'early' };
+    assert.ok(!run(early).items.some((x) => x.kind === 'fatigue'), '休養「早め」で休む疲労75を「疲れたまま」と挙げた');
+    team.onlineTactics = { restLine: 'late' };
+    assert.ok(run(team).items.some((x) => x.kind === 'fatigue' && /疲労85/.test(x.text)), '休養「遅め」で休まない疲労85を挙げない');
   }
   // 監査: 今は起用できない控え（isActive false）を勧めない
   {

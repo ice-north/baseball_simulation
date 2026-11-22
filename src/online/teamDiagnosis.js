@@ -10,7 +10,7 @@
 // ============================================================
 import { plateAppearances } from '../season/seasonManager.js';
 import { POS_FULL } from './api.js';
-import { FIELDER_REST_FATIGUE } from './shared.js';
+import { restFatigueOf } from './shared.js';
 
 /** 診断を出し始める試合数（少ないうちは数字が揺れる） */
 export const DIAGNOSIS_MIN_GAMES = 10;
@@ -33,8 +33,8 @@ const MIN_RELIEF_OUTS = 24;
 const MIN_ALT_OUTS = 30;
 /** 疲れ: 野手の疲労がこれ以上だと試合の打撃・守備が目に見えて落ちる（疲労²/1200 で約3） */
 export const DIAGNOSIS_FATIGUE = 60;
-// ⚠ `FIELDER_REST_FATIGUE`（80）以上で代わりの居る野手は、試合の日にサーバーが自動で休ませる。
-//    「疲れたまま出ています」とは言えないので、その人は挙げない
+// ⚠ 球団の休養の目安（自動采配の `restLine`。`restFatigueOf`、標準80・早め60・遅め100）以上で代わりの居る野手は、
+//    試合の日にサーバーが自動で休ませる。「疲れたまま出ています」とは言えないので、その人は挙げない
 /** 守備: 守らせている位置の適性がこれ未満 */
 const FITNESS_LOW = 60;
 
@@ -182,9 +182,11 @@ export function diagnoseTeam({ team, teamName, rivals, results, leagueName = '�
     });
 
   // 4. 疲れ: 疲れたまま出ている先発野手（試合の打撃・守備が落ちる）
+  // ⚠ 休ませる目安は球団の自動采配から（監査 2026-11-21。80 に固定だと「早め」の球団で休む人を挙げていた）
+  const restAt = restFatigueOf(team.onlineTactics);
   const tired = order
     .map((s) => byId.get(s.playerId))
-    .filter((p) => n(p.fatigue) >= DIAGNOSIS_FATIGUE && n(p.fatigue) < FIELDER_REST_FATIGUE)
+    .filter((p) => n(p.fatigue) >= DIAGNOSIS_FATIGUE && n(p.fatigue) < restAt)
     .sort((a, b) => n(b.fatigue) - n(a.fatigue));
   if (tired.length)
     items.push({

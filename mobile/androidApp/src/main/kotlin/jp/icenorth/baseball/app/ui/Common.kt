@@ -399,8 +399,9 @@ fun StatTable(
                             overflow = TextOverflow.Ellipsis,
                             color = MaterialTheme.colorScheme.primary,
                         )
+                        // ⚠ 名前の列は 118dp。札（「ソフトバンク接触」）を切らないよう、先に縮むのは守備位置・投打の文（監査 2026-11-21）
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(sub(p), fontSize = 10.sp, lineHeight = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
+                            Text(sub(p), fontSize = 10.sp, lineHeight = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
                             ProWatchChip(p.at("proWatch"), Modifier.padding(start = 4.dp))
                         }
                     }

@@ -8,6 +8,7 @@ import {
   recordGrandChampionship,
   recordRetirements,
   annotateHistory,
+  careerSummaryOf,
 } from './chronicle.mjs';
 import {
   TEAMS_DATA,
@@ -127,7 +128,7 @@ import {
 } from './cpuTrades.mjs';
 import { setPlayerIdCounter } from '../src/state/playerIds.js';
 import { captureWorld, restoreWorld } from './worldSnapshot.mjs';
-import { createRecorder, freezeComparison } from './recordedStats.mjs';
+import { createRecorder, freezeComparison, keyFor } from './recordedStats.mjs';
 import { chooseProDraft, applyProDraft } from './proDraft.mjs';
 import {
   pushInbox,
@@ -2253,7 +2254,7 @@ function resolvePhase(league, now) {
         const team = TEAMS_DATA[name];
         const player = team.players.find((p) => p.id === id);
         if (!player) continue;
-        hirePlayerAsCoach(league, name, player, role);
+        hirePlayerAsCoach(league, name, player, role, careerSummaryOf(league, keyFor(name, player), player.position === 'pitcher'));
         coached.push(player);
         cleanupPlayerReferences(team, player.id);
         team.players = team.players.filter((p) => p.id !== player.id);

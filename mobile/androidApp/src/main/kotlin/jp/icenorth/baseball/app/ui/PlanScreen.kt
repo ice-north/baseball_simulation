@@ -420,6 +420,7 @@ private fun OrderEditor(
                         ),
                     ) {
                         FielderRow(
+                            restAt = restAt,
                             order = "${index + 1}",
                             position = slot.position,
                             player = players[slot.playerId],
@@ -442,6 +443,7 @@ private fun OrderEditor(
                 items(members, key = { "bench:${it.id}" }) { p ->
                     Surface(shape = RoundedCornerShape(10.dp), color = if (picked == OrderPick.Bench(p.id)) MaterialTheme.colorScheme.secondary.copy(alpha = 0.22f) else MaterialTheme.colorScheme.surfaceContainerLow, modifier = Modifier.fillMaxWidth()) {
                         FielderRow(
+                            restAt = restAt,
                             order = null,
                             position = p.position,
                             player = p,
@@ -470,6 +472,7 @@ private fun OrderEditor(
                 items(shownPitchers, key = { "bench:${it.id}" }) { p ->
                     Surface(shape = RoundedCornerShape(10.dp), color = if (picked == OrderPick.Bench(p.id)) MaterialTheme.colorScheme.secondary.copy(alpha = 0.22f) else MaterialTheme.colorScheme.surfaceContainerLow, modifier = Modifier.fillMaxWidth()) {
                         FielderRow(
+                            restAt = restAt,
                             order = null,
                             position = p.position,
                             player = p,
@@ -504,6 +507,7 @@ private fun OrderEditor(
                             items(subs, key = { "dock:${it.id}" }) { p ->
                                 Surface(shape = RoundedCornerShape(10.dp), color = MaterialTheme.colorScheme.surfaceContainerLow, modifier = Modifier.fillMaxWidth()) {
                                     FielderRow(
+                                        restAt = restAt,
                                         order = null,
                                         position = p.position,
                                         player = p,
@@ -940,7 +944,7 @@ private val ORDER_HELP = listOf(
     "行はふだん名前と今季成績の2段です。右上の「成績のみ」を押すと能力（ミ パ 眼 走｜守 肩）の段も出ます（端末に覚えます）。成績の段の右端は、ほかに守れる位置の適性です。",
     "守備の札の下の「適」は、守っている位置での適性です（${SUBSTITUTE_MIN_FITNESS}未満は赤、90以上は緑）。",
     "試合の日に疲労${FIELDER_REST_FATIGUE}以上（自動采配の「疲れた野手を休ませる目安」で早め60・遅め100にもできます）の野手は、その日だけ控え（疲労${SUBSTITUTE_FRESH_FATIGUE}未満）と入れ替わって休みます。ほかの先発の守備を移すこともあり、どの守備も適性${SUBSTITUTE_MIN_FITNESS}以上で組めるときだけ休みます（疲労${FIELDER_FORCE_REST_FATIGUE}以上は組めなくても休みます）。",
-    "疲労は41以上で黄（成長が鈍り始める）、${FIELDER_REST_FATIGUE}以上で赤です。",
+    "疲労は41以上で黄（成長が鈍り始める）、休ませる目安（標準${FIELDER_REST_FATIGUE}・早め60・遅め100）以上で赤です。",
 )
 
 /** 投手起用の説明（役割の目安も、行には出さずここに） */

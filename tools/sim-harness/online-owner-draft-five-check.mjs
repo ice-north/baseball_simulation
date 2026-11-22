@@ -79,6 +79,26 @@ while (days < 600) {
         for (const r of c.listedBy) assert.equal(r.first, order.indexOf(r.team) < order.indexOf(A.teamName), '先に指名する球団の印が違う');
       // B の画面には B 自身の札は出ない
       assert.ok(!view(B.userId).phase.candidates.some((c) => c.listedBy?.some((r) => r.team === B.teamName)));
+      // 監査（2026-11-21）: B がトライアウトを指導者に任せたら、B の提出は使われないので札にしない
+      {
+        const saved = B.staffModes;
+        B.staffModes = { ...(saved || {}), tryout: 'delegate' };
+        if (league.coaches?.teams?.[B.teamName]?.manager) {
+          const v2 = view(A.userId);
+          assert.ok(!v2.phase.candidates.some((c) => c.listedBy?.some((r) => r.team === B.teamName && !r.cpu)), '任せた人の提出を札にしている');
+        }
+        B.staffModes = saved;
+        if (saved === undefined) delete B.staffModes;
+      }
+      // 開いた後に人が入った球団は、CPU の見込みと人のリストの札が2つ並ばない
+      {
+        const cpuTeam = Object.keys(league.phase.cpuLists || {})[0];
+        const fake = { userId: 'z', teamName: cpuTeam };
+        league.members.push(fake);
+        const v3 = view(A.userId);
+        league.members.pop();
+        assert.ok(!v3.phase.candidates.some((c) => c.listedBy?.some((r) => r.team === cpuTeam && r.cpu)), '人が入った球団に CPU の見込みの札が残っている');
+      }
       // ⑤ 打診した選手はトライアウトの受験者にいない
       assert.ok(!league.phase.candidates.some((c) => c.name === offered.name && c.age === offered.age), 'コーチ打診した選手がトライアウトに出ている');
       tryoutChecked = true;
@@ -100,6 +120,12 @@ while (days < 600) {
       assert.ok(reserved && reserved.name === pitcher.name, '打診した選手が就任予定の指導者になっていない');
       assert.deepEqual({ team: reserved.joins.team, role: reserved.joins.role }, { team: A.teamName, role: 'pitching' });
       assert.equal(league.coaches.teams[A.teamName].pitching, offered.before, '年度更新の前に席が替わった');
+      // 監査（2026-11-21）: 「元投手（XでN年）」の年数と成績の行はこのリーグの記録から（引退して指導者になる道と同じ）。
+      //    以前は経歴の入団の行を数え、成績の行は出なかった
+      const recKey = pitcher.onlinePlayerId || `${A.teamName}:${pitcher.id}:${pitcher.name}`;
+      const played = Object.values(league.records?.seasons || {}).filter((s) => s.players?.[recKey]).length;
+      assert.equal(reserved.origin.seasons, played, `打診した選手の在籍年数が記録と違う: ${reserved.origin.seasons} / ${played}`);
+      if (played) assert.ok(reserved.origin.line, '打診した選手の成績の行が無い');
       offered.coachId = reserved.id;
       continue;
     }
@@ -118,6 +144,8 @@ while (days < 600) {
           if (prev) assert.ok(prev.career?.some((r) => r.year === startYear && r.team === A.teamName && r.role === 'pitching'), '前の投手コーチの年の記録が消えた');
         }
         assert.ok(!league.coaches.people[offered.coachId].career?.some((r) => r.year === startYear), '打診した選手に務めていない年の記録が付いた');
+        // 監査（2026-11-21）: 前任が市場へ戻っても、市場の人数は上限（16）まで
+        assert.ok(Object.values(league.coaches.people).filter((p) => p.status === 'free').length <= 16, '年度更新の後の市場が上限を超えている');
         offered.done = true;
       }
       break;

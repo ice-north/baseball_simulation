@@ -229,6 +229,15 @@ function careerOf(league, key) {
   return total;
 }
 
+/**
+ * このリーグでの年数と通算の一行（引退の記録 `recordRetirements` と同じ数え方）。
+ * 契約更改のコーチ打診（`hirePlayerAsCoach`）で「元投手（川崎で4年）」と成績の行を出すのに使う
+ */
+export function careerSummaryOf(league, key, pitcher) {
+  const total = key ? careerOf(league, key) : null;
+  return { seasons: total?.seasons || 0, line: total ? careerLine(total, pitcher) : null };
+}
+
 /** 通算の一行（「通算 .281 45本 230打点」「通算 52勝38敗 防御率3.12」） */
 export function careerLine(total, pitcher) {
   const b = total.batting, p = total.pitching;

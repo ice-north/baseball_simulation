@@ -55,7 +55,7 @@ function Cell({ column, player }) {
   return value ?? '—';
 }
 
-/** コーチ打診の役職（`server/coachEngine.mjs` の `hirePlayerAsCoach`）。⚠ アプリの ProceduresScreen.kt と同じ文 */
+/** コーチ打診の役職（`server/coachEngine.mjs` の `hirePlayerAsCoach`）。⚠ 役職はアプリの ProceduresScreen.kt（`COACH_OFFER_ROLES`）と同じ。ボタンの名前は幅の都合でアプリだけ「投C」「野C」と短い */
 export const COACH_OFFER_ROLES = [
   ['pitching', '投手コーチ'],
   ['batting', '野手コーチ'],
