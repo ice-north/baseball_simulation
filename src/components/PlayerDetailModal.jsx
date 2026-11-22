@@ -300,8 +300,14 @@ export default function PlayerDetailModal({ player, onClose, scoutAccuracy = 1 }
                 </div>
                 <div className="border-t border-gray-600 mt-2 pt-2 text-xs text-gray-300 space-y-1">
                   <div>体格: <span className="text-white">{player.physical?.build === 'large' ? '大柄' : player.physical?.build === 'small' ? '小柄' : '中肉'}</span></div>
-                  {/* ⚠ 「来季の年度替わりで主要な能力が1つあたり何点動くか」。
-                      素の成長係数（年齢が入らない）はもう出さない（`src/utils/naturalGrowth.js`） */}
+                  {/* ⚠ **2つ並べる**（いしだ 2026-11-22「各選手の詳細能力の成長の素質に、
+                      成長係数を表示してください」）。
+                      ・成長係数 … 年齢を含まない素の個性（0.30〜1.80）。年齢曲線を
+                        0.1ごとに0.8歳ずらし、キャンプの伸びと止まる年齢も決める
+                      ・自然成長 … 年齢・出場量こみの「来季1能力あたり何点動くか」 */}
+                  <div>成長係数: <span className="text-white font-bold" title="能力の伸びやすさの素（年齢を含まない）。出場で積み・疲れたまま出ると削れる変動こみ">
+                    {Math.max(0.3, Math.min(1.8, (player.growthPotential ?? 1.0) + (player.growthModifier || 0))).toFixed(2)}
+                  </span></div>
                   <div>自然成長: <span className={`font-bold ${naturalGrowthColor(naturalGrowth)}`} title={naturalGrowthTitle(player, ownTeam)}>
                     {naturalGrowthText(naturalGrowth)}
                   </span>{naturalGrowth !== null && <span className="text-gray-400">/年</span>}</div>

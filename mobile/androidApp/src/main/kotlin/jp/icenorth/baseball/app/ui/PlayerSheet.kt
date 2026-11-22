@@ -207,6 +207,10 @@ private fun PlayerDetail(model: AppViewModel, p: JsonObject) {
             Item("体幹", p.at("physical", "muscle").int())
             Item("器用さ", p.at("physical", "dexterity").int())
             Item("プロ意識", p.at("personality", "discipline").int())
+            // ⚠ **2つ並べる**（いしだ 2026-11-22「各選手の詳細能力の成長の素質に、
+            //    成長係数を表示してください」）。成長係数は年齢を含まない素の個性、
+            //    自然成長は年齢・出場量こみの「来季1能力あたり何点動くか」
+            growthFactor(p)?.let { TextItem("成長係数", it) }
             naturalGrowth(p)?.let { TextItem("自然成長", it) }
         }
         val fitness = p.at("positionFitness").obj().orEmpty()
@@ -472,6 +476,17 @@ private fun AbilityScope.TextItem(label: String, text: String, help: String = la
         Text("$label ", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.alignByBaseline())
         Text(text, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold, modifier = Modifier.alignByBaseline())
     }
+}
+
+/**
+ * 成長係数（Web 版と同じく 素質＋変動を 0.3〜1.8 に収め、小数2桁）。
+ * ⚠ 他球団の選手には渡ってこない値なので、そのときは行ごと出さない。
+ */
+private fun growthFactor(p: JsonObject): String? {
+    val base = p.at("growthPotential").num() ?: return null
+    val value = (base + (p.at("growthModifier").num() ?: 0.0)).coerceIn(0.3, 1.8)
+    val hundredths = kotlin.math.round(value * 100).toInt()
+    return "${hundredths / 100}.${(hundredths % 100).toString().padStart(2, '0')}"
 }
 
 /**

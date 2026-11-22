@@ -709,9 +709,10 @@ export default function DesktopView(props) {
                   誰が抜かれたかを出す（いしだ 2026-11-19「指名の演出もほしい」）。
                   年度更新で消える */}
               <ProDraftResult view={view} />
-              {/* 開幕した月のあいだは、キャンプで見逃した人のために「その年のまとめ」も
-                  ホームに出す（`isYearSummaryTime`。キャンプは約27時間しかない） */}
-              <YearSummary view={view} />
+              {/* ⚠ 「その年のまとめ」は**ホームには出さない**（いしだ 2026-11-22
+                  「ホームのトップに表示されている『〇年目のまとめ』は、各チーム分析に
+                  入れて下さい」）。チーム分析の「チーム能力・成績」で、球団を選んで見る。
+                  キャンプの画面と手続きの画面には残してある（年が替わった直後に見る場所） */}
               {/* キャンプが終わった直後の結果（閉じるまで。先方指摘「キャンプ直後に」） */}
               <CompletedCamp key={view.lastCamp?.year} view={view} onHome />
               <LeagueBoard view={view} />

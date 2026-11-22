@@ -6,6 +6,7 @@ import { CompactRoster, PlayerStatsButton } from './PlayerPerformance.jsx';
 import { TeamLineupBody } from './TeamLineup.jsx';
 import { CareerTeamBoard } from './CareerStats.jsx';
 import TeamDiagnosis from './TeamDiagnosis.jsx';
+import YearSummary from './YearSummary.jsx';
 import AgeOutlook from './AgeOutlook.jsx';
 import FieldDiagram from './FieldDiagram.jsx';
 import { teamLabel, formatRate as rate3 } from './gameText.js';
@@ -386,6 +387,12 @@ function TabBody({ tab, view, shown, selector, setTab }) {
     );
   return (
     <Page title="チーム能力・成績" sub="チーム能力値（レーダー）と今季のチーム成績です。" actions={actions}>
+      {/* ⚠ **その年のまとめはここに置く**（いしだ 2026-11-22「ホームのトップに表示されている
+          『〇年目のまとめ』は、各チーム分析に入れて下さい」）。ホームの先頭からは外した。
+          選んだ球団のまとめが出る（順位はその球団の部、入退団はその球団の分）。
+          ⚠ 時期（年度更新〜開幕した月の終わり）の判定にリーグの今日が要るので、
+             選んだ球団のまとめに自分のビューの年と日付を添えて渡す */}
+      <YearSummary view={{ yearSummary: shown.yearSummary, year: view.year, currentDate: view.currentDate }} />
       <Overview view={view} shown={shown} setTab={setTab} />
     </Page>
   );

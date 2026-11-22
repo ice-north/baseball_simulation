@@ -174,10 +174,21 @@ assert.equal(abilityRows({}, 'body')[0][1], null);
   assert.equal(rowsOf({ naturalGrowth: -0.07 })['自然成長'], '-0.07/年', '衰えのマイナスが出ない');
   assert.equal(rowsOf({ naturalGrowth: 0 })['自然成長'], '±0.00/年', '横ばいが ±0.00 で出ない');
   assert.equal(rowsOf({ growthPotential: 1.4 })['自然成長'], undefined, '渡されていないのに自然成長を出している');
-  assert.ok(
-    !abilityRows({ growthPotential: 1.4 }, 'growth').some(([k]) => k === '成長係数'),
-    '素の成長係数の行が残っている',
+  // ⚠ 成長係数（年齢を含まない素の個性）も並べる（いしだ 2026-11-22）。
+  //    自然成長（年齢・出場量こみ）とは別の数字なので、**2つとも出すこと**
+  assert.equal(rowsOf({ growthPotential: 1.4 })['成長係数'], '1.40', '成長係数が出ない');
+  assert.equal(
+    rowsOf({ growthPotential: 1.4, growthModifier: 0.12 })['成長係数'],
+    '1.52',
+    '成長係数に出場による変動が乗っていない',
   );
+  assert.equal(
+    rowsOf({ growthPotential: 1.75, growthModifier: 0.3 })['成長係数'],
+    '1.80',
+    '成長係数が 1.80 で止まっていない',
+  );
+  // ⚠ 他球団の選手には渡さない値（`projectTeamInfo` が落とす）。そのときは行ごと出さない
+  assert.equal(rowsOf({ naturalGrowth: 0.4 })['成長係数'], undefined, '渡されていないのに成長係数を出している');
 }
 const outs = statGroup('pitching', 'basic').columns.find(
   (c) => c.id === 'outs',

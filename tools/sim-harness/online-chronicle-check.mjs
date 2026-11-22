@@ -204,6 +204,25 @@ assert.ok(first.league && first.rank >= 1, `年表に部と順位が無い ${JSO
 const hr = info.chronicle.records.find((r) => r.stat === 'homeruns');
 assert.ok(hr?.season?.length, '歴代記録（本塁打）が無い');
 console.log(`球団史 ${own}: ${JSON.stringify(first)} / 本塁打 ${JSON.stringify(hr.season[0])}`);
+// ⚠ **その年のまとめは球団ごとに載せる**（いしだ 2026-11-22「ホームのトップに表示されている
+//    『〇年目のまとめ』は、各チーム分析に入れて下さい」）。チーム分析は選んだ球団の
+//    `projectTeamInfo` を読むので、ここに無いと他球団を選んだ瞬間に消える。
+//    時期（年度更新〜開幕した月の終わり）の外では `null`
+{
+  const other = league.season.settings.teamNames.find((n) => n !== own);
+  const theirs = projectTeamInfo(bundle(), 'a', other);
+  for (const [name, got] of [[own, info.yearSummary], [other, theirs.yearSummary]]) {
+    assert.ok('yearSummary' in (name === own ? info : theirs), `${name} の球団の情報にまとめの項目が無い`);
+    if (got) {
+      assert.ok(got.standings?.length, `${name} のまとめに順位が無い`);
+      assert.ok(
+        got.standings.some((r) => r.mine && r.team === name),
+        `${name} のまとめの順位表で自球団の印がその球団に付いていない`,
+      );
+    }
+  }
+  console.log(`その年のまとめ: ${own}=${info.yearSummary ? `${info.yearSummary.year}年目` : '時期外'} / ${other}=${theirs.yearSummary ? `${theirs.yearSummary.year}年目` : '時期外'}`);
+}
 // 年間表彰（部ごとの MVP・新人王・ベストナイン・最優秀バッテリー。`seasonAwards.mjs`）
 {
   const honors = h.awards?.honors || {};

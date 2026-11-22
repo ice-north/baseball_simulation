@@ -972,6 +972,15 @@ export function projectTeamInfo(bundle, userId, teamName, context = null) {
     readOnly: true,
     lineup,
     year: l.season.year,
+    // ⚠ **その年のまとめは球団ごとに出す**（いしだ 2026-11-22「ホームのトップに
+    //    表示されている『〇年目のまとめ』は、各チーム分析に入れて下さい」）。
+    //    ホームの先頭から外し、チーム分析で球団を選んで見る形にした。
+    //    中身は自球団と同じ関数で、順位は**その球団の部**・入退団は**その球団の分**。
+    // ⚠ 出す時期の外（開幕した月の終わりより後）は `yearSummaryFor` が null を返す。
+    //    毎回の応答に1年の大半は乗らない
+    // ⚠ `honors` は渡さない（`yearSummaryFor` が要るときだけ自前で作る）。
+    //    ここで `chronicleView(l)` を呼ぶと、時期の外でも毎回リーグ全体をなめ直す
+    yearSummary: yearSummaryFor(l, teamName, labelOf),
     // 人の球団なら、オーナーの呼び名とひとこと（練習試合の申し込みにも使う）
     owner: owner
       ? { label: owner.label || null, comment: owner.comment?.text || null }

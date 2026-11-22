@@ -39,14 +39,53 @@ const POSITION_WEIGHTS = {
   },
 };
 
-// 打撃力スコア
+// ============================================================
+// 【疲労と調子を織り込む】いしだ 2026-11-22「スタメン設定の疲労による自動設定が
+// 効いていないように感じます」。
+//
+// ⚠ **実際に一度も見ていなかった**。CPU の組むスタメン（`autoSimulation.js` の
+//    `generateAILineup`）は疲労と調子で選手を入れ替えるのに、一人用の「自動: 標準/
+//    打撃重視/守備重視」はここを通り、`fatigue` も `condition` も読んでいなかった。
+//    疲れた主力がいつまでもスタメンに残り、休ませる導線が無かった。
+// ⚠ **式は CPU と同じにすること**（`getEffectiveBatting`・`fatigueMalus`）。
+//    片方だけ直すと、自軍と相手で「疲れたら誰を使うか」の判断が食い違う。
+// ============================================================
+/** 調子の補正（絶好調+5 … 絶不調-5）。CPU と同じ */
+const conditionModOf = (p) => ({ 4: 5, 3: 2, 2: 0, 1: -2, 0: -5 })[p?.condition ?? 2] || 0;
+/** 疲労による打撃の目減り（疲労²/1200 → 41で1・61で3・81で5）。CPU と同じ */
+const fatiguePenaltyOf = (p) => {
+  const f = p?.fatigue || 0;
+  return f > 0 ? Math.round((f * f) / 1200) : 0;
+};
+/** 疲労と調子を織り込んだ打撃（この関数を通してから点を付ける） */
+const effBatting = (p) => {
+  const b = p?.batting || {};
+  const d = conditionModOf(p) - fatiguePenaltyOf(p);
+  return {
+    meet: (b.meet || 0) + d,
+    power: (b.power || 0) + d,
+    eye: (b.eye || 0) + d,
+    speed: p?.physical?.speed || 0,
+  };
+};
+/**
+ * 疲れた選手を外へ押す倍率（休養を促す）。CPU の `fatigueMalus`（-8/-25/-50）に当たる。
+ * ⚠ こちらは点の桁が違う（打撃力が150前後）ので、同じ数字ではなく**割合**で持つ。
+ *    疲労41で0.95倍・61で0.85倍・81で0.70倍。**実力差を覆すほどではない**
+ *    （控えとの差が3割以内なら入れ替わる、という程度）。
+ */
+const fatigueRestMult = (p) => {
+  const pen = fatiguePenaltyOf(p);
+  return pen >= 5 ? 0.70 : pen >= 3 ? 0.85 : pen >= 1 ? 0.95 : 1.0;
+};
+
+// 打撃力スコア（疲労・調子こみ）
 const calcOffenseScore = (player) => {
-  const b = player.batting || {};
-  const ph = player.physical || {};
-  return (b.meet || 0) * 1.0 +
-         (b.power || 0) * 1.3 +
-         (b.eye || 0) * 0.7 +
-         (ph.speed || 0) * 0.3;
+  const b = effBatting(player);
+  return b.meet * 1.0 +
+         b.power * 1.3 +
+         b.eye * 0.7 +
+         b.speed * 0.3;
 };
 
 // 守備力スコア（ポジション別）
@@ -94,7 +133,10 @@ const calcPositionValue = (player, position, mode = 'standard') => {
   const fitness = player.positionFitness?.[position] || 0;
   const fitnessPenalty = position === 'dh' ? 1.0 : Math.sqrt(fitness / 100);
 
-  return (offense * w.offenseWeight + defense * w.defenseWeight) * fitnessPenalty;
+  // ⚠ 疲れた選手は**同じ点では残らない**（`fatigueRestMult`）。打撃の目減り
+  //    （`calcOffenseScore`）だけだと守備重視の枠で疲労が素通りする
+  return (offense * w.offenseWeight + defense * w.defenseWeight) * fitnessPenalty
+    * fatigueRestMult(player);
 };
 
 // 貪欲法によるポジション割り当て
@@ -216,32 +258,32 @@ function assignBattingOrder(lineupPlayers, mode = 'standard') {
     // 打撃重視: パワー・ミート最優先の打順
     // 1番: 出塁+走力
     pick((a, b) => {
-      const as = (a.player.batting?.meet || 0) * 1.0 + (a.player.batting?.eye || 0) * 1.2 + (a.player.physical?.speed || 0) * 0.8;
-      const bs = (b.player.batting?.meet || 0) * 1.0 + (b.player.batting?.eye || 0) * 1.2 + (b.player.physical?.speed || 0) * 0.8;
+      const as = effBatting(a.player).meet * 1.0 + effBatting(a.player).eye * 1.2 + effBatting(a.player).speed * 0.8;
+      const bs = effBatting(b.player).meet * 1.0 + effBatting(b.player).eye * 1.2 + effBatting(b.player).speed * 0.8;
       return bs - as;
     });
     // 2番: 強打者（最強バランス）
     pick((a, b) => {
-      const as = (a.player.batting?.meet || 0) * 1.1 + (a.player.batting?.power || 0) * 1.0 + (a.player.batting?.eye || 0) * 0.6;
-      const bs = (b.player.batting?.meet || 0) * 1.1 + (b.player.batting?.power || 0) * 1.0 + (b.player.batting?.eye || 0) * 0.6;
+      const as = effBatting(a.player).meet * 1.1 + effBatting(a.player).power * 1.0 + effBatting(a.player).eye * 0.6;
+      const bs = effBatting(b.player).meet * 1.1 + effBatting(b.player).power * 1.0 + effBatting(b.player).eye * 0.6;
       return bs - as;
     });
     // 3番: パワー+ミート
     pick((a, b) => {
-      const as = (a.player.batting?.power || 0) * 1.2 + (a.player.batting?.meet || 0) * 1.0;
-      const bs = (b.player.batting?.power || 0) * 1.2 + (b.player.batting?.meet || 0) * 1.0;
+      const as = effBatting(a.player).power * 1.2 + effBatting(a.player).meet * 1.0;
+      const bs = effBatting(b.player).power * 1.2 + effBatting(b.player).meet * 1.0;
       return bs - as;
     });
     // 4番: 最強パワー
     pick((a, b) => {
-      const as = (a.player.batting?.power || 0) * 1.5 + (a.player.batting?.meet || 0) * 0.5;
-      const bs = (b.player.batting?.power || 0) * 1.5 + (b.player.batting?.meet || 0) * 0.5;
+      const as = effBatting(a.player).power * 1.5 + effBatting(a.player).meet * 0.5;
+      const bs = effBatting(b.player).power * 1.5 + effBatting(b.player).meet * 0.5;
       return bs - as;
     });
     // 5番: パワー2番手
     pick((a, b) => {
-      const as = (a.player.batting?.power || 0) * 1.3 + (a.player.batting?.meet || 0) * 0.7;
-      const bs = (b.player.batting?.power || 0) * 1.3 + (b.player.batting?.meet || 0) * 0.7;
+      const as = effBatting(a.player).power * 1.3 + effBatting(a.player).meet * 0.7;
+      const bs = effBatting(b.player).power * 1.3 + effBatting(b.player).meet * 0.7;
       return bs - as;
     });
     // 6-9: 残りを打力順
@@ -270,24 +312,24 @@ function assignBattingOrder(lineupPlayers, mode = 'standard') {
 
     // 2番: つなぎ（ミート+選球眼）
     remaining.sort((a, b) => {
-      const as = (a.player.batting?.meet || 0) * 1.2 + (a.player.batting?.eye || 0) * 0.8 + (a.player.physical?.speed || 0) * 0.5;
-      const bs = (b.player.batting?.meet || 0) * 1.2 + (b.player.batting?.eye || 0) * 0.8 + (b.player.physical?.speed || 0) * 0.5;
+      const as = effBatting(a.player).meet * 1.2 + effBatting(a.player).eye * 0.8 + effBatting(a.player).speed * 0.5;
+      const bs = effBatting(b.player).meet * 1.2 + effBatting(b.player).eye * 0.8 + effBatting(b.player).speed * 0.5;
       return bs - as;
     });
     order.push(remaining.shift());
 
     // 3番: バランス
     remaining.sort((a, b) => {
-      const as = (a.player.batting?.meet || 0) * 1.0 + (a.player.batting?.power || 0) * 1.0 + (a.player.batting?.eye || 0) * 0.5;
-      const bs = (b.player.batting?.meet || 0) * 1.0 + (b.player.batting?.power || 0) * 1.0 + (b.player.batting?.eye || 0) * 0.5;
+      const as = effBatting(a.player).meet * 1.0 + effBatting(a.player).power * 1.0 + effBatting(a.player).eye * 0.5;
+      const bs = effBatting(b.player).meet * 1.0 + effBatting(b.player).power * 1.0 + effBatting(b.player).eye * 0.5;
       return bs - as;
     });
     order.push(remaining.shift());
 
     // 4番: パワー最優先
     remaining.sort((a, b) => {
-      const as = (a.player.batting?.power || 0) * 1.5 + (a.player.batting?.meet || 0) * 0.5;
-      const bs = (b.player.batting?.power || 0) * 1.5 + (b.player.batting?.meet || 0) * 0.5;
+      const as = effBatting(a.player).power * 1.5 + effBatting(a.player).meet * 0.5;
+      const bs = effBatting(b.player).power * 1.5 + effBatting(b.player).meet * 0.5;
       return bs - as;
     });
     order.push(remaining.shift());
@@ -300,46 +342,46 @@ function assignBattingOrder(lineupPlayers, mode = 'standard') {
     // 標準: 従来のセオリー打順
     // 1番: 出塁率+走力（俊足巧打）
     pick((a, b) => {
-      const as = (a.player.batting?.meet || 0) * 0.8 + (a.player.batting?.eye || 0) * 1.0 + (a.player.physical?.speed || 0) * 1.2;
-      const bs = (b.player.batting?.meet || 0) * 0.8 + (b.player.batting?.eye || 0) * 1.0 + (b.player.physical?.speed || 0) * 1.2;
+      const as = effBatting(a.player).meet * 0.8 + effBatting(a.player).eye * 1.0 + effBatting(a.player).speed * 1.2;
+      const bs = effBatting(b.player).meet * 0.8 + effBatting(b.player).eye * 1.0 + effBatting(b.player).speed * 1.2;
       return bs - as;
     });
     // 2番: ミート+選球眼（つなぎ役）
     pick((a, b) => {
-      const as = (a.player.batting?.meet || 0) * 1.2 + (a.player.batting?.eye || 0) * 0.8 + (a.player.batting?.power || 0) * 0.3 + (a.player.physical?.speed || 0) * 0.5;
-      const bs = (b.player.batting?.meet || 0) * 1.2 + (b.player.batting?.eye || 0) * 0.8 + (b.player.batting?.power || 0) * 0.3 + (b.player.physical?.speed || 0) * 0.5;
+      const as = effBatting(a.player).meet * 1.2 + effBatting(a.player).eye * 0.8 + effBatting(a.player).power * 0.3 + effBatting(a.player).speed * 0.5;
+      const bs = effBatting(b.player).meet * 1.2 + effBatting(b.player).eye * 0.8 + effBatting(b.player).power * 0.3 + effBatting(b.player).speed * 0.5;
       return bs - as;
     });
     // 3番: 最強打者（ミート+パワー）
     pick((a, b) => {
-      const as = (a.player.batting?.meet || 0) * 1.0 + (a.player.batting?.power || 0) * 1.2 + (a.player.batting?.eye || 0) * 0.5;
-      const bs = (b.player.batting?.meet || 0) * 1.0 + (b.player.batting?.power || 0) * 1.2 + (b.player.batting?.eye || 0) * 0.5;
+      const as = effBatting(a.player).meet * 1.0 + effBatting(a.player).power * 1.2 + effBatting(a.player).eye * 0.5;
+      const bs = effBatting(b.player).meet * 1.0 + effBatting(b.player).power * 1.2 + effBatting(b.player).eye * 0.5;
       return bs - as;
     });
     // 4番: 最強パワーヒッター
     pick((a, b) => {
-      const as = (a.player.batting?.power || 0) * 1.5 + (a.player.batting?.meet || 0) * 0.7 + (a.player.batting?.eye || 0) * 0.3;
-      const bs = (b.player.batting?.power || 0) * 1.5 + (b.player.batting?.meet || 0) * 0.7 + (b.player.batting?.eye || 0) * 0.3;
+      const as = effBatting(a.player).power * 1.5 + effBatting(a.player).meet * 0.7 + effBatting(a.player).eye * 0.3;
+      const bs = effBatting(b.player).power * 1.5 + effBatting(b.player).meet * 0.7 + effBatting(b.player).eye * 0.3;
       return bs - as;
     });
     // 5番: パワー2番手
     pick((a, b) => {
-      const as = (a.player.batting?.power || 0) * 1.3 + (a.player.batting?.meet || 0) * 0.8 + (a.player.batting?.eye || 0) * 0.4;
-      const bs = (b.player.batting?.power || 0) * 1.3 + (b.player.batting?.meet || 0) * 0.8 + (b.player.batting?.eye || 0) * 0.4;
+      const as = effBatting(a.player).power * 1.3 + effBatting(a.player).meet * 0.8 + effBatting(a.player).eye * 0.4;
+      const bs = effBatting(b.player).power * 1.3 + effBatting(b.player).meet * 0.8 + effBatting(b.player).eye * 0.4;
       return bs - as;
     });
     // 6番: バランス型
     pick((a, b) => {
-      const as = (a.player.batting?.meet || 0) + (a.player.batting?.power || 0) + (a.player.batting?.eye || 0) * 0.5;
-      const bs = (b.player.batting?.meet || 0) + (b.player.batting?.power || 0) + (b.player.batting?.eye || 0) * 0.5;
+      const as = effBatting(a.player).meet + effBatting(a.player).power + effBatting(a.player).eye * 0.5;
+      const bs = effBatting(b.player).meet + effBatting(b.player).power + effBatting(b.player).eye * 0.5;
       return bs - as;
     });
     // 7番: 残り打力順
     pick((a, b) => calcOffenseScore(b.player) - calcOffenseScore(a.player));
     // 8番: 残り打力順（非DH時は8番に弱い打者を置き9番投手の前で走者を出す）
     pick((a, b) => {
-      const as = (a.player.physical?.speed || 0) * 0.5 + (a.player.batting?.meet || 0) * 0.5;
-      const bs = (b.player.physical?.speed || 0) * 0.5 + (b.player.batting?.meet || 0) * 0.5;
+      const as = effBatting(a.player).speed * 0.5 + effBatting(a.player).meet * 0.5;
+      const bs = effBatting(b.player).speed * 0.5 + effBatting(b.player).meet * 0.5;
       return bs - as;
     });
     // 9番: 残り
@@ -393,8 +435,8 @@ export const generateOptimalLineup = (teamName, mode = 'standard', given = null)
     }
     if (mode === 'offense') {
       // 打撃重視: ミート+パワーの合計でソート（ユーザー要望通り）
-      const aOff = (a.player.batting?.meet || 0) + (a.player.batting?.power || 0);
-      const bOff = (b.player.batting?.meet || 0) + (b.player.batting?.power || 0);
+      const aOff = effBatting(a.player).meet + effBatting(a.player).power;
+      const bOff = effBatting(b.player).meet + effBatting(b.player).power;
       return bOff - aOff;
     }
     return b.offense - a.offense;

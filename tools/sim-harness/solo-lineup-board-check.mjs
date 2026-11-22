@@ -8,6 +8,7 @@ import assert from 'node:assert/strict';
 import { swapOrder, swapPositions, replaceStarter, benchFielders, positionFitness } from '../../src/online/lineupEdit.js';
 import { orderFromTeam, writeOrder, sameOrder, slotPositions, candidatesForSlot, orderProblems } from '../../src/components/lineup/soloLineupOrder.js';
 import { ensureCompleteLineup } from '../../src/game/lineup.js';
+import { generateOptimalLineup } from '../../src/game/lineupGenerator.js';
 
 const FIELD = ['catcher', 'first', 'second', 'third', 'short', 'left', 'center', 'right'];
 const clone = (v) => JSON.parse(JSON.stringify(v));
@@ -112,4 +113,52 @@ for (const useDH of [false, true]) {
   assert.ok(orderProblems(order, team.players).length > 0, '空きの枠を知らせていない');
 }
 
-console.log('solo-lineup-board-check OK');
+// ============================================================
+// 「自動: 標準／打撃重視／守備重視」が**疲労と調子を見ること**
+//
+// ⚠ いしだ 2026-11-22「スタメン設定の疲労による自動設定が効いていないように感じます」。
+//    CPU の組むスタメン（`autoSimulation.js`）は疲労で入れ替えるのに、一人用の自動は
+//    `fatigue` も `condition` も読んでいなかった（素の能力だけで組んでいた）。
+// ⚠ **実力差を覆すほどにはしない**。控えより20高い主力は疲労65までスタメンに残る。
+// ============================================================
+{
+  const mkFielder = (i, base, fatigue = 0, condition = 2) => ({
+    id: 1000 + i,
+    name: `自動${i}`,
+    position: 'shortstop',
+    isActive: true,
+    fatigue,
+    condition,
+    batting: { meet: base, power: base, eye: base, steal: 30, bunt: 30, bats: 'right' },
+    physical: { speed: base, arm: base, build: 'medium', bodyStamina: 50, recovery: 50 },
+    fielding: { defense: base },
+    positionFitness: Object.fromEntries(FIELD.map((pos) => [pos, 80])),
+  });
+  const makeAutoTeam = (starBase, benchBase, fatigue, condition = 2) => ({
+    name: 'T',
+    players: [
+      mkFielder(0, starBase, fatigue, condition),
+      ...Array.from({ length: 8 }, (_, i) => mkFielder(i + 1, 55)),
+      ...Array.from({ length: 3 }, (_, i) => mkFielder(i + 9, benchBase)),
+      { id: 2000, name: '投手', position: 'pitcher', isActive: true, fatigue: 0,
+        pitching: { velocity: 140, control: 50, stamina: 110, arsenal: [] }, physical: { arm: 50 } },
+    ],
+    pitchingRotation: { starters: [2000], currentStarterIndex: 0 },
+  });
+  const starts = (starBase, benchBase, fatigue, condition = 2) => {
+    const team = makeAutoTeam(starBase, benchBase, fatigue, condition);
+    generateOptimalLineup('T', 'standard', team);
+    const star = team.players.find((p) => p.id === 1000);
+    return (star.battingOrder || 0) > 0 && star.battingOrder <= 9;
+  };
+  assert.ok(starts(60, 50, 0), '疲労0の主力がスタメンに入らない（検査の作りが壊れている）');
+  assert.ok(starts(60, 50, 40), '疲労40で外している（まだ軽い疲れで主力を外さない）');
+  assert.ok(!starts(60, 50, 70), '疲労70でも主力がスタメンに残る＝疲労を見ていない');
+  // ⚠ 実力差は覆らない（控えより20高い主力は疲労65までは残る）
+  assert.ok(starts(70, 50, 65), '実力差のある主力まで疲労で外している');
+  // ⚠ 調子も見る（絶不調は同格の選手に譲る）
+  assert.ok(starts(56, 55, 0, 2), '平常の主力がスタメンに入らない（検査の作りが壊れている）');
+  assert.ok(!starts(56, 55, 0, 0), '絶不調でも同格の選手に譲らない＝調子を見ていない');
+}
+
+console.log('solo-lineup-board-check OK（疲労・調子を見る自動設定を含む）');
