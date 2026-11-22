@@ -3,7 +3,15 @@ import { TEAMS_DATA, LEAGUE_SETTINGS } from '../teams-data.js';
 import { POSITION_NAMES, getAbilityRank, getRankColor, FORM_SHORT } from '../utils/constants.js';
 import { getPitchTypeName } from '../season/yearProgressionSystem.js';
 import { CONDITION_LEVELS, CONDITION_COLORS, CONDITION_ICONS } from '../game/condition.js';
-import { generateOptimalLineup, generatePitchingRotation } from '../game/lineupGenerator.js';
+import { generateOptimalLineup, generatePitchingRotation, REST_POLICIES, DEFAULT_REST_POLICY } from '../game/lineupGenerator.js';
+
+/** 「疲労を見る」の4段の説明（実測の目安。`solo-lineup-board-check` で固定） */
+const REST_POLICY_HINT = {
+  none: '疲労では外さない（疲れた選手の打撃の目減りだけは残る）',
+  low: '控えめ。控えより一段上の主力なら疲労55まで出し続ける',
+  normal: '標準。控えより一段上の主力を疲労40で休ませる',
+  high: '積極的。疲労25で休ませる。主力を温存したいときに',
+};
 import { TabBar } from './GameUIComponents.jsx';
 import { AbilityValue } from './AbilityValue.jsx';
 import TutorialHint from './TutorialHint.jsx';
@@ -1427,6 +1435,40 @@ export const LineupSettingContent = ({
                     </button>
                   ))}
                 </div>
+                {/* ⚠ 【疲れをどれだけ気にするか】いしだ 2026-11-22「もっと敏感に、疲労を
+                    感じ取ってほしいです。設定方法もスタメン設定でできるように」。
+                    選んだ値は球団に残り（`team.restPolicy`）、上の「自動」が次からそれで組む。
+                    ⚠ 疲れた選手の**打撃の目減り**はどの設定でも掛かる（実際に起きることなので
+                       好みの問題にしない）。ここで変わるのは「誰をスタメンから外すか」だけ */}
+                <div className="flex items-center gap-1 mt-2 flex-wrap">
+                  <span className="text-xs text-gray-400 shrink-0">疲労を見る:</span>
+                  {Object.entries(REST_POLICIES).map(([key, { label }]) => {
+                    const current = (team.restPolicy || DEFAULT_REST_POLICY) === key;
+                    return (
+                      <button
+                        key={key}
+                        type="button"
+                        aria-pressed={current}
+                        title={REST_POLICY_HINT[key]}
+                        onClick={() => {
+                          team.restPolicy = key;
+                          if (TEAMS_DATA[teamName]) TEAMS_DATA[teamName].restPolicy = key;
+                          setUpdateTrigger(prev => prev + 1);
+                        }}
+                        className={`text-xs px-2 py-1 rounded font-medium transition border ${
+                          current
+                            ? 'bg-cyan-700 text-white border-cyan-500'
+                            : 'bg-surface-2 text-gray-300 border-gray-600 hover:border-gray-400'
+                        }`}
+                      >
+                        {label}
+                      </button>
+                    );
+                  })}
+                </div>
+                <p className="text-xs text-gray-400 mt-1 leading-snug">
+                  {REST_POLICY_HINT[team.restPolicy || DEFAULT_REST_POLICY]}
+                </p>
                 {!lineup.some(e => e.position === 'catcher') && (
                   <div className="mt-2 flex items-center gap-1.5 text-xs text-red-400 bg-red-950/40 border border-red-700/30 rounded px-2 py-1">
                     <span className="font-bold">!</span>

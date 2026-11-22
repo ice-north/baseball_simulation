@@ -8,7 +8,7 @@ import assert from 'node:assert/strict';
 import { swapOrder, swapPositions, replaceStarter, benchFielders, positionFitness } from '../../src/online/lineupEdit.js';
 import { orderFromTeam, writeOrder, sameOrder, slotPositions, candidatesForSlot, orderProblems } from '../../src/components/lineup/soloLineupOrder.js';
 import { ensureCompleteLineup } from '../../src/game/lineup.js';
-import { generateOptimalLineup } from '../../src/game/lineupGenerator.js';
+import { generateOptimalLineup, REST_POLICIES } from '../../src/game/lineupGenerator.js';
 
 const FIELD = ['catcher', 'first', 'second', 'third', 'short', 'left', 'center', 'right'];
 const clone = (v) => JSON.parse(JSON.stringify(v));
@@ -145,20 +145,45 @@ for (const useDH of [false, true]) {
     ],
     pitchingRotation: { starters: [2000], currentStarterIndex: 0 },
   });
-  const starts = (starBase, benchBase, fatigue, condition = 2) => {
+  const starts = (starBase, benchBase, fatigue, condition = 2, policy = undefined) => {
     const team = makeAutoTeam(starBase, benchBase, fatigue, condition);
+    if (policy !== undefined) team.restPolicy = policy;
     generateOptimalLineup('T', 'standard', team);
     const star = team.players.find((p) => p.id === 1000);
     return (star.battingOrder || 0) > 0 && star.battingOrder <= 9;
   };
+  /** その設定で、控えに譲る疲労（5刻み。最後まで出続けたら 999） */
+  const restsAt = (starBase, benchBase, policy) => {
+    for (let f = 0; f <= 100; f += 5) if (!starts(starBase, benchBase, f, 2, policy)) return f;
+    return 999;
+  };
   assert.ok(starts(60, 50, 0), '疲労0の主力がスタメンに入らない（検査の作りが壊れている）');
-  assert.ok(starts(60, 50, 40), '疲労40で外している（まだ軽い疲れで主力を外さない）');
-  assert.ok(!starts(60, 50, 70), '疲労70でも主力がスタメンに残る＝疲労を見ていない');
-  // ⚠ 実力差は覆らない（控えより20高い主力は疲労65までは残る）
-  assert.ok(starts(70, 50, 65), '実力差のある主力まで疲労で外している');
+  assert.ok(starts(60, 50, 20), '疲労20で外している（軽い疲れで主力を外さない）');
+  assert.ok(!starts(60, 50, 60), '疲労60でも主力がスタメンに残る＝疲労を見ていない');
+  // ⚠ 実力差は覆らない（控えより20高い主力は疲労45までは残る）
+  assert.ok(starts(70, 50, 45), '実力差のある主力まで疲労で外している');
   // ⚠ 調子も見る（絶不調は同格の選手に譲る）
   assert.ok(starts(56, 55, 0, 2), '平常の主力がスタメンに入らない（検査の作りが壊れている）');
   assert.ok(!starts(56, 55, 0, 0), '絶不調でも同格の選手に譲らない＝調子を見ていない');
+
+  // ⚠ **スタメン設定で選べる4段**（いしだ 2026-11-22「もっと敏感に、疲労を感じ取ってほしい。
+  //    設定方法もスタメン設定でできるように」）。`team.restPolicy` に残る。
+  //    控えより10高い主力が控えに譲る疲労: 見ない95 / 控えめ55 / 標準40 / 積極的25
+  assert.deepEqual(Object.keys(REST_POLICIES), ['none', 'low', 'normal', 'high'], '休ませ方の段が変わっている');
+  const steps = ['none', 'low', 'normal', 'high'].map((k) => restsAt(60, 50, k));
+  assert.ok(
+    steps[0] > steps[1] && steps[1] > steps[2] && steps[2] > steps[3],
+    `休ませ方の段が順になっていない（見ない/控えめ/標準/積極的 = ${steps.join('/')}）`,
+  );
+  assert.ok(steps[2] <= 45, `標準でも疲労${steps[2]}まで出続ける（もっと敏感に、の指示）`);
+  assert.ok(steps[3] <= 30, `積極的でも疲労${steps[3]}まで出続ける`);
+  assert.ok(steps[1] >= 50, `控えめなのに疲労${steps[1]}で外している`);
+  // ⚠ 「見ない」でも**打撃の目減りは残る**（疲れた選手の打撃が落ちるのは実際に起きること）。
+  //    極端に疲れれば、ほぼ同格の控えには譲る
+  assert.ok(restsAt(56, 55, 'none') <= 60, '「見ない」で打撃の目減りまで消えている');
+  // 未設定・知らない名前は標準
+  assert.equal(restsAt(60, 50, undefined), steps[2], '未設定のときに標準で動いていない');
+  assert.equal(restsAt(60, 50, 'いいかげん'), steps[2], '知らない設定のときに標準で動いていない');
 }
 
 console.log('solo-lineup-board-check OK（疲労・調子を見る自動設定を含む）');

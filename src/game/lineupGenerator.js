@@ -69,14 +69,30 @@ const effBatting = (p) => {
   };
 };
 /**
- * 疲れた選手を外へ押す倍率（休養を促す）。CPU の `fatigueMalus`（-8/-25/-50）に当たる。
- * ⚠ こちらは点の桁が違う（打撃力が150前後）ので、同じ数字ではなく**割合**で持つ。
- *    疲労41で0.95倍・61で0.85倍・81で0.70倍。**実力差を覆すほどではない**
- *    （控えとの差が3割以内なら入れ替わる、という程度）。
+ * 疲れをどれだけ気にするか（スタメン設定で選ぶ。`team.restPolicy` に残る）。
+ *
+ * ⚠ いしだ 2026-11-22「もっと敏感に、疲労を感じ取ってほしいです。設定方法も
+ *    スタメン設定でできるように」。最初の実装（疲労41で0.95倍・61で0.85倍・81で0.70倍）は
+ *    鈍すぎて、控えより10高い主力が疲労55まで出続けた。
+ * ⚠ `from` から**1ごとに `rate`** 落ちる倍率を守備位置の点に掛ける。`floor` が下限。
+ *    倍率が「控えとの実力の比」を下回ると入れ替わるので、**実力差は覆らない**。
+ * ⚠ 打撃の目減り（`effBatting`。疲労²/1200）は**どの設定でも掛かる**。
+ *    疲れた選手の打撃が落ちるのは実際に起きることで、好みの問題ではない。
  */
-const fatigueRestMult = (p) => {
-  const pen = fatiguePenaltyOf(p);
-  return pen >= 5 ? 0.70 : pen >= 3 ? 0.85 : pen >= 1 ? 0.95 : 1.0;
+export const REST_POLICIES = {
+  none:   { label: '見ない',   from: 999, rate: 0,     floor: 1.00 },
+  low:    { label: '控えめ',   from: 50,  rate: 0.012, floor: 0.70 },
+  normal: { label: '標準',     from: 30,  rate: 0.012, floor: 0.55 },
+  high:   { label: '積極的',   from: 15,  rate: 0.016, floor: 0.35 },
+};
+export const DEFAULT_REST_POLICY = 'normal';
+/** 設定の名前 → 中身（知らない名前・未設定は標準） */
+export const restPolicyOf = (key) => REST_POLICIES[key] || REST_POLICIES[DEFAULT_REST_POLICY];
+/** 疲れた選手を外へ押す倍率（休養を促す） */
+const fatigueRestMult = (p, policy) => {
+  const r = policy || REST_POLICIES[DEFAULT_REST_POLICY];
+  const over = (p?.fatigue || 0) - r.from;
+  return over <= 0 ? 1.0 : Math.max(r.floor, 1.0 - over * r.rate);
 };
 
 // 打撃力スコア（疲労・調子こみ）
@@ -121,7 +137,7 @@ const calcDefenseScore = (player, position, mode = 'standard') => {
 };
 
 // ポジションでの総合価値
-const calcPositionValue = (player, position, mode = 'standard') => {
+const calcPositionValue = (player, position, mode = 'standard', policy = null) => {
   const weights = POSITION_WEIGHTS[mode] || POSITION_WEIGHTS.standard;
   const w = weights[position] || { offenseWeight: 0.5, defenseWeight: 0.5 };
   const offense = calcOffenseScore(player);
@@ -136,11 +152,11 @@ const calcPositionValue = (player, position, mode = 'standard') => {
   // ⚠ 疲れた選手は**同じ点では残らない**（`fatigueRestMult`）。打撃の目減り
   //    （`calcOffenseScore`）だけだと守備重視の枠で疲労が素通りする
   return (offense * w.offenseWeight + defense * w.defenseWeight) * fitnessPenalty
-    * fatigueRestMult(player);
+    * fatigueRestMult(player, policy);
 };
 
 // 貪欲法によるポジション割り当て
-function greedyAssignment(candidates, positions, trialSeed, mode = 'standard') {
+function greedyAssignment(candidates, positions, trialSeed, mode = 'standard', policy = null) {
   const assigned = new Set();
   const assignment = {};
 
@@ -195,7 +211,7 @@ function greedyAssignment(candidates, positions, trialSeed, mode = 'standard') {
       // standard: 30（同程度なら本来ポジション優先）
       // offense/defense: 5（モード特化スコアが本来ポジション優先を上回れるように）
       const nativeBonus = ps.player.position === pos ? (mode === 'standard' ? 30 : 5) : 0;
-      const value = calcPositionValue(ps.player, pos, mode) + nativeBonus;
+      const value = calcPositionValue(ps.player, pos, mode, policy) + nativeBonus;
       if (value > bestValue) {
         bestValue = value;
         bestCandidate = ps;
@@ -223,7 +239,7 @@ function greedyAssignment(candidates, positions, trialSeed, mode = 'standard') {
       const pool = eligible.length > 0 ? eligible : unassignedPlayers; // 全員除外なら緊急措置
       for (const ps of pool) {
         const nativeBonus = ps.player.position === pos ? (mode === 'standard' ? 30 : 5) : 0;
-        const value = calcPositionValue(ps.player, pos, mode) + nativeBonus;
+        const value = calcPositionValue(ps.player, pos, mode, policy) + nativeBonus;
         if (value > bestValue) {
           bestValue = value;
           best = ps;
@@ -398,12 +414,15 @@ function assignBattingOrder(lineupPlayers, mode = 'standard') {
 // mode: 'standard' | 'offense' | 'defense'
 // ⚠ `given` を渡せば TEAMS_DATA を引かない。オンライン版は名簿をサーバーから
 //    受け取るので TEAMS_DATA に居ない（渡さないと黙って何もしない関数になる）
-export const generateOptimalLineup = (teamName, mode = 'standard', given = null) => {
+export const generateOptimalLineup = (teamName, mode = 'standard', given = null, restKey = null) => {
   const team = given || TEAMS_DATA?.[teamName];
   if (!team) {
     console.error('チームデータが見つかりません:', teamName);
     return;
   }
+  // 疲れをどれだけ気にするか。スタメン設定で選んだ値が球団に残る（`team.restPolicy`）。
+  // ⚠ 呼び出しで渡せば球団の設定より優先（画面がボタンごとに試すとき用）
+  const policy = restPolicyOf(restKey ?? team.restPolicy);
 
   const useDH = LEAGUE_SETTINGS.useDH;
   // isActive=false（練習生）は除外。未設定は全員有効（大学モード以外の後方互換）
@@ -421,7 +440,7 @@ export const generateOptimalLineup = (teamName, mode = 'standard', given = null)
 
   playerScores.forEach(ps => {
     positions.forEach(pos => {
-      ps.positions[pos] = calcPositionValue(ps.player, pos, mode);
+      ps.positions[pos] = calcPositionValue(ps.player, pos, mode, policy);
     });
   });
 
@@ -470,11 +489,11 @@ export const generateOptimalLineup = (teamName, mode = 'standard', given = null)
   const targetPositions = useDH ? [...positions, 'dh'] : positions;
 
   for (let trial = 0; trial < 20; trial++) {
-    const assignment = greedyAssignment(candidates, targetPositions, trial, mode);
+    const assignment = greedyAssignment(candidates, targetPositions, trial, mode, policy);
     if (!assignment) continue;
 
     let totalValue = Object.entries(assignment).reduce((sum, [pos, ps]) => {
-      return sum + calcPositionValue(ps.player, pos, mode);
+      return sum + calcPositionValue(ps.player, pos, mode, policy);
     }, 0);
 
     // 難守備ポジションを適性のない選手で埋めた編成は採らない。
