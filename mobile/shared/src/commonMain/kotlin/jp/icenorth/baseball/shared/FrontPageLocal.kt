@@ -6,8 +6,8 @@ import kotlinx.serialization.json.JsonObject
  * 地元紙の記事（警戒選手・試合後のひと言・プロ注目・勝敗投手と本塁打の欄）。[buildFrontPage] から使う。
  *
  * ⚠ 言い回しは [Pen] で選ぶ（同じ試合・同じ日なら同じ紙面）。
- * ⚠ 「プロ注目」は**飾り**（いしだ 2026-11-09「今のところ飾りでOK」）。オンラインは NPB ドラフトをしないので
- *    （server/leagueEngine.mjs）、選手が抜かれることは無い。紙面で「指名確実」のように約束する書き方はしない。
+ * ⚠ 「プロ注目」はサーバーのドラフトの気配（`proWatch`、server/proDraft.mjs）から書く。噂の出た球団が
+ *    そのまま指名する式だが、指名は能力の線だけで決まるので、紙面で「指名確実」のように約束する書き方はしない。
  */
 
 /** 地元紙の題字（「宮崎球報」）。⚠ 実在の新聞の名前に寄せない */
@@ -183,33 +183,59 @@ internal fun commentArticle(manager: String?, tone: FrontPage.Tone, s: Situation
     return FrontPage.Article("ひと言", "${boss}「${quote}」", heroLine ?: "${boss}は試合後、そう振り返った。", null)
 }
 
+/** 光る能力の一言（スカウトが見ている所）。無ければ null（web の local.js の scoutTrait と同じ） */
+private fun scoutTrait(p: Player): Pair<String, Int>? {
+    if (p.isPitcher) {
+        val v = p.pitching?.velocity ?: 0
+        val c = p.pitching?.control ?: 0
+        return when {
+            v >= 150 -> "最速${v}kmの直球" to v - 140
+            c >= 75 -> "精密な制球" to c - 65
+            v >= 147 -> "${v}kmの速球" to v - 142
+            else -> null
+        }
+    }
+    val pw = p.batting?.power ?: 0
+    val sp = p.physical?.speed ?: 0
+    val mt = p.batting?.meet ?: 0
+    return when {
+        pw >= 70 -> "長打力" to pw - 60
+        sp >= 80 -> "足の速さ" to sp - 70
+        mt >= 75 -> "巧みなバットコントロール" to mt - 65
+        else -> null
+    }
+}
+
+/** ドラフトの気配の1人（サーバーの `proWatch` の行。NPB が注目している選手） */
+internal data class WatchRow(val id: Long?, val name: String, val team: String, val npb: String, val hot: Boolean)
+
+/** ビューの `proWatch`。古いサーバー（項目が無い）は null */
+internal fun watchRows(raw: JsonObject?): List<WatchRow>? {
+    val v = raw?.get("proWatch") as? kotlinx.serialization.json.JsonArray ?: return null
+    return v.mapNotNull { e ->
+        val o = e.obj() ?: return@mapNotNull null
+        val name = o.at("name").str() ?: return@mapNotNull null
+        val npb = o.at("npb").str() ?: return@mapNotNull null
+        WatchRow(o.at("id").long(), name, o.at("team").str().orEmpty(), npb, o.at("level").str() == "hot")
+    }
+}
+
 /**
- * プロ注目（飾り）。若くて光る能力のある自球団の選手に、NPBのスカウトが見に来ているという話。
+ * プロ注目。
+ * - `watch`（サーバーの `proWatch`。ドラフトの気配）があれば**本物**: 自球団で NPB が見ている選手の話
+ *   （「西武が○○に熱視線！」「○○に中日が接触」）。きのうの試合で活躍していれば毎日「プロ注目の○○が完封」。
+ *   見られている選手がいなければ載せない。
+ * - `watch` が無い（古いサーバー）ときは飾り: 若くて光る能力のある自球団の選手に、NPBのスカウトが見に来ている。
  * 毎日は載せない（2日に1日くらい。同じ日なら同じ）
  */
-internal fun scoutArticle(roster: List<Player>, me: String, year: Int?, date: GameDate?, pen: Pen): FrontPage.Article? {
+internal fun scoutArticle(
+    roster: List<Player>, me: String, year: Int?, date: GameDate?, pen: Pen,
+    watch: List<WatchRow>? = null, team: String = "", facts: GameFacts? = null, s: Situation? = null,
+): FrontPage.Article? {
+    if (watch != null) return watchArticle(roster, me, year, date, pen, watch, team, facts, s)
     data class Pick(val p: Player, val trait: String, val score: Int)
     val picks = roster.filter { it.isActive && (it.age ?: 99) <= 26 }.mapNotNull { p ->
-        if (p.isPitcher) {
-            val v = p.pitching?.velocity ?: 0
-            val c = p.pitching?.control ?: 0
-            when {
-                v >= 150 -> Pick(p, "最速${v}kmの直球", v - 140)
-                c >= 75 -> Pick(p, "精密な制球", c - 65)
-                v >= 147 -> Pick(p, "${v}kmの速球", v - 142)
-                else -> null
-            }
-        } else {
-            val pw = p.batting?.power ?: 0
-            val sp = p.physical?.speed ?: 0
-            val mt = p.batting?.meet ?: 0
-            when {
-                pw >= 70 -> Pick(p, "長打力", pw - 60)
-                sp >= 80 -> Pick(p, "足の速さ", sp - 70)
-                mt >= 75 -> Pick(p, "巧みなバットコントロール", mt - 65)
-                else -> null
-            }
-        }
+        scoutTrait(p)?.let { (trait, score) -> Pick(p, trait, score) }
     }
     if (picks.isEmpty()) return null
     val day = (year ?: 0) * 400 + (date?.month ?: 0) * 31 + (date?.day ?: 0)
@@ -226,6 +252,70 @@ internal fun scoutArticle(roster: List<Player>, me: String, year: Int?, date: Ga
         "${p.age}歳の${pos}・${p.name}。$school${pick.trait}に、NPB${scouts}球団のスカウトが" +
             pen.pick(listOf("ネット裏で目を光らせた。", "視察に訪れた。", "熱心にメモを取っていた。"), 23) +
             "${potential}${pen.pick(listOf("今後の成長が楽しみだ。", "この先の伸びに注目が集まる。", "独立リーグから羽ばたく日は来るか。"), 24)}",
+        LINK_LINEUP,
+    )
+}
+
+/** きのうの試合での活躍（「完封」「2発」など）。無ければ null */
+private fun watchFeat(w: WatchRow, facts: GameFacts?, s: Situation?, tone: FrontPage.Tone): String? {
+    if (facts == null) return null
+    val ace = facts.ace
+    if (tone == FrontPage.Tone.Win && ace != null && ace.name == w.name && facts.complete) return if (s != null && s.theirs == 0) "完封" else "完投"
+    val b = facts.batters.firstOrNull { it.name == w.name }
+    if (b != null && b.hr >= 2) return "${b.hr}発"
+    if (b != null && b.hr == 1) return "一発"
+    if (b != null && b.hits >= 3) return "猛打賞"
+    if (tone == FrontPage.Tone.Win && ace != null && ace.name == w.name && ace.outs >= 18 && ace.runs <= 1) return "好投"
+    return null
+}
+
+private fun watchArticle(
+    roster: List<Player>, me: String, year: Int?, date: GameDate?, pen: Pen,
+    watch: List<WatchRow>, team: String, facts: GameFacts?, s: Situation?,
+): FrontPage.Article? {
+    val ours = watch.filter { it.team == team }
+    if (ours.isEmpty()) return null
+    fun playerOf(w: WatchRow) = roster.firstOrNull { (w.id != null && it.id == w.id) || it.name == w.name }
+    val tone = when {
+        s == null -> FrontPage.Tone.None
+        s.ours > s.theirs -> FrontPage.Tone.Win
+        s.ours < s.theirs -> FrontPage.Tone.Lose
+        else -> FrontPage.Tone.Draw
+    }
+    // きのう活躍した人がいれば、その話（毎日）
+    for (w in ours) {
+        val feat = watchFeat(w, facts, s, tone) ?: continue
+        val p = playerOf(w)
+        val pos = p?.let { positionNoun(it.position) } ?: "選手"
+        return FrontPage.Article(
+            "プロ注目",
+            pen.pick(listOf("プロ注目の${w.name}が$feat", "${w.name}$feat ${w.npb}のスカウトの前で"), 25),
+            "${w.npb}が${if (w.hot) "指名の候補に挙げる" else "追いかける"}${pos}・${w.name}が${feat}。" +
+                pen.pick(listOf("ネット裏のスカウトは「やはり良いものを持っている」とうなずいた。", "スカウトの評価をまた一つ上げた。", "視察に訪れたスカウトの前で、存在感を見せつけた。"), 26),
+            LINK_LINEUP,
+        )
+    }
+    val day = (year ?: 0) * 400 + (date?.month ?: 0) * 31 + (date?.day ?: 0)
+    if (Pen(day).pick(listOf(true, false), 20).not()) return null
+    val w = Pen(day).pick(ours, 21)
+    val p = playerOf(w)
+    val pos = p?.let { positionNoun(it.position) } ?: "選手"
+    val age = p?.age?.let { "${it}歳の" } ?: ""
+    val trait = p?.let { scoutTrait(it)?.first }
+    if (w.hot)
+        return FrontPage.Article(
+            "プロ注目",
+            pen.pick(listOf("${w.name}に${w.npb}が接触", "${w.npb}、${w.name}の調査に本腰", "${me}の${w.name}、${w.npb}が指名候補に"), 27),
+            "$age$pos・${w.name}に、${w.npb}のスカウトが接触した。${trait ?: "素質"}を高く買い、指名に向けて調査を進めているという。" +
+                pen.pick(listOf("秋のドラフトへ、注目が集まる。", "独立リーグから羽ばたく日は近いか。"), 28),
+            LINK_LINEUP,
+        )
+    return FrontPage.Article(
+        "プロ注目",
+        pen.pick(listOf("${w.npb}が${w.name}に熱視線！", "プロ注目 ${me}の${w.name}", "${w.name}の${trait ?: "素質"}に${w.npb}の目"), 29),
+        "$age$pos・${w.name}。${trait ?: "その素質"}に、${w.npb}のスカウトが" +
+            pen.pick(listOf("ネット裏で目を光らせた。", "視察に訪れた。", "熱心にメモを取っていた。"), 23) +
+            pen.pick(listOf("今後の成長が楽しみだ。", "この先の伸びに注目が集まる。", "独立リーグから羽ばたく日は来るか。"), 24),
         LINK_LINEUP,
     )
 }

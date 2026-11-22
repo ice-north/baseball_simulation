@@ -16,7 +16,7 @@ import {
 const GROUPS = {
   basic: '基本方針',
   bunt: 'バント',
-  subs: '代打・守備固め',
+  subs: '代打・守備固め・休養',
   pitcher: '先発の交代',
   roles: '投手の役割（確認）',
   // 見るだけ（B2）。基本方針の下に置くと 320px で長いスクロールになるので分ける
@@ -24,7 +24,7 @@ const GROUPS = {
 };
 const FIELDS = {
   bunt: ['sacrificeBunt', 'squeeze', 'safetyBunt'],
-  subs: ['pinchHit', 'pinchHitFrom', 'defensiveSub', 'defenseFrom'],
+  subs: ['pinchHit', 'pinchHitFrom', 'defensiveSub', 'defenseFrom', 'restLine'],
   pitcher: ['hook', 'starterLimit'],
 };
 export default function MobileTactics({

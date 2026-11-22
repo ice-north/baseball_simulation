@@ -33,6 +33,7 @@ import {
   commentArticle,
   commentSpeaker,
   scoutArticle,
+  watchRow,
   staffLocalArticles,
   recentWorld,
   milestonesOn,
@@ -402,9 +403,10 @@ export function buildFrontPage(view, raw, lastGame = null, { history = null, his
     const c = commentArticle(speaker, tone, sit, pen, temper);
     if (c) articles.push(c);
   }
-  // プロ注目（飾り）
+  // プロ注目（ドラフトの気配 `proWatch` があれば本物、無ければ飾り）
   {
-    const sc = scoutArticle(view.roster, me, view.year, date, pen);
+    const watch = Array.isArray(raw?.proWatch) ? raw.proWatch.map(watchRow).filter(Boolean) : null;
+    const sc = scoutArticle(view.roster, me, view.year, date, pen, watch, team, offPhase ? null : facts, offPhase ? null : sit);
     if (sc) articles.push(sc);
   }
   // 同窓・地元の縁

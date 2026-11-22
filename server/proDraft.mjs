@@ -107,6 +107,66 @@ const NPB_TEAMS = [
 const unit = (league, tag) =>
   hashSeed(`${league.seed ?? 0}:${league.season.year}:proDraft:${tag}`) / 4294967296;
 
+/** 紙面・バッジに出す NPB 球団の短い呼び名（`NPB_TEAMS` と同じ並び） */
+const NPB_SHORT = {
+  '読売ジャイアンツ': '巨人', '阪神タイガース': '阪神', '横浜DeNAベイスターズ': 'DeNA',
+  '広島東洋カープ': '広島', '中日ドラゴンズ': '中日', 'ヤクルトスワローズ': 'ヤクルト',
+  'オリックス・バファローズ': 'オリックス', 'ソフトバンクホークス': 'ソフトバンク', '西武ライオンズ': '西武',
+  '楽天ゴールデンイーグルス': '楽天', '千葉ロッテマリーンズ': 'ロッテ', '日本ハムファイターズ': '日本ハム',
+};
+export const npbShort = (name) => NPB_SHORT[name] || name;
+/**
+ * その年にこの選手を追っている NPB 球団。⚠ **指名するときと同じ式**（`chooseProDraft`）なので、
+ * 噂の出た球団がそのまま指名する（「西武が熱視線」の選手を中日が獲ることはない）
+ */
+export const npbTeamFor = (league, playerId) =>
+  NPB_TEAMS[Math.floor(unit(league, `npb:${playerId}`) * NPB_TEAMS.length)];
+
+/**
+ * ドラフトの気配（先方要望 2026-11-21「どの球団が誰に注目しているかの記事が欲しい。
+ * 噂が出たあと、選手に黄色でプロ球団のバッジが付いてもいい」）。
+ *
+ * - 線より `PRO_WATCH_MARGIN` 下から「注目」（`watch`）、`PRO_HOT_MARGIN` 下から「接触」（`hot`）。
+ *   指名そのものは `PRO_DRAFT_THRESHOLD` だけで決まる（ここは見え方だけで、指名に効かない）。
+ *   実測（初期セット30リーグ・開幕時・成績の加点なし）: 線−25 以上はリーグに平均4.7人、
+ *   線−8 以上は約1.6人、線以上は1.0人。シーズンが進むとタイトルの加点で少し増える。
+ * - 噂が出る日は選手ごとに決まっている（5月1日〜7月31日。リーグの種×年×選手）。
+ *   その日より前は出さない。指名の日（`_draftDone`）を過ぎたら消える（指名された人は球団史へ）。
+ * - 乱数は使わない（同じ日を何度見ても同じ）。
+ */
+export const PRO_WATCH_MARGIN = 25;
+export const PRO_HOT_MARGIN = 8;
+const WATCH_START_DAYS = 92; // 5/1 から 7/31 まで
+const dayOfSeason = (d) => {
+  const lengths = [31, 30, 31, 30, 31, 31, 30]; // 4月〜10月
+  const m = (d?.month ?? 0) - 4;
+  if (m < 0) return -1;
+  return lengths.slice(0, m).reduce((a, b) => a + b, 0) + (d?.day ?? 1) - 1;
+};
+const MAY_FIRST = 30;
+export function proWatchList(league, teams, skip = new Set()) {
+  const season = league.season;
+  if (!season || season._draftDone) return [];
+  const today = dayOfSeason(season.currentDate);
+  if (today < MAY_FIRST) return [];
+  const totalGames = season.settings?.gamesPerSeason || season.schedule?.length || 0;
+  const rows = [];
+  for (const c of proDraftCandidates(teams, skip, { totalGames })) {
+    const margin = c.score - PRO_DRAFT_THRESHOLD;
+    if (margin < -PRO_WATCH_MARGIN) break;
+    const start = MAY_FIRST + Math.floor(unit(league, `watch:${c.player.id}`) * WATCH_START_DAYS);
+    if (today < start) continue;
+    rows.push({
+      id: c.player.id,
+      name: c.player.name,
+      team: c.teamName,
+      npb: npbShort(npbTeamFor(league, c.player.id)),
+      level: margin >= -PRO_HOT_MARGIN ? 'hot' : 'watch',
+    });
+  }
+  return rows;
+}
+
 /**
  * 何位で指名されたか（点が高いほど上位。`ikusei` は育成指名）。
  *
@@ -174,7 +234,7 @@ export function chooseProDraft(league, teams, skip = new Set()) {
   for (const c of proDraftCandidates(teams, skip, { totalGames })) {
     if (picks.length >= PRO_DRAFT_MAX) break;
     if (!isProLevel(c.score)) break;
-    const npbTeam = NPB_TEAMS[Math.floor(unit(league, `npb:${c.player.id}`) * NPB_TEAMS.length)];
+    const npbTeam = npbTeamFor(league, c.player.id);
     const rank = rankOf(c.score - PRO_DRAFT_THRESHOLD);
     picks.push({ ...c, round: rank.round, ikusei: !!rank.ikusei, npbTeam });
   }

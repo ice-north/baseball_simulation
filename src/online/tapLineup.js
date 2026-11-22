@@ -223,10 +223,11 @@ function replaced(order, index, playerId) {
  *    `planRest`（ほかの先発が守備を移って休める場合も「休みます」）。
  *    文はアプリの「気になる所」と同じ。
  * `positionName` は守備位置の名前（`POS_FULL`）。`nextStarterId` は次の先発（`view.nextStarterId`）。
+ * `restAt` は休ませる目安の疲労（自動采配の `restLine`。`restFatigueOf(view.lineup.tactics)`）。
  * ⚠ 次の先発が野手の枠にも居る（二刀流）と、その日は野手の枠を抜ける。サーバーと同じく
  *    抜けた形で休めるかを数え、その選手には休養の注意を出さない（その日は投げる）。
  */
-export function lineupNotes(order, roster, bench, positionName, nextStarterId = null) {
+export function lineupNotes(order, roster, bench, positionName, nextStarterId = null, restAt = REST_FATIGUE) {
   const byId = new Map((roster || []).map((p) => [p.id, p]));
   const notes = [];
   // 試合の日に誰が休むか（サーバーと同じ計算。守備をまとめて組み直す）
@@ -234,7 +235,7 @@ export function lineupNotes(order, roster, bench, positionName, nextStarterId = 
     .filter((slot) => slot.position !== 'pitcher' && slot.position !== 'dh')
     .map((slot) => ({ player: byId.get(slot.playerId), position: slot.position }));
   const rest = field.every((s) => canPlayField(s.player))
-    ? planRest(field, bench || [], nextStarterId ?? null)
+    ? planRest(field, bench || [], nextStarterId ?? null, restAt)
     : null;
   const resting = new Set(rest?.resting || []);
   order.forEach((slot, index) => {
@@ -259,7 +260,7 @@ export function lineupNotes(order, roster, bench, positionName, nextStarterId = 
       return;
     }
     const fatigue = player.fatigue || 0;
-    if (fatigue >= REST_FATIGUE && !(nextStarterId != null && player.id === nextStarterId)) {
+    if (fatigue >= restAt && !(nextStarterId != null && player.id === nextStarterId)) {
       notes.push({
         index,
         kind: 'rest',

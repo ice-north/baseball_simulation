@@ -199,6 +199,7 @@ import {
   signTotal,
   fillsAutomatically,
   TRYOUT_WISH_MAX,
+  tryoutPickOrder,
 } from '../src/online/tryoutPlan.js';
 import { generateRosterPacks, packsForMember } from '../src/online/rosterPack.js';
 import { abilitySnapshot, abilityGains, addCampGains } from '../src/online/campGains.js';
@@ -212,6 +213,7 @@ import {
   coachSeasonRows,
   coachOffseason,
   fillVacancies,
+  hirePlayerAsCoach,
   setStaffModes,
   staffCommand,
   effectiveStaffModes,
@@ -1214,6 +1216,21 @@ export function openPhase(league, kind, now) {
     }
   }
   league.phase = phase;
+  if (kind === 'tryout') {
+    // ⚠ **CPU球団の狙い（見込み）**。トライアウトの候補に「どの球団がリストに入れているか」の札を出す
+    //    （先方要望 2026-11-21「欲しい選手を全部リストに入れても予定人数取れない事があった。どの球団が
+    //    リストに加えているかバッジがあれば、より上位にしたり諦めたり選択肢が増える」）。
+    //    中身は標準案（`defaultPhasePlan`。CPU が取るときと同じ `selectPlayerForAI` で空き枠ぶん並べたもの）。
+    //    CPU は実際には指名の番ごとに選び直すので**見込み**（画面もそう書く）。開いた時に1回だけ作って残す
+    //    （名簿は契約更改のあとで決まっていて、手続きの間は動かない）。手続きが終われば `phase` ごと消える。
+    const human = new Set((league.members || []).map((m) => m.teamName));
+    phase.cpuLists = Object.fromEntries(
+      league.season.settings.teamNames
+        .filter((n) => !human.has(n) && TEAMS_DATA[n])
+        .map((n) => [n, defaultPhasePlan(league, n).rankedIds || []])
+        .filter(([, ids]) => ids.length),
+    );
+  }
   league.status = 'waiting';
   league.nextAdvanceAt = null;
   league.season.pendingPhaseEvent = kind;
@@ -1503,14 +1520,31 @@ function validatePhasePlan(league, teamName, plan) {
           plan.releaseIds.every((id) => team.players.some((p) => p.id === id)),
         '退団選手の指定が不正です',
       );
+      // コーチ打診（先方要望 2026-11-21。`hirePlayerAsCoach`）。役職ごとに1人まで。**無くてもよい**（古い画面・アプリ）
+      const offers = plan.coachOffers ?? {};
+      requireOnline(
+        offers && typeof offers === 'object' && !Array.isArray(offers) &&
+          Object.keys(offers).every((role) => role === 'pitching' || role === 'batting'),
+        'コーチ打診の指定が不正です',
+      );
+      const offerIds = Object.values(offers).filter((id) => id != null);
+      requireOnline(
+        new Set(offerIds).size === offerIds.length &&
+          offerIds.every((id) => team.players.some((p) => p.id === id) && !plan.releaseIds.includes(id)),
+        'コーチ打診の選手が不正です（名簿に居ない・解雇と重なる・2つの役職に同じ人）',
+      );
       const remaining = team.players.filter(
-        (p) => !plan.releaseIds.includes(p.id),
+        (p) => !plan.releaseIds.includes(p.id) && !offerIds.includes(p.id),
       );
       requireOnline(
         remaining.length >= Math.min(9, team.players.length),
         '契約後も最低9人は残してください。既に9人未満の場合は新たな退団はできません',
       );
-      return { releaseIds: [...plan.releaseIds] };
+      const coachOffers = Object.fromEntries(Object.entries(offers).filter(([, id]) => id != null));
+      return {
+        releaseIds: [...plan.releaseIds],
+        ...(Object.keys(coachOffers).length ? { coachOffers } : {}),
+      };
     }
     case 'camp': {
       requireOnline(
@@ -1883,9 +1917,7 @@ function resolveTryout(league, plans, now) {
   //       先に取ることになり、「順位が上なら先に取れる」と食い違う。
   //    ⚠ 勝率が同じ球団は球団名で決める（毎回同じ順にするため。`winRate` だけで
   //       並べると、同率の2球団の前後が実行ごとに変わりうる）
-  const names = [...league.season.standings]
-    .sort((a, b) => b.winRate - a.winRate || (a.team < b.team ? -1 : 1))
-    .map((s) => s.team);
+  const names = tryoutPickOrder(league.season.standings);
   const remaining = clone(phase.candidates);
   const acquired = Object.fromEntries(names.map((name) => [name, []]));
   const allPicked = [];
@@ -2213,8 +2245,22 @@ function resolvePhase(league, now) {
           TEAMS_DATA[name].players,
           releaseBiasFor(league, name),
         );
+      // コーチ打診（人の球団だけ。`hirePlayerAsCoach`）。⚠ 解雇と違い、トライアウトの受験者（`releasePlayers` の
+      //    退団者の池）には入れない。名簿から外して、年度更新でコーチの席に就く
+      const offers = Object.entries(plans[name]?.coachOffers || {});
+      const coached = [];
+      for (const [role, id] of offers) {
+        const team = TEAMS_DATA[name];
+        const player = team.players.find((p) => p.id === id);
+        if (!player) continue;
+        hirePlayerAsCoach(league, name, player, role);
+        coached.push(player);
+        cleanupPlayerReferences(team, player.id);
+        team.players = team.players.filter((p) => p.id !== player.id);
+      }
+      if (coached.length) refreshTeamPlan(league, name);
       // 取引の記録（退団）。⚠ 名簿から消す前に名前を控える
-      const leaving = TEAMS_DATA[name].players.filter((p) => ids.includes(p.id));
+      const leaving = [...coached, ...TEAMS_DATA[name].players.filter((p) => ids.includes(p.id))];
       releasePlayers(name, ids, league.season.year);
       recordTransaction(
         league,

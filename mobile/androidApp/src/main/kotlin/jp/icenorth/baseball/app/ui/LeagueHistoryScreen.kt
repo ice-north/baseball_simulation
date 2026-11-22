@@ -291,6 +291,31 @@ private fun HonorsPane(view: LeagueView, raw: JsonObject) {
                 }
             }
         }
+        // 歴代タイトル（年ごと・新しい順。その年にプロへ進んだ人は「→西武」。Web の TitleHistory と同じ）
+        // ⚠ 先方要望（2026-11-21）「プロ指名された選手もリーグの過去のタイトルとして残して」
+        Section("歴代タイトル") {
+            val years = raw.at("chronicle", "titles").list().mapNotNull { it.obj() }
+            if (years.isEmpty()) Muted("まだありません。10月下旬に成績が確定すると、その年のタイトルがここに残ります。")
+            years.forEach { y ->
+                Text("${y.at("year").int() ?: ""}年目", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 4.dp))
+                y.at("titles").list().mapNotNull { it.obj() }.forEach { t ->
+                    val team = t.at("team").str().orEmpty()
+                    val mine = team == view.teamName
+                    Row(Modifier.fillMaxWidth().padding(vertical = 1.dp)) {
+                        Text(t.at("label").str().orEmpty(), style = MaterialTheme.typography.bodySmall, modifier = Modifier.width(92.dp))
+                        Text(
+                            t.at("name").str().orEmpty() + (t.at("pro").str()?.let { "（→$it）" } ?: ""),
+                            style = MaterialTheme.typography.bodySmall,
+                            fontWeight = if (mine) FontWeight.Bold else FontWeight.Normal,
+                            color = if (mine) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.weight(1f),
+                        )
+                        Text(view.teamShort(team), style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(end = 8.dp))
+                        Text(t.at("line").str().orEmpty(), style = MaterialTheme.typography.bodySmall)
+                    }
+                }
+            }
+        }
         Section("オーナー名鑑") {
             if (owners.isEmpty()) Muted("まだ参加者がいません。")
             owners.forEach { o ->

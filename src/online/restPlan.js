@@ -62,6 +62,7 @@ export function planField(staying, pool, saved) {
  * 試合の日に誰を休ませ、守備をどう組むか。
  * `starters`: 守備に就く先発（8人。`{ player, position }`）、`bench`: 控えの野手（起用できる人）、
  * `leaving`: その日に先発投手として野手の枠を抜ける二刀流の選手の id（居なければ null）。
+ * `restAt`: 休ませる疲労（球団の目安 `restFatigueOf`。既定は `FIELDER_REST_FATIGUE`）。
  * 返すのは `{ resting: 選手id[], assign: Map(選手id → 守備位置) }`。休ませる人が居なければ null。
  * `assign` には `leaving` は入らない（抜けた枠も控えで埋めた形）。
  *
@@ -82,7 +83,7 @@ export function planField(staying, pool, saved) {
  * ⚠ 疲れの抜けていない控え（`SUBSTITUTE_FRESH_FATIGUE` 以上）は、疲れ切った選手を
  *    休ませるときだけ使う。
  */
-export function planRest(starters, bench, leaving = null) {
+export function planRest(starters, bench, leaving = null, restAt = FIELDER_REST_FATIGUE) {
   const positions = new Set(starters.map((s) => s.position));
   if (starters.length !== FIELD.length || !FIELD.every((pos) => positions.has(pos))) return null;
   // ⚠ 起用できない先発（名簿に居ない・登録を外れた）が居る打順は組まない（2026-11-20 監査）。
@@ -98,7 +99,7 @@ export function planRest(starters, bench, leaving = null) {
   const out = starters.some((s) => s.player.id === leaving) ? leaving : null;
   const tired = starters
     .map((s) => s.player)
-    .filter((p) => p.id !== out && (p.fatigue || 0) >= FIELDER_REST_FATIGUE)
+    .filter((p) => p.id !== out && (p.fatigue || 0) >= restAt)
     .sort((a, b) => (b.fatigue || 0) - (a.fatigue || 0));
   if (!tired.length) return null;
   const saved = new Map(starters.map((s) => [s.player.id, s.position]));

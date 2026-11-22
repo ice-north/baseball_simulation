@@ -106,6 +106,11 @@ for (const [k, v] of Object.entries(ints)) {
   if (!Number.isInteger(v)) throw new Error(`${k} が読めない`);
   out(`const val ${k}: Int = ${v}`);
 }
+// 疲れた野手を休ませる目安（自動采配の restLine → 疲労）。アプリの気になる所が同じ値で「休みます」を出す
+if (!shared.REST_LINES) throw new Error('REST_LINES が読めない');
+out(`val REST_LINES: Map<String, Int> = mapOf(${Object.entries(shared.REST_LINES).map(([k, v]) => `${q(k)} to ${v}`).join(', ')})`);
+out('/** その球団の休ませる目安の疲労（Web 版 shared.js の restFatigueOf） */');
+out('fun restFatigueOf(restLine: String?): Int = REST_LINES[restLine] ?: FIELDER_REST_FATIGUE');
 // 1年の流れの帯（`SEASON_STEPS`）と、キャンプの方針ごとの伸びの目安（`CAMP_POLICY_GUIDE`）
 out('data class SeasonStep(val key: String, val label: String, val time: String, val todo: String)');
 out('val SEASON_STEPS: List<SeasonStep> = listOf(');

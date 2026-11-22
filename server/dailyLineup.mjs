@@ -9,6 +9,7 @@ import {
   FIELDER_REST_FATIGUE,
   STARTER_SKIP_FATIGUE,
   SUBSTITUTE_FRESH_FATIGUE,
+  restFatigueOf,
 } from '../src/online/shared.js';
 import { FIELD, planField, planRest } from '../src/online/restPlan.js';
 
@@ -73,10 +74,12 @@ export function restTiredFielders(team, twoWayStarterId = null) {
   );
   const inLineup = new Set(order.map((e) => e.playerId));
   // ⚠ 守備位置が欠けた・重なった打順は直さない（`planRest` が null。`ensureCompleteLineup` に任せる）
+  // ⚠ 休ませる目安は球団ごと（自動采配の `restLine`。CPU球団は標準の80）
   const plan = planRest(
     slots.map((e) => ({ player: byId.get(e.playerId), position: e.position })),
     team.players.filter((p) => !inLineup.has(p.id)),
     twoWayStarterId,
+    restFatigueOf(team.onlineTactics),
   );
   if (!plan) return Object.assign(() => {}, { resting: [] });
   const saved = new Map(slots.map((e) => [e.playerId, e.position]));

@@ -473,3 +473,37 @@ export function teamFitRank(candidate, roster, weights) {
     of: same.length,
   };
 }
+
+/**
+ * トライアウトの指名順（球団名の並び）。**前年の順位が上の球団から**、同じ勝率は球団名で
+ * （`resolveTryout` の注）。画面の「先に指名する球団」の札も同じ並びで決める。
+ */
+export function tryoutPickOrder(standings) {
+  return [...(standings || [])]
+    .sort((a, b) => b.winRate - a.winRate || (a.team < b.team ? -1 : 1))
+    .map((s) => s.team);
+}
+
+/**
+ * トライアウトの候補ごとに、ほかの球団のリスト（参加者の保存した交渉リストと、CPU球団の狙いの見込み）。
+ * 先方要望（2026-11-21）「どの球団がリストに加えているかバッジがあれば、より上位にしたり諦めたり選択肢が増える」。
+ * @param lists 球団名 → 候補 id の並び
+ * @returns 候補 id → `{ team, wish, cpu, first }[]`（`wish` はその球団のリストの何番目、
+ *   `first` は自分より先に指名する球団か）。自分の球団は入れない
+ */
+export function tryoutInterest({ ownTeam, order, humanLists = {}, cpuLists = {} }) {
+  const at = new Map(order.map((t, i) => [t, i]));
+  const mine = at.get(ownTeam) ?? Infinity;
+  const out = new Map();
+  const add = (team, ids, cpu) => {
+    if (team === ownTeam) return;
+    (ids || []).forEach((id, i) => {
+      const row = { team, wish: i + 1, cpu, first: (at.get(team) ?? Infinity) < mine };
+      out.set(id, [...(out.get(id) || []), row]);
+    });
+  };
+  for (const [team, ids] of Object.entries(humanLists)) add(team, ids, false);
+  for (const [team, ids] of Object.entries(cpuLists)) add(team, ids, true);
+  for (const rows of out.values()) rows.sort((a, b) => (at.get(a.team) ?? 99) - (at.get(b.team) ?? 99));
+  return out;
+}
