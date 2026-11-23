@@ -13,7 +13,7 @@ import { teamLook, NEUTRAL_LOOK } from './teamLook.js';
 import { stadiumScene } from './sceneArt.js';
 import { makeStage, stadiumOf, paintFrame } from './motionPaint.js';
 import { VIEW_W, VIEW_H } from './motionCamera.js';
-import { teamShort } from '../gameText.js';
+import { teamCity, teamShort } from '../gameText.js';
 
 /** 絵の中で使う字（`look.css` の @font-face。canvas は使うだけでは読みにいかないので先に読む） */
 const FONTS = ['900 24px LookHead', '700 12px LookJP', '700 12px LookNum', '400 12px LookGraduate'];
@@ -61,6 +61,8 @@ export default function PlayMotion({ game, scene, before, speed = 1, replayKey =
   const away = teamLook(game.away) || NEUTRAL_LOOK;
   const homeName = teamShort(game.home);
   const awayName = teamShort(game.away);
+  // ⚠ 景色（海・山）は略称でなく土地の名前で決める（今日の一戦の札と同じ景色にする。名前を付け替えた球団は略称が土地と違う）
+  const homeCity = teamCity(game.home);
   const stage = useMemo(
     () => makeStage({ scene, before, home, away, names: { home: homeName, away: awayName } }),
     [scene, before, home, away, homeName, awayName],
@@ -91,7 +93,7 @@ export default function PlayMotion({ game, scene, before, speed = 1, replayKey =
     if (!ctx || !width || !fonts) return undefined;
     // 球場の絵は、いちばん寄った時（2.8倍）でもぼけない細かさで1度だけ描く
     const scale = Math.min(4, Math.max(2, Math.ceil((width / VIEW_W) * 2.2)));
-    const stadium = stadiumOf({ home, away, scene: stadiumScene(homeName), scale, tag: fonts });
+    const stadium = stadiumOf({ home, away, scene: stadiumScene(homeCity), scale, tag: fonts });
     if (!stadium) return undefined;
     const height = Math.round((width * VIEW_H) / VIEW_W);
     if (canvas.width !== width || canvas.height !== height) {
@@ -128,7 +130,7 @@ export default function PlayMotion({ game, scene, before, speed = 1, replayKey =
     };
     frame = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(frame);
-  }, [stage, home, away, homeName, width, fonts, replayKey]);
+  }, [stage, home, away, homeCity, width, fonts, replayKey]);
   return (
     <canvas
       ref={canvasRef}
