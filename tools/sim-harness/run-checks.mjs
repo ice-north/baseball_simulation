@@ -109,6 +109,17 @@ const CHECKS = [
   // 人どうしの関わり（ひとこと・取引の記録・おるすばん・予告先発・練習試合・得点経過）
   { name: 'online-social-check', group: 'check', online: true, slow: 125 },
   { name: 'progression-check', group: 'full', slow: 38 },
+  // 固定の種で回した結果（一人用の自動試合・オンラインの開幕40回と参加者のビュー）が記録と同じか。
+  // 動きを変えない整理の安全網。狙って結果を変えたら `--update` で書き直す（replay-hashes.json）
+  { name: 'replay-hash-check', group: 'check', online: true, slow: 40 },
+  // 同じものを年度更新をまたいで次の年の最初の試合まで（約2分）
+  {
+    name: 'replay-hash-check-year',
+    group: 'full',
+    online: true,
+    slow: 150,
+    args: [harness('replay-hash-check'), '--year'],
+  },
   // アプリの共通部（mobile/shared）に写した表と計算の期待値が、Web 版と食い違っていないか（どれも0.2秒未満）。
   // ⚠ 写し元（src/）だけを変えたときに気づくため、mobile を触らなくても毎回回す（android.yml は paths で絞っている）
   ...['gen-tables', 'expect-logic', 'expect-social', 'expect-chronicle', 'expect-paper'].map((tool) => ({
