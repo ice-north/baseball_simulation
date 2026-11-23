@@ -38,6 +38,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -368,8 +373,42 @@ fun StatTable(
     trailing: (@Composable (JsonObject) -> Unit)? = null,
     trailingHeader: String = "",
     trailingWidth: Dp = 76.dp,
+    /**
+     * 新しい見た目（試作）: 成績の数字の段位（S〜F、リーグ平均比。`statGrade`）。渡さなければ付けない。
+     * ⚠ 入のときだけ使う（切のときは今までと同じ表）
+     */
+    grade: ((StatColumn, Double?, JsonObject) -> Char?)? = null,
 ) {
     val divider = MaterialTheme.colorScheme.outlineVariant
+    // 新しい見た目（試作。Web の `look/feel.css` 案2〜4と同じ考え）: 見出しの下に球団色の線・1行おきの縞・
+    // 数字の頭に S〜F の札・並べ替えた列の棒（左から伸びる）・並べ替え／項目を変えたら行が上から順に浮かぶ
+    val look = LocalLook.current
+    val lookLine = if (look.on) lookColor(look.teamLook(look.capTeam)?.c2) ?: divider else null
+    val sortColumn = if (look.on) columns.firstOrNull { it.id == sortId } else null
+    val barOf: ((Double?) -> Float?)? = sortColumn?.let { c ->
+        val values = players.mapNotNull { c.get(it)?.takeIf { v -> v.isFinite() } }
+        val min = values.minOrNull()
+        val max = values.maxOrNull()
+        if (values.size < 2 || min == null || max == null || max == min) null
+        else { v: Double? -> v?.takeIf { it.isFinite() }?.let { ((if (c.ascending) max - it else it - min) / (max - min)).toFloat() } }
+    }
+    val enter = androidx.compose.runtime.remember(sortId, ascending, columns.map { it.id }) {
+        androidx.compose.animation.core.Animatable(if (look.on) 0f else 1f)
+    }
+    androidx.compose.runtime.LaunchedEffect(enter) {
+        if (look.on) enter.animateTo(1f, androidx.compose.animation.core.tween(420))
+    }
+    /** i 行目の浮かび方（0〜1）。上の行から少しずつ遅れて */
+    fun rise(i: Int): Float = if (!look.on) 1f else ((enter.value * 1.6f) - i * 0.04f).coerceIn(0f, 1f)
+    fun Modifier.lookRow(i: Int, highlighted: Boolean): Modifier =
+        if (!look.on) this
+        else this
+            .graphicsLayer {
+                val k = rise(i)
+                alpha = k
+                translationY = (1f - k) * 6.dp.toPx()
+            }
+            .then(if (!highlighted && i % 2 == 1) Modifier.background(Color.White.copy(alpha = 0.03f)) else Modifier)
     val hScroll = rememberScrollState()
     // ⚠ 行の高さは文字の大きさの設定に合わせて伸ばす。dp で固定のままだと、端末の文字を大きくしている人では
     //    名前＋「守備 年齢」の2行が行に入りきらず、はみ出した下の行（年齢）に次の行の色付きの背景が重なって切れて見えた
@@ -377,10 +416,11 @@ fun StatTable(
     val colWidth: (StatColumn) -> Dp = { c -> if (c.label.length >= 4) 64.dp else 52.dp }
     Row(Modifier.fillMaxWidth()) {
         Column(Modifier.width(NameWidth)) {
-            HeaderCell("選手", NameWidth, TextAlign.Start, null)
-            players.forEach { p ->
+            HeaderCell("選手", NameWidth, TextAlign.Start, null, lookLine)
+            players.forEachIndexed { i, p ->
                 Row(
                     Modifier
+                        .lookRow(i, highlight(p))
                         .height(rowHeight)
                         .fillMaxWidth()
                         .background(if (highlight(p)) MaterialTheme.colorScheme.primary.copy(alpha = 0.14f) else Color.Transparent)
@@ -415,12 +455,13 @@ fun StatTable(
             Row {
                 columns.forEach { c ->
                     val mark = if (c.id == sortId) (if (ascending) "▲" else "▼") else ""
-                    HeaderCell(c.label + mark, colWidth(c), TextAlign.End) { onSort(c) }
+                    HeaderCell(c.label + mark, colWidth(c), TextAlign.End, { onSort(c) }, lookLine)
                 }
             }
-            players.forEach { p ->
+            players.forEachIndexed { i, p ->
                 Row(
                     Modifier
+                        .lookRow(i, highlight(p))
                         .height(rowHeight)
                         .background(if (highlight(p)) MaterialTheme.colorScheme.primary.copy(alpha = 0.14f) else Color.Transparent),
                     verticalAlignment = Alignment.CenterVertically,
@@ -428,24 +469,61 @@ fun StatTable(
                     columns.forEach { c ->
                         val v = c.get(p)
                         val rank = statRank(c, v)
-                        Text(
-                            formatStat(c, v),
-                            fontSize = 13.sp,
-                            textAlign = TextAlign.End,
-                            fontWeight = if (rank != null) FontWeight.Bold else FontWeight.Normal,
-                            color = rank?.let { rankColor(it) } ?: MaterialTheme.colorScheme.onSurface,
-                            modifier = Modifier.width(colWidth(c)).padding(end = 6.dp),
-                        )
+                        if (!look.on) {
+                            Text(
+                                formatStat(c, v),
+                                fontSize = 13.sp,
+                                textAlign = TextAlign.End,
+                                fontWeight = if (rank != null) FontWeight.Bold else FontWeight.Normal,
+                                color = rank?.let { rankColor(it) } ?: MaterialTheme.colorScheme.onSurface,
+                                modifier = Modifier.width(colWidth(c)).padding(end = 6.dp),
+                            )
+                        } else {
+                            val graded = grade?.invoke(c, v, p)
+                            val chip = rank ?: graded
+                            val bar = if (c.id == sortId) barOf?.invoke(v) else null
+                            Row(
+                                Modifier
+                                    .width(colWidth(c))
+                                    .fillMaxHeight()
+                                    .then(
+                                        if (bar == null) Modifier
+                                        else Modifier.drawBehind {
+                                            // 行の下端に3dpの棒（Web の並べ替えた列の棒と同じ。左から伸びる）
+                                            val h = 3.dp.toPx()
+                                            val y = size.height - 5.dp.toPx()
+                                            val left = 4.dp.toPx()
+                                            val w = size.width - left - 6.dp.toPx()
+                                            drawRect(Color.White.copy(alpha = 0.1f), Offset(left, y), Size(w, h))
+                                            drawRect(LookBarColor, Offset(left, y), Size(w * bar * enter.value, h))
+                                        },
+                                    )
+                                    .padding(end = 6.dp),
+                                horizontalArrangement = Arrangement.End,
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                if (chip != null) RankLetterChip(chip, Modifier.padding(end = 3.dp), size = 13.dp)
+                                Text(
+                                    formatStat(c, v),
+                                    fontSize = 13.sp,
+                                    maxLines = 1,
+                                    softWrap = false,
+                                    fontWeight = if (chip != null) FontWeight.Bold else FontWeight.Normal,
+                                    color = chip?.let { rankColor(it) } ?: MaterialTheme.colorScheme.onSurface,
+                                )
+                            }
+                        }
                     }
                 }
             }
         }
         if (trailing != null) {
             Column(Modifier.width(trailingWidth)) {
-                HeaderCell(trailingHeader, trailingWidth, TextAlign.Start, null)
-                players.forEach { p ->
+                HeaderCell(trailingHeader, trailingWidth, TextAlign.Start, null, lookLine)
+                players.forEachIndexed { i, p ->
                     Box(
                         Modifier
+                            .lookRow(i, highlight(p))
                             .height(rowHeight)
                             .fillMaxWidth()
                             .background(if (highlight(p)) MaterialTheme.colorScheme.primary.copy(alpha = 0.14f) else Color.Transparent),
@@ -459,12 +537,23 @@ fun StatTable(
     Box(Modifier.fillMaxWidth().height(1.dp).border(1.dp, divider))
 }
 
+/** 並べ替えた列の棒の色（Web の `look/feel.css` と同じ水色） */
+private val LookBarColor = Color(0xFF67E8F9)
+
+/** @param line 新しい見た目（試作）の見出しの下の線（球団の色）。切のときは null */
 @Composable
-private fun HeaderCell(text: String, width: Dp, align: TextAlign, onClick: (() -> Unit)?) {
+private fun HeaderCell(text: String, width: Dp, align: TextAlign, onClick: (() -> Unit)?, line: Color? = null) {
     Box(
         Modifier
             .width(width)
             .height(32.dp)
+            .then(
+                if (line == null) Modifier
+                else Modifier.drawBehind {
+                    val h = 2.dp.toPx()
+                    drawRect(line, Offset(0f, size.height - h), Size(size.width, h))
+                },
+            )
             .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
             .padding(horizontal = 4.dp),
         contentAlignment = if (align == TextAlign.End) Alignment.CenterEnd else Alignment.CenterStart,

@@ -324,13 +324,21 @@ fun conditionName(condition: Int?, name: String, gap: String = " "): Pair<Annota
 @Composable
 fun RankChip(value: Int, velocity: Boolean = false, stamina: Boolean = false, modifier: Modifier = Modifier) {
     if (!LocalLook.current.on) return
-    val rank = abilityRank(value, velocity, stamina)
+    RankLetterChip(abilityRank(value, velocity, stamina), modifier)
+}
+
+/**
+ * 段位の字の札（S〜F）。能力の札と、成績の札（リーグ平均比。`statGrade`）で同じ形。
+ * ⚠ 入／切は呼ぶ側が見る
+ */
+@Composable
+fun RankLetterChip(rank: Char, modifier: Modifier = Modifier, size: Dp = 16.dp) {
     Box(
-        modifier.size(16.dp).background(rankColor(rank), RoundedCornerShape(3.dp)).testTag("rank-chip"),
+        modifier.size(size).background(rankColor(rank), RoundedCornerShape(3.dp)).testTag("rank-chip"),
         contentAlignment = Alignment.Center,
     ) {
-        // ⚠ 札は 16dp の固定なので、字も dp で決める（端末の文字の大きさの設定で札からはみ出さない）
-        val fontSize = with(LocalDensity.current) { 11.dp.toSp() }
+        // ⚠ 札は dp の固定なので、字も dp で決める（端末の文字の大きさの設定で札からはみ出さない）
+        val fontSize = with(LocalDensity.current) { (size * 0.69f).toSp() }
         Text(rank.toString(), color = Color(0xFF0F172A), fontFamily = LookGraduate, fontSize = fontSize, lineHeight = fontSize)
     }
 }
