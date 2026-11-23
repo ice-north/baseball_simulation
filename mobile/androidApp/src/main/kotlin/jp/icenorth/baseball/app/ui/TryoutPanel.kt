@@ -185,14 +185,6 @@ fun TryoutPanel(
                     PlayerSummary(p, { model.openPlayer = it }) {
                         Column(horizontalAlignment = Alignment.End) {
                             Score(scores[p.pid])
-                            // 絞り込みの条件にした能力のうち、この選手のふだんの行に無いもの（投手のミートなど）
-                            val side = if (p.at("position").str() == "pitcher") "pitcher" else "fielder"
-                            val extra = abilityFilters.mapNotNull { f -> ABILITY_FILTERS.firstOrNull { it.key == f.key } }.distinct().filter { it.side != side }
-                            if (extra.isNotEmpty()) Text(
-                                extra.joinToString(" ") { "${it.label}${it.get(p).toInt()}" },
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.tertiary,
-                            )
                             Fit(teamFitRank(p, roster, weights))
                             // 獲得する人数より下は「取られたときの繰り上がり」
                             if (i >= total) Tag("繰り上がり用", MaterialTheme.colorScheme.onSurfaceVariant)
@@ -238,8 +230,8 @@ fun TryoutPanel(
                         Column(horizontalAlignment = Alignment.End) {
                             Score(scores[p.pid])
                             // 絞り込みの条件にした能力のうち、この選手のふだんの行に無いもの（投手のミートなど）
-                            val side = if (p.at("position").str() == "pitcher") "pitcher" else "fielder"
-                            val extra = abilityFilters.mapNotNull { f -> ABILITY_FILTERS.firstOrNull { it.key == f.key } }.distinct().filter { it.side != side }
+                            val ownSide = if (p.at("position").str() == "pitcher") "pitcher" else "fielder"
+                            val extra = abilityFilters.mapNotNull { f -> ABILITY_FILTERS.firstOrNull { it.key == f.key } }.distinct().filter { it.side != ownSide }
                             if (extra.isNotEmpty()) Text(
                                 extra.joinToString(" ") { "${it.label}${it.get(p).toInt()}" },
                                 style = MaterialTheme.typography.labelSmall,
