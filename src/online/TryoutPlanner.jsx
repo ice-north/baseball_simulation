@@ -1,5 +1,5 @@
 import React, { useMemo, useRef, useState } from 'react';
-import { POS, posGroup } from './api.js';
+import { POS } from './api.js';
 import { AbilityGrade, PlayerStatsButton } from './PlayerPerformance.jsx';
 import { PageNav } from './PageNav.jsx';
 import { teamShort } from './gameText.js';
@@ -301,14 +301,14 @@ function PoolTable({
                     className="online-lineup-playable"
                     title="本職と、ほかに守れる位置（適性の高い順）"
                   >
-                    <span className="online-lineup-pos is-bench" data-pos={posGroup(p.position)}>
+                    <span className="online-lineup-pos is-bench">
                       {POS[p.position] || '?'}
                     </span>
                     {playablePositions(p)
                       .filter((e) => e.position !== p.position)
                       .slice(0, 2)
                       .map((e) => (
-                        <span key={e.position} data-pos={posGroup(e.position)}>{POS[e.position]}</span>
+                        <span key={e.position}>{POS[e.position]}</span>
                       ))}
                   </span>
                 )}

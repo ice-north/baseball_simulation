@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { POS, POS_FULL, posGroup } from './api.js';
+import { POS, POS_FULL } from './api.js';
 import {
   useDraftState,
   useDraftMemoryStore,
@@ -458,7 +458,7 @@ export default function TapLineup({
           <ul>
             {notes.map((note) => (
               <li key={`${note.index}:${note.kind}`} className={`is-${note.kind}`}>
-                <span className="online-tap-pos is-note" data-pos={posGroup(order[note.index]?.position)}>
+                <span className="online-tap-pos is-note">
                   {POS[order[note.index]?.position] || '?'}
                 </span>
                 {note.text}
@@ -513,7 +513,6 @@ export default function TapLineup({
                 <button
                   type="button"
                   className={`online-tap-pos ${posSelected ? 'is-selected' : ''}`}
-                  data-pos={posGroup(slot.position)}
                   aria-pressed={posSelected}
                   aria-label={
                     posSelected
@@ -641,7 +640,7 @@ export default function TapLineup({
                       }
                     >
                       <span className="online-tap-order" aria-hidden="true" />
-                      <span className="online-tap-pos is-bench" data-pos={posGroup(player.position)}>
+                      <span className="online-tap-pos is-bench">
                         {POS[player.position] || '?'}
                       </span>
                       <button

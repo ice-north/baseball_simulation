@@ -8,7 +8,7 @@ import React, {
 } from 'react';
 import { useRead, ReadContext } from './useRead.js';
 import { teamLabel, teamShort } from './gameText.js';
-import { POS, posGroup } from './api.js';
+import { POS } from './api.js';
 import { ROSTER_LIMIT, ONLINE_ROSTER_TARGETS } from './shared.js';
 import { TRADE_NOTE_MAX } from './social.js';
 import { TransactionsPage } from './SocialPages.jsx';
@@ -545,12 +545,12 @@ function PlayerCells({ player, kind, lineup, team }) {
             className="online-lineup-playable"
             title="本職と、ほかに守れる位置（適性の高い順）"
           >
-            <span className="online-lineup-pos is-bench" data-pos={posGroup(player.position)}>{POS[player.position] || '?'}</span>
+            <span className="online-lineup-pos is-bench">{POS[player.position] || '?'}</span>
             {playablePositions(player)
               .filter((e) => e.position !== player.position)
               .slice(0, 2)
               .map((e) => (
-                <span key={e.position} data-pos={posGroup(e.position)}>{POS[e.position]}</span>
+                <span key={e.position}>{POS[e.position]}</span>
               ))}
           </span>
         )}

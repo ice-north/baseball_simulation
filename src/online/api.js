@@ -11,20 +11,6 @@ export const POS = {
   right: '右',
 };
 /**
- * 守備位置の組（投・捕・内野・外野）。新しい見た目（試作）の札の色に使う（`data-pos`）。
- * ⚠ 色はアプリの `positionColor`（`FielderRow.kt`）と同じ組分け
- */
-export const posGroup = (pos) =>
-  pos === 'pitcher'
-    ? 'p'
-    : pos === 'catcher'
-      ? 'c'
-      : ['first', 'second', 'third', 'short'].includes(pos)
-        ? 'if'
-        : ['left', 'center', 'right'].includes(pos)
-          ? 'of'
-          : undefined;
-/**
  * 守備位置の正式名。⚠ **短縮（`POS`）と同じ場所に置くこと**。別々の場所に
  *    置くと、片方だけ直して画面ごとに呼び方が変わる。
  */

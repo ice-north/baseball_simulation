@@ -4,7 +4,7 @@
 // 見ること:
 //   - 既定は切。切のときは絵（`.online-look-art`）を1つも描かず、調子は今までの絵文字のまま
 //   - PC の見出しの「新しい見た目（試作）」で入にすると、順位表・左メニューに球団マーク、
-//     スタメン設定に選手の顔と守備位置の色、選手の詳細に顔と段位の字、調子は自前の顔になる
+//     スタメン設定に選手の顔、選手の詳細に顔と段位の字、調子は自前の顔になる
 //   - 入／切は端末に覚える（開き直しても入のまま）。リーグの球団でない名前にはマークを描かない
 //   - スマホはメニュー（☰）から切り替えられる
 import assert from 'node:assert/strict';
@@ -73,15 +73,10 @@ await withDeadline(
       assert.equal(monos.length, 12);
       assert.equal(new Set(monos).size, 12, `12球団の字が重なった: ${monos}`);
 
-      // スタメン設定: 顔・守備位置の色・調子の顔
+      // スタメン設定: 顔・調子の顔
       await nav.getByRole('button', { name: 'スタメン設定', exact: true }).click();
       await p.locator('.online-lineup-person').first().waitFor();
       assert.ok((await p.locator('.online-lineup-person .online-face').count()) >= 9, '選手の顔が出ていない');
-      const posColor = await p
-        .locator('.online-lineup-pos[data-pos]')
-        .first()
-        .evaluate((el) => getComputedStyle(el).borderTopColor);
-      assert.notEqual(posColor, 'rgba(0, 0, 0, 0)');
       const conditionText = await p.locator('.online-lineup-person .online-condition').first().textContent();
       assert.doesNotMatch(conditionText, EMOJI, '入なのに調子が絵文字のまま');
       assert.ok(await p.locator('.online-lineup-person .online-condition-face').count());
@@ -131,7 +126,7 @@ await withDeadline(
         .locator('.online-standings .online-team-mark')
         .evaluateAll((els) => els.filter((el) => getComputedStyle(el).display !== 'none').length);
       assert.equal(shown, 0, 'スマホの順位表にマークが出ている');
-      // 打順: 顔と守備位置の色
+      // 打順: 顔
       await p.getByRole('button', { name: '打順', exact: true }).first().click();
       await p.locator('.online-tap-name').first().waitFor();
       assert.ok((await p.locator('.online-tap-line1 .online-face').count()) >= 9);
