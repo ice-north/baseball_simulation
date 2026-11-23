@@ -143,10 +143,20 @@ function seasonSnapshot() {
   const strength = {};
   for (const [lg, ns] of Object.entries(byLeague)) { const v = ns.map((n) => squadStrength(teams[n]?.players || [])); strength[lg] = { avg: r1(avg(v)), min: r1(Math.min(...v)), max: r1(Math.max(...v)) }; }
   const humanStrength = [...hs].map((n) => ({ team: n, lg: league.teams.find((t) => t.name === n)?.league, s: r1(squadStrength(teams[n]?.players || [])) }));
+  // 対人リーグの外（社会人・独立・クラブなど世界の残り）。トライアウトの候補はここから来るので、インフレの元を見る
+  const inLeague = new Set(names());
+  const outside = Object.entries(teams).filter(([n]) => !inLeague.has(n)).flatMap(([, t]) => t?.players || []);
+  const oBats = outside.filter((p) => !isP(p)), oPits = outside.filter(isP);
+  const world = {
+    players: outside.length, young: outside.filter((p) => p.age <= 22).length, ageAvg: r1(avg(outside.map((p) => p.age))),
+    meet: r1(avg(oBats.map((p) => p.batting?.meet).filter((x) => x != null))), power: r1(avg(oBats.map((p) => p.batting?.power).filter((x) => x != null))),
+    eye: r1(avg(oBats.map((p) => p.batting?.eye).filter((x) => x != null))), control: r1(avg(oPits.map((p) => p.pitching?.control).filter((x) => x != null))),
+    velocity: r1(avg(oPits.map((p) => p.pitching?.velocity).filter((x) => x != null))),
+  };
   const ages = all.map(({ p }) => p.age);
   const ageBins = {}; for (const a of ages) { const b = a <= 22 ? '〜22' : a <= 26 ? '23-26' : a <= 30 ? '27-30' : a <= 34 ? '31-34' : '35〜'; ageBins[b] = (ageBins[b] || 0) + 1; }
   const roster = names().map((n) => teams[n]?.players?.length || 0);
-  return { year: league.season.year, leagues, stats, abilities, strength, humanStrength, age: { avg: r1(avg(ages)), max: Math.max(...ages), bins: ageBins }, roster: { min: Math.min(...roster), max: Math.max(...roster), avg: r1(avg(roster)) }, players: all.length };
+  return { year: league.season.year, leagues, stats, abilities, world, strength, humanStrength, age: { avg: r1(avg(ages)), max: Math.max(...ages), bins: ageBins }, roster: { min: Math.min(...roster), max: Math.max(...roster), avg: r1(avg(roster)) }, players: all.length };
 }
 
 function teamDiag(n) {
@@ -166,6 +176,15 @@ function teamDiag(n) {
 
 const years = [];
 const offseasons = [];
+// 手続きごとの能力の平均（42球団）。どの手続きで能力が動くか（キャンプ・年度更新・トライアウト…）を分けて見る
+const phaseLog = [];
+function abilityMeans() {
+  const ps = names().flatMap((n) => league.game.teams[n]?.players || []);
+  const b = ps.filter((p) => !isP(p)), q = ps.filter(isP);
+  const m = (arr, f) => r1(avg(arr.map(f).filter((x) => x != null)));
+  return { meet: m(b, (p) => p.batting?.meet), power: m(b, (p) => p.batting?.power), eye: m(b, (p) => p.batting?.eye),
+    control: m(q, (p) => p.pitching?.control), velocity: m(q, (p) => p.pitching?.velocity), young: ps.filter((p) => p.age <= 22).length, age: r1(avg(ps.map((p) => p.age))) };
+}
 let days = 0, lastPhase = null;
 const t0 = Date.now();
 let tYear = Date.now();
@@ -186,10 +205,11 @@ while (days < 20000) {
       years.push(snap);
       out(`\n=== ${snap.year}年 終わり（${snap.seconds}秒） ===`);
       out(JSON.stringify({ leagues: snap.leagues, stats: snap.stats }, null, 0));
-      out(JSON.stringify({ abilities: snap.abilities, strength: snap.strength, humanStrength: snap.humanStrength, age: snap.age, roster: snap.roster, players: snap.players }));
+      out(JSON.stringify({ abilities: snap.abilities, world: snap.world, strength: snap.strength, humanStrength: snap.humanStrength, age: snap.age, roster: snap.roster, players: snap.players }));
       out(JSON.stringify(snap.size));
-      if (OUT) writeFileSync(OUT, JSON.stringify({ seed: SEED, years, offseasons, issues: Object.fromEntries(issues) }, null, 1));
+      if (OUT) writeFileSync(OUT, JSON.stringify({ seed: SEED, years, offseasons, phaseLog, issues: Object.fromEntries(issues) }, null, 1));
     }
+    if (lastPhase !== phase.id) phaseLog.push({ year: league.season.year, at: `${phase.kind}:open`, ...abilityMeans() });
     lastPhase = phase.id;
     for (const m of league.members) {
       try { quiet(() => submitPhase(league, m.userId, { phaseId: phase.id, plan: defaultPhasePlan(league, m.teamName), ready: true }, now.toISOString())); }
@@ -221,4 +241,4 @@ out(`\n=== 終わり ${Math.round((Date.now() - t0) / 60000)}分 ${days}回 ===`
 out(JSON.stringify(offseasons));
 out(JSON.stringify(sizes()));
 for (const [k, v] of issues) out(`${v}× ${k}`);
-if (OUT) writeFileSync(OUT, JSON.stringify({ seed: SEED, years, offseasons, finalSize: sizes(), issues: Object.fromEntries(issues) }, null, 1));
+if (OUT) writeFileSync(OUT, JSON.stringify({ seed: SEED, years, offseasons, phaseLog, finalSize: sizes(), issues: Object.fromEntries(issues) }, null, 1));

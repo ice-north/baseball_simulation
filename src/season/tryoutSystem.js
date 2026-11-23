@@ -1371,14 +1371,18 @@ export function calculatePlayerRank(player) {
 
     totalScore = (velocityScore * 0.3) + (controlScore * 0.25) + (staminaScore * 0.25) + (arsenalScore * 0.2);
   } else {
-    // 野手評価: ミート、パワー、走力、守備、肩
+    // 野手評価: ミート、パワー、選球眼、走力、守備、肩
+    // ⚠ **選球眼も入れる**。入れていなかったので、トライアウトでも戦力外でも選球眼が一度も
+    //    選ばれず、10年でリーグの選球眼だけが横ばい（制球は+20）→四球が半分になっていた
+    //    （10年の長期シミュ 2026-11-23）
     const meetScore = player.batting.meet;
     const powerScore = player.batting.power;
+    const eyeScore = player.batting.eye ?? 40;
     const speedScore = player.physical.speed;
     const defenseScore = player.fielding.defense;
     const armScore = player.physical.arm;
 
-    totalScore = (meetScore * 0.3) + (powerScore * 0.25) + (speedScore * 0.2) + (defenseScore * 0.15) + (armScore * 0.1);
+    totalScore = (meetScore * 0.27) + (powerScore * 0.22) + (eyeScore * 0.1) + (speedScore * 0.18) + (defenseScore * 0.14) + (armScore * 0.09);
   }
 
   // 年齢補正（素材型ボーナス / 即戦力ペナルティ）

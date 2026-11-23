@@ -1,0 +1,46 @@
+name: long-sim
+
+# 10年の長期シミュ（tools/sim-harness/long-run-probe.mjs、計測だけで合否なし）を種4本で同時に回す。
+# 1本30〜40分かかるので、いつもの check には入れず、sim/** のブランチに push したときと手動のときだけ回す。
+# 結果の JSON は成果物（long-sim-<種>）に残る。
+on:
+  push:
+    branches: ['sim/**']
+  workflow_dispatch:
+    inputs:
+      years:
+        description: 年数
+        default: '10'
+
+jobs:
+  probe:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        seed: [11, 22, 33, 44]
+    name: long-sim (seed ${{ matrix.seed }})
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - name: Long run
+        run: node --max-old-space-size=6144 tools/sim-harness/long-run-probe.mjs ${{ github.event.inputs.years || '10' }} ${{ matrix.seed }} long-sim-${{ matrix.seed }}.json > long-sim-${{ matrix.seed }}.log
+      # 結果の JSON をログにも出す（成果物を落とせない環境からも `gh api .../jobs/<id>/logs` で読める）
+      - name: Result
+        if: always()
+        run: |
+          tail -n 40 long-sim-${{ matrix.seed }}.log
+          echo '::group::json'
+          gzip -c long-sim-${{ matrix.seed }}.json | base64 -w 0
+          echo
+          echo '::endgroup::'
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: long-sim-${{ matrix.seed }}
+          path: long-sim-${{ matrix.seed }}.*

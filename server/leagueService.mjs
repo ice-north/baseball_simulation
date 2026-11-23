@@ -60,6 +60,30 @@ import {
 const digest = (value) =>
   createHash('sha256').update(JSON.stringify(value)).digest('hex');
 const clone = (value) => structuredClone(value);
+/**
+ * 定期進行・締め切りの自動決定の前に取るリーグの写し（失敗したら元のリーグに印を付けて保存する）。
+ * ⚠ **終わった年の試合（`records.seasons[年].games`）は複製せず同じものを指す**。保存側はそこを
+ *    読まずに番人にしている（`assembleWorld`）ので、複製すると番人に触れて `DataCloneError` になり、
+ *    毎回全部を読み直していた。終わった年の試合は進行で書き換えない（書き換えれば番人が止めて、
+ *    全部を読み直してやり直す）。全部を読んだときも同じく指すだけ（1年で約22MBあり、複製が重い）
+ */
+function cloneLeague(league) {
+  const seasons = league?.records?.seasons;
+  const year = league?.season?.year;
+  if (!seasons || typeof seasons !== 'object' || !Number.isFinite(year)) return clone(league);
+  const held = {};
+  const stripped = {};
+  for (const [key, season] of Object.entries(seasons)) {
+    if (Number(key) < year && season && typeof season === 'object' && season.games && typeof season.games === 'object') {
+      held[key] = season.games;
+      stripped[key] = { ...season, games: null };
+    } else stripped[key] = season;
+  }
+  if (!Object.keys(held).length) return clone(league);
+  const copy = clone({ ...league, records: { ...league.records, seasons: stripped } });
+  for (const [key, games] of Object.entries(held)) copy.records.seasons[key].games = games;
+  return copy;
+}
 // 世界（リーグ外の球団・高校生の母集団など）を必ず読む命令。保存側は最初から全体を読む。
 // ⚠ ここに無い命令も、世界に触れば保存側が全体で読み直してやり直すので正しさは崩れない。
 //    並べるのはやり直しの1回ぶん（数秒）を省くためだけ（`server/storage/snapshotParts.mjs`）
@@ -941,7 +965,7 @@ export class LeagueService {
           l.updatedAt = this.clock();
           return { value: { advanced: false, autoResolveFailed: true, attemptsExhausted: true } };
         }
-        const working = clone(l);
+        const working = cloneLeague(l);
         try {
           const resolved = await this.engine((engine) =>
             engine.autoResolvePhase(working, now),
@@ -1000,7 +1024,7 @@ export class LeagueService {
         l.nextAdvanceAt = null;
         l.error = `日次処理が${ATTEMPT_LIMIT}回続けて時間内に終わりませんでした。状態を確認して管理者が再開してください`;
       } else {
-        const working = clone(l);
+        const working = cloneLeague(l);
         try {
           await this.engine((engine) =>
             engine.advanceLeagueDay(working, due, now),

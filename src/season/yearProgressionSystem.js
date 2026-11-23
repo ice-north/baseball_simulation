@@ -775,10 +775,17 @@ export function finalizePlayerSeason(player, year) {
     highQualityStarts: (cp.highQualityStarts || 0) + (sp.highQualityStarts || 0)
   };
 
+  // ⚠ **出ていない側の成績（0ばかり）は書かない**。年度別の記録は世界の全選手（約16,000人）に
+  //    毎年たまり、10年で世界の保存の半分になって毎日の進行も倍に重くなった（10年の長期シミュ）。
+  //    社会人・独立など対人リーグの外の選手は打撃・投球とも0、野手の投球・投手の打撃もほぼ0。
+  //    読む側（選手詳細の年度別成績・オンラインの「参考」の期間）は `h.batting || {}` で読むので、
+  //    無い年は今までどおり0として出る。能力（abilities）と年は残す（新人王の判定は件数を見る）
+  const playedBatting = sb.games || sb.atBats || sb.walks || sb.hitByPitch;
+  const playedPitching = sp.games || sp.inningsPitched;
   const statsHistoryEntry = {
     year: year || '?',
-    batting: JSON.parse(JSON.stringify(player.seasonStats?.batting || {})),
-    pitching: JSON.parse(JSON.stringify(player.seasonStats?.pitching || {})),
+    ...(playedBatting ? { batting: JSON.parse(JSON.stringify(sb)) } : {}),
+    ...(playedPitching ? { pitching: JSON.parse(JSON.stringify(sp)) } : {}),
     abilities: {
       meet: player.batting?.meet || 0,
       power: player.batting?.power || 0,
