@@ -114,6 +114,7 @@ export default function OnlineLineup({ view, busy, tab, onSave, onClose }) {
         team={team}
         canConvertPosition={false}
         canSealPitch={false}
+        restPolicyControl={false}
         initialTab={tab}
       />
     </div>,

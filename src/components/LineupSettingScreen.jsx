@@ -109,6 +109,9 @@ export const LineupSettingContent = ({
   initialTab = 'lineup',
   embedded = false,
   board = false,
+  // 「疲労を見る」の段を出すか。⚠ オンライン（OnlineLineup.jsx）は false。オンラインの保存
+  //   （lineupBridge の planFromTeam）は restPolicy を送らないので、押しても球団に残らない
+  restPolicyControl = true,
 }) => {
   const [tab, setTab] = useState(initialTab);
   useEffect(() => setTab(initialTab), [initialTab]);
@@ -1399,6 +1402,7 @@ export const LineupSettingContent = ({
                     選んだ値は球団に残り（`team.restPolicy`）、上の「自動」が次からそれで組む。
                     ⚠ 疲れた選手の**打撃の目減り**はどの設定でも掛かる（実際に起きることなので
                        好みの問題にしない）。ここで変わるのは「誰をスタメンから外すか」だけ */}
+                {restPolicyControl && (<>
                 <div className="flex items-center gap-1 mt-2 flex-wrap">
                   <span className="text-xs text-gray-400 shrink-0">疲労を見る:</span>
                   {Object.entries(REST_POLICIES).map(([key, { label }]) => {
@@ -1428,6 +1432,7 @@ export const LineupSettingContent = ({
                 <p className="text-xs text-gray-400 mt-1 leading-snug">
                   {REST_POLICY_HINT[team.restPolicy || DEFAULT_REST_POLICY]}
                 </p>
+                </>)}
                 {!lineup.some(e => e.position === 'catcher') && (
                   <div className="mt-2 flex items-center gap-1.5 text-xs text-red-400 bg-red-950/40 border border-red-700/30 rounded px-2 py-1">
                     <span className="font-bold">!</span>
