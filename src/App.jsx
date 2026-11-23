@@ -1524,12 +1524,9 @@ import { useEscapeToClose } from './components/useEscapeToClose.js';
           }
         }
         
-        if (advancement < 3) {
-          newBases[advancement - 1] = batterAsRunner(isError);
-        } else {
-          runsScored++;
-          if (isError) unearnedScored++;
-        }
+        // 打者自身を塁に置く（三塁打は三塁に残る。本塁打は別の道で処理する。
+        // 以前は `advancement < 3` で分けていたので、三塁打の打者が必ず生還していた）
+        newBases[advancement - 1] = batterAsRunner(isError);
 
         // setBases(newBases); ← 削除
         return { bases: newBases, runsScored, unearnedScored, outsMade: outsFromThrow };
