@@ -216,7 +216,7 @@ function exhibitionBox(result, events) {
       .filter((p) => {
         const b = p.gameStats?.batting || {};
         const q = p.gameStats?.pitching || {};
-        return (b.atBats || b.walks || b.hitByPitch || b.sacrificeBunts || q.pitches || q.outs || 0) > 0;
+        return (b.atBats || b.walks || b.hitByPitch || b.sacrificeBunts || b.sacrificeFlies || q.pitches || q.outs || 0) > 0;
       })
       .map((p) => ({
         id: p.id,
