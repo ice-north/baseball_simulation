@@ -99,6 +99,64 @@ const HistoryButtons = ({ canUndo, canRedo, undo, redo }) => (
 // `embedded`: 一人用の大学のロスター管理（RosterScreen）のタブの中に置くとき。外側が枠と見出しを
 //   持つので、ここでは枠（ScreenShell）と見出しを出さず、元に戻す・やり直すだけを右に置く。
 //   ⚠ 以前は外と中に「ロスター管理」の見出しが2つ並び、枠の余白も二重で控えの表の右が切れていた
+/**
+ * スタメンの「自動: 標準/打撃重視/守備重視」と「疲労を見る」の4段。
+ * 一人用の表（`board`）と、オンラインのスマホ版の従来の画面の両方で使う。
+ * ⚠ 【疲れをどれだけ気にするか】いしだ 2026-11-22「もっと敏感に、疲労を感じ取ってほしいです。
+ *    設定方法もスタメン設定でできるように」。選んだ値は球団に残り（`team.restPolicy`）、
+ *    「自動」が次からそれで組む。
+ * ⚠ 疲れた選手の**打撃の目減り**はどの設定でも掛かる（実際に起きることなので好みの問題に
+ *    しない）。ここで変わるのは「誰をスタメンから外すか」だけ。
+ * ⚠ オンラインは `restPolicy` を保存しないので、`restPolicyControl={false}` で段を隠す。
+ */
+const AutoLineupControls = ({ team, teamName, restPolicyControl, onDone }) => {
+  const currentKey = team.restPolicy || DEFAULT_REST_POLICY;
+  return (
+    <>
+      <div className="flex gap-1 mt-2">
+        {[
+          { mode: 'standard', label: '標準' },
+          { mode: 'offense', label: '打撃重視' },
+          { mode: 'defense', label: '守備重視' },
+        ].map(({ mode, label }) => (
+          <button key={mode} type="button" onClick={() => {
+            generateOptimalLineup(teamName, mode, team);
+            onDone();
+          }} className="btn-secondary text-xs px-2 py-1 rounded font-medium transition">
+            自動: {label}
+          </button>
+        ))}
+      </div>
+      {restPolicyControl && (<>
+        <div className="flex items-center gap-1 mt-2 flex-wrap">
+          <span className="text-xs text-gray-400 shrink-0">疲労を見る:</span>
+          {Object.entries(REST_POLICIES).map(([key, { label }]) => (
+            <button
+              key={key}
+              type="button"
+              aria-pressed={currentKey === key}
+              title={REST_POLICY_HINT[key]}
+              onClick={() => {
+                team.restPolicy = key;
+                if (TEAMS_DATA[teamName]) TEAMS_DATA[teamName].restPolicy = key;
+                onDone();
+              }}
+              className={`text-xs px-2 py-1 rounded font-medium transition border ${
+                currentKey === key
+                  ? 'bg-cyan-700 text-white border-cyan-500'
+                  : 'bg-surface-2 text-gray-300 border-gray-600 hover:border-gray-400'
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+        <p className="text-xs text-gray-400 mt-1 leading-snug">{REST_POLICY_HINT[currentKey]}</p>
+      </>)}
+    </>
+  );
+};
+
 export const LineupSettingContent = ({
   teamName,
   onBack,
@@ -1334,6 +1392,17 @@ export const LineupSettingContent = ({
             <b className="text-cyan-200">試合に出た選手ほど伸びます。</b>1年フル出場した若手は、ほとんど出番の無かった選手の<b className="text-cyan-200">2倍以上</b>成長します（実測: 300打席で能力合計 +12.7 に対し、0打席では +5.8）。
             いま勝つために主力を並べるか、数年後のために若手を我慢して使うか——<b className="text-cyan-200">スタメンを決めることは育成方針を決めること</b>でもあります。
           </TutorialHint>
+          {/* ⚠ 一人用の表にも「自動」と「疲労を見る」を置く（いしだ 2026-11-23 の判断カード
+              「スタメン表に自動を出す」）。11-04 に外した自動ボタンを一人用では戻した。
+              表（`.online-embed`）の中に Tailwind の部品は入れられないので、表の上に置く */}
+          <div className="mb-3 rounded-xl border border-gray-700/50 bg-surface-2 px-4 py-3" data-testid="solo-auto-lineup">
+            <AutoLineupControls
+              team={team}
+              teamName={teamName}
+              restPolicyControl={restPolicyControl}
+              onDone={() => setUpdateTrigger(prev => prev + 1)}
+            />
+          </div>
           <SoloLineupBoard
             team={team}
             useDH={useDH}
@@ -1380,59 +1449,17 @@ export const LineupSettingContent = ({
                     <span className="text-blue-400 text-xs basis-full">→ 入替先を選択</span>
                   )}
                 </div>
-                <div className="flex gap-1 mt-2">
-                  {[
-                    { mode: 'standard', label: '標準' },
-                    { mode: 'offense', label: '打撃重視' },
-                    { mode: 'defense', label: '守備重視' },
-                  ].map(({ mode, label }) => (
-                    <button key={mode} onClick={() => {
-                      generateOptimalLineup(teamName, mode, team);
-                      setSwapSource(null);
-                      setSelectedBenchPlayer(null);
-                      setSelectedBattingOrder(null);
-                      setUpdateTrigger(prev => prev + 1);
-                    }} className="btn-secondary text-xs px-2 py-1 rounded font-medium transition">
-                      自動: {label}
-                    </button>
-                  ))}
-                </div>
-                {/* ⚠ 【疲れをどれだけ気にするか】いしだ 2026-11-22「もっと敏感に、疲労を
-                    感じ取ってほしいです。設定方法もスタメン設定でできるように」。
-                    選んだ値は球団に残り（`team.restPolicy`）、上の「自動」が次からそれで組む。
-                    ⚠ 疲れた選手の**打撃の目減り**はどの設定でも掛かる（実際に起きることなので
-                       好みの問題にしない）。ここで変わるのは「誰をスタメンから外すか」だけ */}
-                {restPolicyControl && (<>
-                <div className="flex items-center gap-1 mt-2 flex-wrap">
-                  <span className="text-xs text-gray-400 shrink-0">疲労を見る:</span>
-                  {Object.entries(REST_POLICIES).map(([key, { label }]) => {
-                    const current = (team.restPolicy || DEFAULT_REST_POLICY) === key;
-                    return (
-                      <button
-                        key={key}
-                        type="button"
-                        aria-pressed={current}
-                        title={REST_POLICY_HINT[key]}
-                        onClick={() => {
-                          team.restPolicy = key;
-                          if (TEAMS_DATA[teamName]) TEAMS_DATA[teamName].restPolicy = key;
-                          setUpdateTrigger(prev => prev + 1);
-                        }}
-                        className={`text-xs px-2 py-1 rounded font-medium transition border ${
-                          current
-                            ? 'bg-cyan-700 text-white border-cyan-500'
-                            : 'bg-surface-2 text-gray-300 border-gray-600 hover:border-gray-400'
-                        }`}
-                      >
-                        {label}
-                      </button>
-                    );
-                  })}
-                </div>
-                <p className="text-xs text-gray-400 mt-1 leading-snug">
-                  {REST_POLICY_HINT[team.restPolicy || DEFAULT_REST_POLICY]}
-                </p>
-                </>)}
+                <AutoLineupControls
+                  team={team}
+                  teamName={teamName}
+                  restPolicyControl={restPolicyControl}
+                  onDone={() => {
+                    setSwapSource(null);
+                    setSelectedBenchPlayer(null);
+                    setSelectedBattingOrder(null);
+                    setUpdateTrigger(prev => prev + 1);
+                  }}
+                />
                 {!lineup.some(e => e.position === 'catcher') && (
                   <div className="mt-2 flex items-center gap-1.5 text-xs text-red-400 bg-red-950/40 border border-red-700/30 rounded px-2 py-1">
                     <span className="font-bold">!</span>
