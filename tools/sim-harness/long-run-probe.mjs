@@ -176,6 +176,15 @@ function teamDiag(n) {
 
 const years = [];
 const offseasons = [];
+// 手続きごとの能力の平均（42球団）。どの手続きで能力が動くか（キャンプ・年度更新・トライアウト…）を分けて見る
+const phaseLog = [];
+function abilityMeans() {
+  const ps = names().flatMap((n) => league.game.teams[n]?.players || []);
+  const b = ps.filter((p) => !isP(p)), q = ps.filter(isP);
+  const m = (arr, f) => r1(avg(arr.map(f).filter((x) => x != null)));
+  return { meet: m(b, (p) => p.batting?.meet), power: m(b, (p) => p.batting?.power), eye: m(b, (p) => p.batting?.eye),
+    control: m(q, (p) => p.pitching?.control), velocity: m(q, (p) => p.pitching?.velocity), young: ps.filter((p) => p.age <= 22).length, age: r1(avg(ps.map((p) => p.age))) };
+}
 let days = 0, lastPhase = null;
 const t0 = Date.now();
 let tYear = Date.now();
@@ -198,8 +207,9 @@ while (days < 20000) {
       out(JSON.stringify({ leagues: snap.leagues, stats: snap.stats }, null, 0));
       out(JSON.stringify({ abilities: snap.abilities, world: snap.world, strength: snap.strength, humanStrength: snap.humanStrength, age: snap.age, roster: snap.roster, players: snap.players }));
       out(JSON.stringify(snap.size));
-      if (OUT) writeFileSync(OUT, JSON.stringify({ seed: SEED, years, offseasons, issues: Object.fromEntries(issues) }, null, 1));
+      if (OUT) writeFileSync(OUT, JSON.stringify({ seed: SEED, years, offseasons, phaseLog, issues: Object.fromEntries(issues) }, null, 1));
     }
+    if (lastPhase !== phase.id) phaseLog.push({ year: league.season.year, at: `${phase.kind}:open`, ...abilityMeans() });
     lastPhase = phase.id;
     for (const m of league.members) {
       try { quiet(() => submitPhase(league, m.userId, { phaseId: phase.id, plan: defaultPhasePlan(league, m.teamName), ready: true }, now.toISOString())); }
@@ -231,4 +241,4 @@ out(`\n=== 終わり ${Math.round((Date.now() - t0) / 60000)}分 ${days}回 ===`
 out(JSON.stringify(offseasons));
 out(JSON.stringify(sizes()));
 for (const [k, v] of issues) out(`${v}× ${k}`);
-if (OUT) writeFileSync(OUT, JSON.stringify({ seed: SEED, years, offseasons, finalSize: sizes(), issues: Object.fromEntries(issues) }, null, 1));
+if (OUT) writeFileSync(OUT, JSON.stringify({ seed: SEED, years, offseasons, phaseLog, finalSize: sizes(), issues: Object.fromEntries(issues) }, null, 1));
