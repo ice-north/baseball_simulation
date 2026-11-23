@@ -817,30 +817,6 @@ export const resetIndependentLeagueSchedules = (calendarYear) => {
 };
 
 // ============================================================
-// 地域リーグ生成（社会人モードのレギュラーシーズン）
-// ユーザーの地域から8-12チームを選出してリーグ戦を組む
-// ============================================================
-
-const NEIGHBOR_REGIONS = {
-  hokkaido: ['tohoku'],
-  tohoku: ['hokkaido', 'kitakanto'],
-  kitakanto: ['tohoku', 'minamikanto', 'tokyo'],
-  minamikanto: ['kitakanto', 'tokyo', 'kanagawa'],
-  tokyo: ['kitakanto', 'minamikanto', 'kanagawa'],
-  kanagawa: ['tokyo', 'minamikanto', 'hokushinetsu'],
-  hokushinetsu: ['kanagawa', 'kitakanto', 'tokai'],
-  tokai: ['hokushinetsu', 'kinki'],
-  kinki: ['tokai', 'chugoku'],
-  chugoku: ['kinki', 'shikoku', 'kyushu'],
-  shikoku: ['chugoku', 'kyushu', 'kinki'],
-  kyushu: ['chugoku', 'shikoku'],
-};
-
-const TARGET_LEAGUE_SIZE = 10;
-const GAMES_PER_SEASON = 30;
-
-
-// ============================================================
 // 全234大学チームをTEAMS_DATAに追加（並行世界として全モードで選手追跡・移籍を有効化）
 // warmUpPlayerPipeline() 実行後に呼ぶこと。
 // universityPool のプレイヤーを各大学チームのロスターに移動し、

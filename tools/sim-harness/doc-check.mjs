@@ -82,6 +82,9 @@ const REMOVED_ON_PURPOSE = {
   seasonProgress:  '日程表からしか呼ばれない日程進行ハンドラー（本物は DateProgressScreen）。同上',
   progressToNextPhase: '次のフェーズの初日へ日付を差し替えて残り試合をまとめて消化する経路。progressToNextGame と同じ型で除去（歴史の記録）',
   calendarUI:      '日程表のカレンダー。同上',
+  HOME_BONUS:      '社会人の補充の地元加点。補充が z の合成（rosterProgression の HOME_Z）に移って死んでいたので除去（歴史の記録）',
+  formatRange:     'scouting.js の使い手のないレンジ表示。監査13で除去（歴史の記録）',
+  MAX_SCOUT_LEVEL: '同上',
   simulateGamesOnDate: '`seasonProgress.js` にあった1日分の試合の消化。いまの本体は daySimulation.js の simulateScheduledGamesOnDate（歴史の記録）',
   CAMP_PRESETS:    'キャンプの旧プリセット5種。方向性×フェーズの2軸の方針に集約したあとも画面から呼ばれずに残っていたので 2026-11-23 に除去（歴史の記録）',
 };

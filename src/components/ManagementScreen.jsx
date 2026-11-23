@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { TEAMS_DATA, initializeAllPitchingRotations, releasedPlayersPool } from '../teams-data.js';
+import React from 'react';
+import { TEAMS_DATA, initializeAllPitchingRotations } from '../teams-data.js';
 import { SEASON_PHASES } from '../season/seasonManager.js';
 import { applyNextSeasonRegulations } from '../season/nextSeasonRegulations.js';
 import { withDeparted, rosterIndex, departedSince } from '../season/departedStats.js';

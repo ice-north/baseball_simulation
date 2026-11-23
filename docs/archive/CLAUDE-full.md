@@ -1801,8 +1801,8 @@ NEW GAME → 大学チーム選択 → キャンプ
   ルートとコンポーネントも一緒に消してある——**描画されない state を残さない**のと同じ話
 - ⚠ **道連れの確認を先にすること**。`PotentialBadge` / `projectPeak` は
   `PlayerDetailModal` の将来性バーが引き続き使うので**消してはいけない**。
-  `scouting.js` の `formatRange` / `MAX_SCOUT_LEVEL` は使い手がいないが、
-  season 側のモジュールなので残してある（`abilityRange` / `accuracyMeta` は
+  `scouting.js` の `formatRange` / `MAX_SCOUT_LEVEL` は使い手がいないので、
+  のちに（監査13）除去した（`abilityRange` / `accuracyMeta` は
   `PotentialBadge` が現役で使う）
 - ⚠ **ここに「`getScoutAccuracy` は `staffData.js` が引き続き使う」と書いてあったが誤り**。
   `staffData.js` にあるのは**別物の `getScoutAccuracyGain`**（これも未使用）で、

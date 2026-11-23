@@ -422,11 +422,7 @@ export const resetTeamOverrides = (teamId) => {
 
 
 
-// 後方互換: getTeamDisplayName / setTeamDisplayName
-export const getTeamDisplayName = (teamId) => {
-  return getTeamOverride(teamId, 'name') || CORPORATE_TEAMS.find(t => t.id === teamId)?.name || '';
-};
-
+// 後方互換: setTeamDisplayName
 export const setTeamDisplayName = (teamId, newName) => {
   setTeamOverride(teamId, 'name', newName.trim());
 };

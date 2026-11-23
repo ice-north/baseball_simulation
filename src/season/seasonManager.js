@@ -477,47 +477,6 @@ export const initializeStandings = (teams) => {
   }));
 };
 
-/**
- * カレンダー月データを生成
- * @param {number} year - 年
- * @param {number} month - 月
- * @param {Array} schedule - 試合スケジュール
- * @returns {Array} カレンダーデータ
- */
-export const generateMonthCalendar = (year, month, schedule) => {
-  const daysInMonth = getDaysInMonth(year, month);
-  const firstDayOfWeek = getDayOfWeek({ year, month, day: 1 });
-
-  const calendar = [];
-
-  // 前月の空白日
-  for (let i = 0; i < firstDayOfWeek; i++) {
-    calendar.push({ day: null, games: [] });
-  }
-
-  // 当月の日付
-  for (let day = 1; day <= daysInMonth; day++) {
-    const date = { year, month, day };
-    const phase = getCurrentPhase(month, day);
-    const gamesThisDay = schedule.filter(game =>
-      game.date.year === year &&
-      game.date.month === month &&
-      game.date.day === day
-    );
-
-    calendar.push({
-      day,
-      date,
-      phase,
-      games: gamesThisDay,
-      isGameDay: isGameDay(date, phase)
-    });
-  }
-
-  return calendar;
-};
-
-
 // ============================================================
 // 規定打席・規定投球回（タイトルの資格）
 //
