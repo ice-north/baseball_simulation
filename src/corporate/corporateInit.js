@@ -1470,8 +1470,10 @@ export const updateAllTeamReputations = (seasonData) => {
     }
   }
   // 都市対抗本戦の勝利数
-  if (td?.mainTournament) {
-    const mtWins = countBracketWins(td.mainTournament);
+  // ⚠ 勝ち数は組み合わせ（`.bracket`。`rounds` を持つ）から数える。以前は `mainTournament` を
+  //    そのまま渡していて、都市対抗の勝ちが注目度にいつも0で入っていた（監査 2026-11-23）
+  if (td?.mainTournament?.bracket) {
+    const mtWins = countBracketWins(td.mainTournament.bracket);
     for (const [team, w] of Object.entries(mtWins)) {
       mainTournamentWinsMap[team] = (mainTournamentWinsMap[team] || 0) + w;
     }
@@ -1494,13 +1496,6 @@ export const updateAllTeamReputations = (seasonData) => {
       if (q.qualifiedTeams) q.qualifiedTeams.forEach(t => senshukenEntries.add(t));
     }
   }
-
-  const toshitaikouChampion = td?.mainTournament?.champion || td?.champion || null;
-  const toshitaikouFinal = td?.mainTournament?.bracket?.rounds?.slice(-1)[0] || [];
-  const toshitaikouRunnerUp = toshitaikouFinal.length > 0 ? (toshitaikouFinal[0]?.loser || null) : null;
-  const senshukenChampion = ns?.mainTournament?.champion || ns?.champion || null;
-  const senshukenFinal = ns?.mainTournament?.bracket?.rounds?.slice(-1)[0] || [];
-  const senshukenRunnerUp = senshukenFinal.length > 0 ? (senshukenFinal[0]?.loser || null) : null;
 
   const rankChanges = [];
 
