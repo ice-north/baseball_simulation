@@ -46,9 +46,10 @@ import jp.icenorth.baseball.shared.shortLabel
  * ⚠ 能力のランク色（数字の文字色）と取り違えないよう、位置の色は**札の枠と字**でだけ使う。
  */
 fun positionColor(pos: String?): Color = when (positionGroup(pos)) {
-    // パワプロと同じ並び（いしだ指定: 投手は赤ピンク、捕手は水色、内野は黄、外野は緑）
-    "pitcher" -> Color(0xFFE11D63) // 赤ピンク
-    "catcher" -> Color(0xFF0EA5E9) // 水色
+    // パワプロと同じ並び（先方指定 2026-11-23: 投手は赤、捕手は青、内野は黄、外野は緑。
+    // 以前のいしだ指定は赤ピンク・水色）。⚠ Web 版は online.css の `.is-pos-*`（api.js の `posTone`）
+    "pitcher" -> Color(0xFFDC2626) // 赤
+    "catcher" -> Color(0xFF2563EB) // 青
     "infield" -> Color(0xFFEAB308) // 黄
     "outfield" -> Color(0xFF16A34A) // 緑
     else -> Color(0xFF475569)

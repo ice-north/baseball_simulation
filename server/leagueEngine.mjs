@@ -213,6 +213,8 @@ import {
   campPlanFor,
   coachSeasonRows,
   coachOffseason,
+  validateStaffMoves,
+  reserveStaffMoves,
   fillVacancies,
   hirePlayerAsCoach,
   setStaffModes,
@@ -1542,9 +1544,12 @@ function validatePhasePlan(league, teamName, plan) {
         '契約後も最低9人は残してください。既に9人未満の場合は新たな退団はできません',
       );
       const coachOffers = Object.fromEntries(Object.entries(offers).filter(([, id]) => id != null));
+      // 指導者の異動（先方要望 2026-11-23。`validateStaffMoves`）。**無くてもよい**（古い画面・アプリ）
+      const staffMoves = validateStaffMoves(league, teamName, plan.staffMoves);
       return {
         releaseIds: [...plan.releaseIds],
         ...(Object.keys(coachOffers).length ? { coachOffers } : {}),
+        ...(staffMoves ? { staffMoves } : {}),
       };
     }
     case 'camp': {
@@ -2260,6 +2265,17 @@ function resolvePhase(league, now) {
         team.players = team.players.filter((p) => p.id !== player.id);
       }
       if (coached.length) refreshTeamPlan(league, name);
+      // 指導者の異動（人の球団だけ）。年度更新で動く（`reserveStaffMoves` → `applyStaffMoves`）。
+      // ⚠ 締め切りまでに席が空いていたら（いまは契約更改の間に席は動かないが念のため）検め直して落とす
+      if (league.coaches && plans[name]?.staffMoves) {
+        let moves = null;
+        try {
+          moves = validateStaffMoves(league, name, plans[name].staffMoves);
+        } catch {
+          moves = null;
+        }
+        reserveStaffMoves(league, name, moves);
+      }
       // 取引の記録（退団）。⚠ 名簿から消す前に名前を控える
       const leaving = [...coached, ...TEAMS_DATA[name].players.filter((p) => ids.includes(p.id))];
       releasePlayers(name, ids, league.season.year);

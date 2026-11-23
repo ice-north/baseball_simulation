@@ -41,7 +41,7 @@ import PackSelect, { TeamIdentity } from './PackSelect.jsx';
 import { packWaiting, phaseStatusLabel } from './notices.js';
 import { ReadContext } from './useRead.js';
 import CampPlanner from './CampPlanner.jsx';
-import ContractPlanner, { COACH_OFFER_ROLES } from './ContractPlanner.jsx';
+import ContractPlanner, { staffMoveLines } from './ContractPlanner.jsx';
 import {
   PYRAMID_LEAGUES,
   PROMOTION_PLACES,
@@ -766,12 +766,10 @@ function MobilePlanContents({ phase, plan, view }) {
     players = plan.releaseIds.map((id) => byId.get(id)).filter(Boolean);
     head = `退団させる選手 ${plan.releaseIds.length}人`;
     if (!plan.releaseIds.length) note = '全員と来季も契約します。';
-    // コーチ打診（`ContractPlanner` の「投手C」「野手C」）
-    const offered = COACH_OFFER_ROLES.map(([role, label]) => [label, byId.get(plan.coachOffers?.[role])]).filter(([, p]) => p);
-    if (offered.length)
-      note = [note, `コーチ打診: ${offered.map(([label, p]) => `${p.name}（${label}）`).join('・')}。年度更新で就任します。`]
-        .filter(Boolean)
-        .join(' ');
+    // コーチ打診（`ContractPlanner` の「投手C」「野手C」）と指導者の異動。年度更新で動く順の文
+    const staffLines = staffMoveLines(plan, view.staff?.seats, view.roster);
+    if (staffLines.length)
+      note = [note, `年度更新で: ${staffLines.join('。')}。`].filter(Boolean).join(' ');
   } else return <p>シーズンを締めて次年度へ進みます。</p>;
   return (
     <div className="online-phase-contents">
@@ -1042,6 +1040,7 @@ export function PhasePanel({ view, auth, busy, run, command, mobile, setTab }) {
           roster={view.roster}
           plan={plan}
           advice={phase.releaseAdvice || {}}
+          staff={view.staff}
           onChange={(next) => {
             setDirty(true);
             setPlan(next);

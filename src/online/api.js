@@ -25,6 +25,27 @@ export const POS_FULL = {
   center: '中堅',
   right: '右翼',
 };
+/**
+ * 守備位置の色（スタメン設定などの守備位置の札。先方要望 2026-11-23「パワプロリスペクトで
+ * 投手→赤・捕手→青・内野→黄・外野→緑」）。色は online.css の `.is-pos-*`。
+ * ⚠ アプリは FielderRow.kt の `positionColor`（同じ4区分・同じ色の並び）
+ * `posTone`: 札（塗り）に付けるクラス、`posInk`: 字だけ色を付けるとき（ほかに守れる位置の小さな字）
+ */
+const POS_TONES = {
+  pitcher: 'pitcher',
+  catcher: 'catcher',
+  first: 'infield',
+  second: 'infield',
+  third: 'infield',
+  short: 'infield',
+  left: 'outfield',
+  center: 'outfield',
+  right: 'outfield',
+};
+export const posTone = (position) =>
+  POS_TONES[position] ? `has-pos is-pos-${POS_TONES[position]}` : '';
+export const posInk = (position) =>
+  POS_TONES[position] ? `pos-ink is-pos-${POS_TONES[position]}` : '';
 export const STATUS = {
   running: '進行中',
   waiting: '決定待ち',

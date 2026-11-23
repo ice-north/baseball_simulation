@@ -445,6 +445,126 @@ export function hirePlayerAsCoach(league, teamName, player, role, career = null)
   return coach;
 }
 
+/**
+ * 契約更改の「指導者の異動」（先方要望 2026-11-23「契約更改時に監督・コーチの異動もできるように。
+ * 選手が引退するタイミングで、コーチの昇格や監督の退任ができるように」）。
+ *
+ * 案の形（`plan.staffMoves`。無くてもよい）:
+ *   { manager: 'leave' | 'pitching' | 'batting',   // 退任・投手コーチを昇格・野手コーチを昇格
+ *     pitching: 'leave', batting: 'leave' }        // コーチの退任
+ * - 昇格させたコーチの席は空く。同じ契約更改でコーチ打診（`coachOffers`）をすれば、打診した選手がそこに入る
+ *   （「選手が引退してコーチに → コーチが監督に → 監督は退任」の流れ）
+ * - **年度更新で動かす**（`applyStaffMoves`）。コーチ打診と同じく、終わった年の成績を席に居る人の通算に
+ *   足してから替える（契約更改で替えると、務めた年が消える）
+ * - 空いた席は、すぐ後のキャンプの間に指導者のページで市場から呼べる。呼ばなければキャンプの終わりに
+ *   市場から埋める（`c.refill` → `fillVacancies`。先方の判断 2026-11-23）
+ * - 退任は解任に数えない（`markFired` しない。紙面・画面は「退任」）
+ * @returns 送られた案を検めて整えたもの（動かさない席は書かない）。動かす席が無ければ null
+ */
+export const STAFF_MOVE_OPTIONS = {
+  manager: ['leave', 'pitching', 'batting'],
+  pitching: ['leave'],
+  batting: ['leave'],
+};
+export function validateStaffMoves(league, teamName, moves) {
+  if (moves == null) return null;
+  requireOnline(
+    typeof moves === 'object' && !Array.isArray(moves) &&
+      Object.entries(moves).every(([role, to]) => to == null || STAFF_MOVE_OPTIONS[role]?.includes(to)),
+    '指導者の異動の指定が不正です',
+  );
+  const clean = Object.fromEntries(Object.entries(moves).filter(([, to]) => to != null));
+  if (!Object.keys(clean).length) return null;
+  const seats = league.coaches?.teams?.[teamName] || {};
+  for (const [role, to] of Object.entries(clean)) {
+    requireOnline(seats[role], `${role === 'manager' ? '監督' : role === 'pitching' ? '投手コーチ' : '野手コーチ'}の席が空いています`, 409);
+    if (role === 'manager' && to !== 'leave') {
+      requireOnline(seats[to], '昇格させるコーチがいません', 409);
+      requireOnline(clean[to] !== 'leave', '監督に上げるコーチを退任にはできません');
+    }
+  }
+  return clean;
+}
+
+/** 契約更改で決めた異動を控える（年度更新で `applyStaffMoves` が動かす）。⚠ 決めたときの人の id と組で持つ */
+export function reserveStaffMoves(league, teamName, moves) {
+  const c = ensureCoaches(league);
+  const seats = c.teams[teamName] || {};
+  c.moves ||= {};
+  delete c.moves[teamName];
+  if (!moves) {
+    if (!Object.keys(c.moves).length) delete c.moves;
+    return;
+  }
+  c.moves[teamName] = Object.fromEntries(
+    Object.entries(moves).map(([role, to]) => [role, { to, id: seats[role] }]),
+  );
+}
+
+/**
+ * 控えた異動を動かす（年度更新。打診した選手が席に就く `seatReserved` の**前**）。出来事を返す。
+ * ⚠ 決めたあとに勇退・辞任で席を離れた人は動かさない（席に居る人が決めたときの人と同じときだけ）。
+ *    監督に上げるコーチが居なくなっていたら、監督も続投（席を空けない）
+ */
+function applyStaffMoves(c, year) {
+  const events = [];
+  for (const [team, moves] of Object.entries(c.moves || {})) {
+    const seats = (c.teams[team] ||= { manager: null, pitching: null, batting: null });
+    const still = (role) => moves[role] && seats[role] === moves[role].id ? c.people[moves[role].id] : null;
+    // 異動で空いた席（キャンプの終わりにまだ空いていれば市場から埋める。`fillVacancies`）
+    const emptied = new Set();
+    const leave = (role, coach) => {
+      unassign(c, coach, year);
+      emptied.add(role);
+      events.push({ year, kind: 'resign', stepDown: true, team, role, coachId: coach.id, name: coach.name });
+    };
+    for (const role of ['pitching', 'batting']) {
+      const coach = still(role);
+      if (coach && moves[role].to === 'leave') leave(role, coach);
+    }
+    const head = still('manager');
+    if (head) {
+      const to = moves.manager.to;
+      const up = to === 'leave' ? null : c.people[seats[to]];
+      if (to === 'leave' || up) {
+        leave('manager', head);
+        if (up) {
+          unassign(c, up, year);
+          emptied.add(to);
+          emptied.delete('manager');
+          assign(c, team, 'manager', up, year);
+          events.push(hireEvent(c, { year, kind: 'promote', team, role: 'manager', coach: up }));
+        }
+      }
+    }
+    if (emptied.size) (c.refill ||= {})[team] = [...emptied];
+  }
+  delete c.moves;
+  return events;
+}
+
+/** これからの人事（年度更新で動く。契約更改の異動とコーチ打診）。指導者の画面に出す文 */
+export function scheduledStaffLines(league, teamName) {
+  const c = league.coaches;
+  if (!c) return [];
+  const label = { manager: '監督', pitching: '投手コーチ', batting: '野手コーチ' };
+  const nameOf = (id) => c.people[id]?.name || '';
+  const out = [];
+  const moves = c.moves?.[teamName] || {};
+  const seats = c.teams[teamName] || {};
+  if (moves.manager) {
+    const { to, id } = moves.manager;
+    if (seats.manager === id)
+      out.push(to === 'leave' ? `${nameOf(id)}監督が退任` : `${nameOf(id)}監督が退任し、${nameOf(seats[to])}${label[to]}が監督に昇格`);
+  }
+  for (const role of ['pitching', 'batting'])
+    if (moves[role]?.to === 'leave' && seats[role] === moves[role].id) out.push(`${nameOf(moves[role].id)}${label[role]}が退任`);
+  for (const coach of Object.values(c.people))
+    if (coach.status === 'reserved' && coach.joins?.team === teamName)
+      out.push(`${coach.name}（現役を引退）が${label[coach.joins.role]}に就任`);
+  return out;
+}
+
 /** 打診を受けた人を席に就ける（年度更新の最後）。いまの人は市場へ。出来事を返す */
 function seatReserved(c, year) {
   const events = [];
@@ -711,7 +831,8 @@ export function coachOffseason(league, { rows = {}, retirees = [] } = {}) {
     // 契約更改でコーチ打診を受けた人が席に就く（成績を足し・辞任を決めた**後**。`hirePlayerAsCoach`）。
     // ⚠ 市場の人数を整える**前**に（監査 2026-11-21）。後だと、席を譲った前任が市場へ戻ったぶん
     //    その年の市場が `MARKET_MAX` を超えていた
-    seated = seatReserved(c, nextYear);
+    // 契約更改で決めた異動（`applyStaffMoves`）を先に。監督に上げたコーチの空いた席に、打診した選手が入る
+    seated = [...applyStaffMoves(c, nextYear), ...seatReserved(c, nextYear)];
     // 5) 市場の人数を整える
     const free = () => Object.values(c.people).filter((p) => p.status === 'free');
     while (free().length < MARKET_MIN) {
@@ -749,7 +870,6 @@ export function fillVacancies(league) {
   const events = [];
   seededIn(league, `fill:${year}`, () => {
     for (const team of order) {
-      if (memberOf(league, team)) continue;
       const seats = c.teams[team];
       const pickFrom = (role) => {
         // ⚠ 点は1人1回だけ引く（並べ替えの比べるたびに乱数を引くと、比べ方が食い違う）
@@ -771,6 +891,18 @@ export function fillVacancies(league) {
         scored.sort((a, b) => b.score - a.score || a.p.id.localeCompare(b.p.id));
         return scored[0]?.p || null;
       };
+      if (memberOf(league, team)) {
+        // 人の球団は、契約更改の異動（`applyStaffMoves`）で空けた席だけ、キャンプの間に呼ばなければ
+        // ここで市場から埋める（先方の判断 2026-11-23: おすすめどおり）。解任して空けた席・前から空いている席は埋めない
+        for (const role of c.refill?.[team] || []) {
+          if (seats[role]) continue;
+          const coach = pickFrom(role);
+          if (!coach) continue;
+          assign(c, team, role, coach, year);
+          events.push(hireEvent(c, { year, team, role, coach }));
+        }
+        continue;
+      }
       if (!seats.manager) {
         const insiders = ['pitching', 'batting']
           .map((role) => c.people[seats[role]])
@@ -798,6 +930,7 @@ export function fillVacancies(league) {
       }
     }
   });
+  delete c.refill;
   for (const event of events.reverse()) logEvent(c, event);
   return events;
 }

@@ -1,5 +1,5 @@
 import React, { useCallback, useState } from 'react';
-import { POS, POS_FULL } from './api.js';
+import { POS, POS_FULL, posTone, posInk } from './api.js';
 import { turnOfDate, restFatigueOf } from './shared.js';
 import { BoardPage, Fatigue } from './BoardParts.jsx';
 import FieldDiagram from './FieldDiagram.jsx';
@@ -516,7 +516,7 @@ export default function LineupBoard({
                         <span className="online-lineup-playable">
                           <button
                             type="button"
-                            className={`online-lineup-pos ${selectedPos === index ? 'is-selected' : ''}`}
+                            className={`online-lineup-pos ${posTone(entry.position)} ${selectedPos === index ? 'is-selected' : ''}`}
                             aria-pressed={selectedPos === index}
                             aria-label={`${index + 1}番の守備位置（${POS[entry.position]}）を入れ替える`}
                             draggable={!busy}
@@ -537,7 +537,7 @@ export default function LineupBoard({
                               .filter((e) => e.position !== entry.position)
                               .slice(0, 2)
                               .map((e) => (
-                                <span key={e.position}>{POS[e.position]}</span>
+                                <span key={e.position} className={posInk(e.position)}>{POS[e.position]}</span>
                               ))}
                         </span>
                       </td>
@@ -568,7 +568,7 @@ export default function LineupBoard({
                     <span>9</span>
                   </td>
                   <td className="online-lineup-poscell">
-                    <span className="online-lineup-pos is-fixed">投</span>
+                    <span className={`online-lineup-pos is-fixed ${posTone('pitcher')}`}>投</span>
                   </td>
                   <td
                     colSpan={COLUMN_COUNT - 2}
@@ -707,14 +707,14 @@ export default function LineupBoard({
                             title={`本職と、ほかに守れる位置（適性${LOW_FITNESS}%以上、高い順）`}
                           >
                             <span className="online-lineup-playable">
-                              <span className="online-lineup-pos is-bench">
+                              <span className={`online-lineup-pos is-bench ${posTone(player.position)}`}>
                                 {POS[player.position] || '?'}
                               </span>
                               {playablePositions(player)
                                 .filter((e) => e.position !== player.position)
                                 .slice(0, 2)
                                 .map((e) => (
-                                  <span key={e.position}>
+                                  <span key={e.position} className={posInk(e.position)}>
                                     {POS[e.position]}
                                   </span>
                                 ))}

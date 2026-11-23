@@ -164,6 +164,8 @@ data class StaffEvent(
     val mentor: String? = null,
     val homecoming: Boolean = false,
     val reason: String? = null,
+    /** 契約更改で人が決めた退任（kind は resign。サーバーの `applyStaffMoves`）。古いサーバーには無い */
+    val stepDown: Boolean = false,
     val text: String = "",
 )
 
@@ -182,6 +184,8 @@ data class StaffView(
     val market: List<CoachCard> = emptyList(),
     val events: List<StaffEvent> = emptyList(),
     val rifts: List<StaffRift> = emptyList(),
+    /** 年度更新で動く人事（契約更改の異動・コーチ打診。サーバーの `scheduledStaffLines`）。古いサーバーには無い */
+    val scheduled: List<String> = emptyList(),
 ) {
     fun seat(role: String): CoachCard? = seats.firstOrNull { it.role == role }?.coach
     val manager: CoachCard? get() = seat("manager")

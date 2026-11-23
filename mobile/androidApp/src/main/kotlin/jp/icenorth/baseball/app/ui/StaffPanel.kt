@@ -206,11 +206,16 @@ private fun OwnStaff(model: AppViewModel, view: LeagueView, staff: StaffView) {
     Section("首脳陣", trailing = {
         InfoButton("指導者", listOf(
             "監督・投手コーチ・野手コーチの考え方と性格で、采配の「AI判断」やトライアウト・退団・キャンプの案、トレードの返事が変わります。能力は上がりません。",
-            "入れ替えられるのは年度更新のすぐ後のキャンプの間だけです。何もしなければ留任です。",
+            "入れ替えられるのは年度更新のすぐ後のキャンプの間です（契約更改でも、年度更新に向けて監督の退任・コーチの昇格・退任を決められます）。何もしなければ留任です。",
             "監督の「任せ度」は、投手・野手の判断でコーチの考えをどれだけ使うかです（ワンマン 0%〜任せる 100%）。",
         ))
     }) {
         if (staff.canEditSeats) Muted("キャンプの間は、解任・役職の入れ替え・市場から呼ぶことができます。")
+        // 年度更新で動く人事（契約更改で決めた異動・コーチ打診。Web 版 StaffPage と同じ文）
+        if (staff.scheduled.isNotEmpty()) {
+            Text("年度更新で動く人事", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.tertiary)
+            staff.scheduled.forEach { Text(it, style = MaterialTheme.typography.bodySmall) }
+        }
         staff.seats.forEach { seat ->
             CoachBlock(seat.roleLabel, seat.coach)
             if (staff.canEditSeats) SeatActions(seat, staff.seats, canWrite, onRelease = { ask = StaffAsk.Release(seat) }) { other -> act("swap", seat.role, other, null) }
