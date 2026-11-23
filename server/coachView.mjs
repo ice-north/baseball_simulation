@@ -512,7 +512,7 @@ export function ownStaffView(league, member, team, labelOf) {
  *    埋めず「おすすめ」で練習する（`coaches.js` の `campPlan` の `strictSeats`）。
  *    コーチが2人とも居なければ案は無い（null）
  * ⚠ キャンプは「決定」ではなく1クールずつ実行する。文もそれに合わせる
- * ⚠ 任せた手続きはその人の決定を待たない（`leagueEngine` の `waitsFor`）。「任せる」の文はそれを書く。
+ * ⚠ 任せた手続きはその人の決定を待たない（`coachEngine` の `waitsFor`）。「任せる」の文はそれを書く。
  *    キャンプは人事ができる期間でもあるので、ほかの球団が終えると終わることも書く
  */
 export function phasePlanBy(league, teamName, kind) {

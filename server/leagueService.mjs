@@ -85,6 +85,16 @@ const unpackBackup = (backup) =>
     : clone(backup?.league);
 // エンジンはグローバル世界を使うため、同一Nodeプロセス内でも全storeをまたいで直列化する。
 let engineQueue = Promise.resolve();
+/** この端末のセッションが生きているか（同時に使えるのはブラウザ・アプリそれぞれ1台） */
+function assertLiveSession(bundle, userId, sessionId) {
+  requireOnline(
+    isLiveSession(bundle.sessions, userId, sessionId),
+    '別の端末でログインしました（ブラウザ・アプリはそれぞれ1台まで）。この端末からの操作はできません',
+    409,
+    'session',
+  );
+}
+
 export class LeagueService {
   constructor(
     store,
@@ -212,16 +222,24 @@ export class LeagueService {
   }
   /** 取引の記録（トレード・退団・入団）。⚠ 芯にあるので軽い読みで足りる */
   async transactions(userId, query) {
+    return this.lightThenFull((bundle) => projectTransactions(bundle, userId, query));
+  }
+  /**
+   * まず芯だけの軽い読み（`readLight`）で `fn` を試し、世界・記録に触れていたら全体を読み直して
+   * やり直す。軽い読みの無い保存先（ローカルの FileStore）は初めから全体で読む。
+   * ⚠ 触れていたときは、軽い読みでの結果も例外も捨てる（芯だけでは正しく作れない）
+   */
+  async lightThenFull(fn) {
     if (this.store.readLight) {
       const light = await this.store.readLight();
       try {
-        const result = projectTransactions(light.bundle, userId, query);
+        const result = await fn(light.bundle);
         if (!light.touched()) return result;
       } catch (error) {
         if (!light.touched()) throw error;
       }
     }
-    return projectTransactions(await this.store.read(), userId, query);
+    return fn(await this.store.read());
   }
   async teamInfo(userId, teamName) {
     if (this.store.readTeamInfo)
@@ -262,12 +280,7 @@ export class LeagueService {
    */
   assertAdminSession(bundle, userId, sessionId) {
     requireOnline(userId === this.adminId, '招待を扱えるのは管理者だけです', 403);
-    requireOnline(
-      isLiveSession(bundle.sessions, userId, sessionId),
-      '別の端末でログインしました（ブラウザ・アプリはそれぞれ1台まで）。この端末からの操作はできません',
-      409,
-      'session',
-    );
+    assertLiveSession(bundle, userId, sessionId);
   }
   async invites(userId, sessionId) {
     // ⚠ 招待は芯にあるので軽い読みで足りる（世界まで読まない）
@@ -385,12 +398,7 @@ export class LeagueService {
       '操作内容が不正です',
     );
     return this.store.transaction(async (bundle) => {
-      requireOnline(
-        isLiveSession(bundle.sessions, userId, sessionId),
-        '別の端末でログインしました（ブラウザ・アプリはそれぞれ1台まで）。この端末からの操作はできません',
-        409,
-        'session',
-      );
+      assertLiveSession(bundle, userId, sessionId);
       requireOnline(
         typeof command.requestId === 'string' &&
           /^[a-zA-Z0-9:-]{8,100}$/.test(command.requestId),
@@ -615,33 +623,17 @@ export class LeagueService {
           await this.engine((e) => e.updateStaff(l, userId, command.payload || {}));
         } else if (command.type === 'tradeOffer') {
           // ⚠ **選手が動くのでエンジンの中で行う**。`TEAMS_DATA` を触るものは
-          //    必ず `loadLeagueWorld` → 処理 → `captureLeagueWorld` の順で囲む
-          await this.engine((e) => {
-            e.loadLeagueWorld(l);
-            e.openTrade(l, userId, command.payload || {}, now);
-            l.game = e.captureLeagueWorld();
-          });
+          //    必ず `loadLeagueWorld` → 処理 → `captureLeagueWorld` の順で囲む（`inWorld`）
+          await this.inWorld(l, (e) => e.openTrade(l, userId, command.payload || {}, now));
         } else if (command.type === 'convert') {
           // ⚠ **選手の登録が変わるのでエンジンの中で行う**。`TEAMS_DATA` を
-          //    触るものは `loadLeagueWorld` → 処理 → `captureLeagueWorld` の順で囲む
-          await this.engine((e) => {
-            e.loadLeagueWorld(l);
-            e.convertPosition(l, userId, command.payload || {});
-            l.game = e.captureLeagueWorld();
-          });
+          //    触るものは `loadLeagueWorld` → 処理 → `captureLeagueWorld` の順で囲む（`inWorld`）
+          await this.inWorld(l, (e) => e.convertPosition(l, userId, command.payload || {}));
         } else if (command.type === 'teamFace') {
           // 主将・永久欠番（球団の顔。効き目は無い。`teamFace.mjs`）
-          await this.engine((e) => {
-            e.loadLeagueWorld(l);
-            e.setTeamFace(l, userId, command.payload || {});
-            l.game = e.captureLeagueWorld();
-          });
+          await this.inWorld(l, (e) => e.setTeamFace(l, userId, command.payload || {}));
         } else if (command.type === 'tradeRespond') {
-          await this.engine((e) => {
-            e.loadLeagueWorld(l);
-            e.respondTrade(l, userId, command.payload || {}, now);
-            l.game = e.captureLeagueWorld();
-          });
+          await this.inWorld(l, (e) => e.respondTrade(l, userId, command.payload || {}, now));
         } else if (command.type === 'starterPick') {
           // 予告先発（改善案 B1）。世界は読まない（保存した世界の名簿で確かめる）
           setStarterPick(l, userId, command.payload || {});
@@ -688,15 +680,12 @@ export class LeagueService {
           // ⚠ キャンプを指導者に任せていたのに自分で回したら、キャンプは「意見を聞く」に戻す
           //    （任せたままだと、締め切りで残りのクールが指導者の方針に変わる）
           engine.takeBackCamp(l, me);
-          let result = null;
-          await this.engine((e) => {
-            e.loadLeagueWorld(l);
-            // ⚠ 経験値の消費は**最後のクールで1回だけ**（覚醒率を均すため）
-            result = e.runCampRound(l, me.teamName, plan, {
+          // ⚠ 経験値の消費は**最後のクールで1回だけ**（覚醒率を均すため）
+          const result = await this.inWorld(l, (e) =>
+            e.runCampRound(l, me.teamName, plan, {
               lastRound: Number(command.payload?.round) >= engine.CAMP_ROUNDS,
-            });
-            l.game = e.captureLeagueWorld();
-          });
+            }),
+          );
           engine.recordCampRound(state, result);
           state.plan = plan;
           // ⚠ 4クール終わったら**提出する**。全員が終われば締め切りを待たずに
@@ -770,7 +759,7 @@ export class LeagueService {
             403,
           );
           requireOnline(l.status === 'running', '試合の期間ではありません', 409);
-          // ⚠ 1ターン＝1時間＝1試合日。まとめて進めるときも**1日ずつ繰り返す**。
+          // ⚠ 1ターン（`TURN_MINUTES`＝45分）＝ゲーム内の1日。まとめて進めるときも**1日ずつ繰り返す**。
           //    日付を飛ばすと、間の日の試合・疲労回復・コンディション更新が落ちる
           const turns = Math.max(1, Math.min(24, Number(command.payload?.turns) || 1));
           for (let i = 0; i < turns; i += 1) {
@@ -833,6 +822,18 @@ export class LeagueService {
       };
     }, { full: FULL_COMMANDS.has(command?.type) });
   }
+  /**
+   * 選手（`TEAMS_DATA`）を触る命令を、`loadLeagueWorld` → `fn(engine)` → `captureLeagueWorld` で囲む。
+   * ⚠ 囲みを書き写さない（読み込み忘れ・書き戻し忘れは、選手の動きが黙って消える）
+   */
+  inWorld(l, fn) {
+    return this.engine((e) => {
+      e.loadLeagueWorld(l);
+      const result = fn(e);
+      l.game = e.captureLeagueWorld();
+      return result;
+    });
+  }
   engine(fn) {
     const result = engineQueue.then(async () =>
       fn(await import('./leagueEngine.mjs')),
@@ -844,16 +845,7 @@ export class LeagueService {
     // ⚠ **まず芯だけで作る**（`readLight`。世界・記録は読まない）。標準案はリーグの球団と手続きの
     //    候補しか見ないので、たいていはそれで足りる。世界に触れたら全体を読んでやり直す
     //    （以前は毎回世界まるごとを読み、手続きの画面を開くたびに数秒待った）
-    if (this.store.readLight) {
-      const light = await this.store.readLight();
-      try {
-        const result = await this.defaultsFrom(light.bundle, userId, sessionId);
-        if (!light.touched()) return result;
-      } catch (error) {
-        if (!light.touched()) throw error;
-      }
-    }
-    return this.defaultsFrom(await this.store.read(), userId, sessionId);
+    return this.lightThenFull((bundle) => this.defaultsFrom(bundle, userId, sessionId));
   }
   async defaultsFrom(bundle, userId, sessionId) {
     // 候補一覧に対する純粋な提案。エンジンの共有世界には書き込まない。
@@ -895,7 +887,7 @@ export class LeagueService {
       // ⚠ **締め切り超過の手続きを先に片付ける**。手続き中は status が
       //    running でないので、下の判定だけだと永遠に動かない。
       // ⚠ 自動決定に失敗して止めた後（status が error）は、管理者が再開するまで
-      //    やり直さない。毎時同じ失敗を繰り返して記録を埋めないため。
+      //    やり直さない。定期処理（5分ごとの cron）のたびに同じ失敗を繰り返して記録を埋めないため。
       if (l?.phase?.deadline && l.phase.deadline <= now && l.status !== 'error') {
         const working = clone(l);
         try {

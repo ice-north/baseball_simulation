@@ -8,6 +8,7 @@ import { withSeededRandom, hashSeed } from '../game/rng.js';
 import {
   ONLINE_SCHEMA,
   ONLINE_ENGINE_VERSION,
+  isCurrent,
   requireOnline,
   phaseDeadlineAt,
 } from './shared.js';
@@ -317,10 +318,8 @@ export function migrationChain(options) {
   return { problems, reaches: expected };
 }
 
-/** いまのコードで読めるか */
-export const isCurrent = (league, target = ONLINE_SCHEMA) =>
-  league?.schema === target &&
-  league?.engineVersion === ONLINE_ENGINE_VERSION;
+/** いまのコードで読めるか（照合は `shared.js` の `isCurrent` 1つ） */
+export { isCurrent };
 
 /**
  * 直せるかどうかと、その理由。画面に出す文面もここで決める。

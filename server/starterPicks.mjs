@@ -26,20 +26,30 @@ import { starterSequence } from './leagueBoard.mjs';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const dayIndex = (d) => Math.round(Date.UTC(d.year, d.month - 1, d.day) / DAY_MS);
-const dateKey = (d) => d.year * 10000 + d.month * 100 + d.day;
+const dateKey = (d) => (d.year || 0) * 10000 + (d.month || 0) * 100 + (d.day || 0);
 
-/** 自球団のまだ終わっていない試合（近い順） */
-export function ownOpenGames(schedule, teamName) {
+/**
+ * 自球団の試合（消化済みも含む。日付順、同じ日は id 順）。相手の決まっていない試合（`TBD`）と
+ * 日付の無い試合は除く。
+ * ⚠ 通し番号（その球団の何試合目か）はこの並びの位置で数える。ホームの今後・直近の試合
+ *    （`projection.ownUpcomingGames`・`ownRecentGames`）と予告先発がこの1つを使うので、
+ *    数え方が画面ごとにずれない。
+ */
+export function ownGamesByDate(schedule, teamName) {
   return (schedule || [])
     .filter(
       (g) =>
         g.date &&
-        !g.result &&
         g.home !== 'TBD' &&
         g.away !== 'TBD' &&
         (g.home === teamName || g.away === teamName),
     )
     .sort((a, b) => dateKey(a.date) - dateKey(b.date) || a.id - b.id);
+}
+
+/** 自球団のまだ終わっていない試合（近い順） */
+export function ownOpenGames(schedule, teamName) {
+  return ownGamesByDate(schedule, teamName).filter((g) => !g.result);
 }
 
 /**

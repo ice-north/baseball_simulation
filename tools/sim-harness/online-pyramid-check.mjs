@@ -231,8 +231,8 @@ for (const [name, n] of Object.entries(played)) {
   assert.equal(n, gamesPerTeam(), `${name} の試合数がちがう: ${n}`);
 }
 
-// ⚠ **1ターンに2試合する球団がいないこと**。1ターン＝1時間＝1試合なので、
-//    重複すると「全球団が毎時1試合」という前提が崩れる。
+// ⚠ **1ターンに2試合する球団がいないこと**。1ターン（45分）＝1日＝1試合なので、
+//    重複すると「試合のあるターンは全球団が1試合」という前提が崩れる。
 const byTurn = {};
 for (const g of schedule) (byTurn[g.turn] ||= []).push(g.home, g.away);
 for (const [turn, names] of Object.entries(byTurn)) {
