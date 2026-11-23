@@ -5,30 +5,24 @@ import TutorialHint from './TutorialHint.jsx';
 import { ScreenShell } from './GameUIComponents.jsx';
 import { TEAMS_DATA, LEAGUE_SETTINGS, getTeamAbbreviation } from '../teams-data.js';
 import { leagueMagic, remainingHeadToHead } from '../season/magicNumber.js';
-import { PHASE_INFO, SEASON_PHASES, formatDate, getDayOfWeek, getCurrentPhase, getNPBDraftDay, qualifiedPA, qualifiedOuts as qualifiedOutsFor, plateAppearances, getDaysInMonth, getPlayoffChampion, advanceDate, compareDates } from '../season/seasonManager.js';
+import { SEASON_PHASES, formatDate, getCurrentPhase, getNPBDraftDay, qualifiedPA, qualifiedOuts as qualifiedOutsFor, plateAppearances, getDaysInMonth, getPlayoffChampion, advanceDate, compareDates } from '../season/seasonManager.js';
 import { RANK_COLORS } from '../utils/constants.js';
 import { getScheduleByDate, getNextGame } from '../season/scheduleGenerator.js';
-import { progressDate, handlePhaseTransition, updatePlayoffProgress } from '../season/dateProgression.js';
-import { autoSimulateGame } from '../game/autoSimulation.js';
-import { scheduledGameSeed } from '../game/rng.js';
+import { progressDate, handlePhaseTransition } from '../season/dateProgression.js';
 import { ensureCompleteLineup } from '../game/lineup.js';
 import { getModeCapabilities } from '../game/modeCapabilities.js';
-import { generateToshitaikou, createMainTournament, autoPlayMainTournament, autoPlayQualifier, autoPlayBracket, getRoundName, getUserNextMatch, simulateQualifierOnDate, simulateMainTournamentOnDate, getUserMatchOnDate, getTournamentDatesForCalendar, simulateQuickMatch, recordResult as recordTournamentResult, generateNihonSenshuken, generateClubSenshuken, simulateNihonSenshukenOnDate, getUserNihonSenshukenMatchOnDate, getNihonSenshukenDatesForCalendar, createSenshukenMainTournament, generateRegionalTournament, simulateRegionalTournamentOnDate, getUserRegionalTournamentMatchOnDate, getRegionalTournamentDatesForCalendar } from '../corporate/toshitaikou.js';
+import { generateToshitaikou, createMainTournament, getRoundName, getUserNextMatch, simulateQualifierOnDate, simulateMainTournamentOnDate, getUserMatchOnDate, getTournamentDatesForCalendar, simulateQuickMatch, recordResult as recordTournamentResult, generateNihonSenshuken, generateClubSenshuken, simulateNihonSenshukenOnDate, getUserNihonSenshukenMatchOnDate, getNihonSenshukenDatesForCalendar, createSenshukenMainTournament, generateRegionalTournament, simulateRegionalTournamentOnDate, getUserRegionalTournamentMatchOnDate, getRegionalTournamentDatesForCalendar } from '../corporate/toshitaikou.js';
 import { simulateParallelWorldDate, getAllParallelLeagues, getAllUniversityLeagues, generateGrandChampionship, autoPlayGrandChampionship, processSpringPromotionRelegation, regenerateFallSchedules } from '../corporate/parallelWorldManager.js';
 import { getUserFallSchedule } from '../university/universityInit.js';
-import { generateAprilHighSchoolClass, checkNPBDraftEligibility } from '../season/yearProgressionSystem.js';
-import { simulateKoshien, getKoshienHeadline, KOSHIEN_STAGE_LABEL } from '../season/koshien.js';
-import { addToWatchList, removeFromWatchList, isWatched } from '../game/watchList.js';
-import { highSchoolPool, universityPool, seedInitialUniversityClasses } from '../season/universityPool.js';
+import { generateAprilHighSchoolClass } from '../season/yearProgressionSystem.js';
+import { simulateKoshien } from '../season/koshien.js';
+import { seedInitialUniversityClasses } from '../season/universityPool.js';
 import { WORLD_DATA } from '../corporate/worldData.js';
 import { updateAllTeamReputations, resetIndependentLeagueSchedules, getLeagueRankFromTeams } from '../corporate/corporateInit.js';
 import { INDEPENDENT_LEAGUES } from '../corporate/independentLeagueData.js';
-import { CONDITION_LEVELS, CONDITION_LABELS, CONDITION_COLORS, CONDITION_ICONS } from '../game/condition.js';
-import { POSITION_NAMES, FORM_SHORT, FORM_NAME } from '../utils/constants.js';
-import { Tooltip } from './GameUIComponents.jsx';
 import { formatInnings } from '../utils/physics.js';
 import { checkScoutMissionCompletion, SCOUT_TARGETS, processAutoInvestigation, advanceFavoriteBonus, processUniversityScoutDay, initUniversityScoutList } from '../corporate/scoutingSystem.js';
-import { generateUniversityChampionship, generateMeijiJinguTournament, simulateUniversityTournamentOnDate, autoPlayUniversityTournament, getUserUniversityTournamentMatchOnDate, getUniversityTournamentDatesForCalendar } from '../university/universityTournament.js';
+import { generateUniversityChampionship, generateMeijiJinguTournament, simulateUniversityTournamentOnDate, getUserUniversityTournamentMatchOnDate, getUniversityTournamentDatesForCalendar } from '../university/universityTournament.js';
 import { UNIVERSITY_REGIONS } from '../university/universityTeamsData.js';
 import PreGameModal from './dateProgress/PreGameModal.jsx';
 import NewspaperModal, { buildNewspaperData } from './dateProgress/Newspaper.jsx';
@@ -141,7 +135,6 @@ const DateProgressContent = ({ seasonData, setSeasonData, onForceEvent, onSetupM
   const isCorporate = modeCapabilities.corporate;
   const isUniversity = modeCapabilities.university;
   const currentPhase = seasonData.phase || 'off_season';
-  const phaseInfo = PHASE_INFO[currentPhase] || { name: '', color: 'bg-gray-100', description: '' };
   const currentDate = seasonData.currentDate || { month: 4, day: 1, year: 1 };
 
   const getStartingPitcher = (teamName) => {
@@ -1203,20 +1196,6 @@ const DateProgressContent = ({ seasonData, setSeasonData, onForceEvent, onSetupM
   const halfTeams = Math.floor((seasonData?.settings?.teamsCount || 4) / 2);
   const league1Teams = isTwoLeague ? teamNamesList.slice(0, halfTeams) : [];
   const league2Teams = isTwoLeague ? teamNamesList.slice(halfTeams) : [];
-  const getLeagueLabel = (game) => {
-    if (!isTwoLeague) return null;
-    if (league1Teams.includes(game.home) && league1Teams.includes(game.away)) return leagueNamesList[0];
-    if (league2Teams.includes(game.home) && league2Teams.includes(game.away)) return leagueNamesList[1];
-    return '交流戦';
-  };
-  const leader = standings[0];
-  const leaderWins = leader?.wins || 0;
-  const leaderLosses = leader?.losses || 0;
-  const isChampionDecided = leader && standings.length > 1 && (() => {
-    const second = standings[1];
-    const secondRemaining = totalGames - ((second.wins || 0) + (second.losses || 0) + (second.draws || 0));
-    return leaderWins > (second.wins || 0) + secondRemaining;
-  })();
 
   // トピック生成（試合結果が増えた時だけ再計算 = 試合のある日のみ更新）
   const cachedTopics = useMemo(() => {
@@ -3418,7 +3397,6 @@ const DateProgressContent = ({ seasonData, setSeasonData, onForceEvent, onSetupM
         const isRtType = tm.bracketType === 'regional_tournament';
         const isUcType = tm.type === 'university_championship';
         const isMjType = tm.type === 'meiji_jingu';
-        const isQualifier = tm.type === 'qualifier' || tm.type === 'nihon_senshuken_qualifier';
         const td = seasonData.toshitaikou;
         const ns = seasonData.nihonSenshuken;
         const cs = seasonData.clubSenshuken;
