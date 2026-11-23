@@ -126,51 +126,14 @@ export function createHandler(
         //    何ができるかは `LeagueService` 側が参加者一覧を見て決める。
         requireOnline(userId, 'ログインしてください', 401);
         const sessionId = req.headers['x-online-session'];
-        if (action === 'logout' && req.method === 'POST')
-          value = await service.logout(userId, sessionId);
-        else if (action === 'view' && req.method === 'GET')
-          value = await service.view(
-            userId,
-            sessionId,
-            // 手元のビューの世代（`viewGeneration`）。同じなら中身を送らない
-            /^\d+$/.test(url.searchParams.get('since') || '')
-              ? Number(url.searchParams.get('since'))
-              : null,
-          );
-        else if (action === 'defaults' && req.method === 'GET')
-          value = await service.defaults(userId, sessionId);
-        else if (action === 'team' && req.method === 'GET')
-          value = await service.teamInfo(userId, url.searchParams.get('team'));
-        else if (action === 'player' && req.method === 'GET')
-          value = await service.playerInfo(userId, url.searchParams.get('id'));
-        else if (action === 'games' && req.method === 'GET')
-          value = await service.games(
-            userId,
-            Object.fromEntries(url.searchParams),
-          );
-        else if (action === 'game' && req.method === 'GET')
-          value = await service.gameInfo(
-            userId,
-            url.searchParams.get('id'),
-            url.searchParams.get('year'),
-          );
-        // 取引の記録（トレード・退団・入団）。`year` で年度を選ぶ
-        else if (action === 'transactions' && req.method === 'GET')
-          value = await service.transactions(
-            userId,
-            Object.fromEntries(url.searchParams),
-          );
-        // 画面を開いた・アプリに戻った（最後に来た時刻。おるすばんを解く）
-        else if (action === 'presence' && req.method === 'POST')
-          value = await service.presence(userId, sessionId);
-        // 招待リンク（管理者だけ）。一覧と、作る・取り消す
-        else if (action === 'invites' && req.method === 'GET')
-          value = await service.invites(userId, sessionId);
-        else if (action === 'invites' && req.method === 'POST')
-          value = await service.inviteCommand(userId, sessionId, body);
-        else if (action === 'command' && req.method === 'POST')
-          value = await service.command(userId, sessionId, body);
-        else throw new OnlineError('操作先が見つかりません', 404);
+        value = await routeSignedIn(service, {
+          action,
+          method: req.method,
+          url,
+          body,
+          userId,
+          sessionId,
+        });
       }
       res.statusCode = 200;
       res.setHeader('Content-Type', 'application/json; charset=utf-8');
@@ -189,4 +152,57 @@ export function createHandler(
       );
     }
   };
+}
+
+/**
+ * ログインした人の操作の振り分け（`?action=…`）。本人の確かめ（`userId`）は呼ぶ側で済ませておく。
+ * ⚠ 検査が画面の通信を検査の中の service へつなぐとき（`tools/sim-harness/lib/serviceRoute.mjs`）も
+ *    これを使う。写しを持つと、足した操作が検査の側だけ 404 になる
+ */
+export function routeSignedIn(service, { action, method, url, body, userId, sessionId }) {
+  if (action === 'logout' && method === 'POST')
+    return service.logout(userId, sessionId);
+  if (action === 'view' && method === 'GET')
+    return service.view(
+      userId,
+      sessionId,
+      // 手元のビューの世代（`viewGeneration`）。同じなら中身を送らない
+      /^\d+$/.test(url.searchParams.get('since') || '')
+        ? Number(url.searchParams.get('since'))
+        : null,
+    );
+  if (action === 'defaults' && method === 'GET')
+    return service.defaults(userId, sessionId);
+  if (action === 'team' && method === 'GET')
+    return service.teamInfo(userId, url.searchParams.get('team'));
+  if (action === 'player' && method === 'GET')
+    return service.playerInfo(userId, url.searchParams.get('id'));
+  if (action === 'games' && method === 'GET')
+    return service.games(
+      userId,
+      Object.fromEntries(url.searchParams),
+    );
+  if (action === 'game' && method === 'GET')
+    return service.gameInfo(
+      userId,
+      url.searchParams.get('id'),
+      url.searchParams.get('year'),
+    );
+  // 取引の記録（トレード・退団・入団）。`year` で年度を選ぶ
+  if (action === 'transactions' && method === 'GET')
+    return service.transactions(
+      userId,
+      Object.fromEntries(url.searchParams),
+    );
+  // 画面を開いた・アプリに戻った（最後に来た時刻。おるすばんを解く）
+  if (action === 'presence' && method === 'POST')
+    return service.presence(userId, sessionId);
+  // 招待リンク（管理者だけ）。一覧と、作る・取り消す
+  if (action === 'invites' && method === 'GET')
+    return service.invites(userId, sessionId);
+  if (action === 'invites' && method === 'POST')
+    return service.inviteCommand(userId, sessionId, body);
+  if (action === 'command' && method === 'POST')
+    return service.command(userId, sessionId, body);
+  throw new OnlineError('操作先が見つかりません', 404);
 }

@@ -1,6 +1,6 @@
 // 画面の通信（`/api/online?action=…`）を、この検査の中で作った LeagueService へ
 // つなぐ。サーバーを立てずに、エンジンで直に作った局面（年末のトライアウトなど）を
-// 実画面で操作するために使う。振り分けは server/http.mjs と同じ。
+// 実画面で操作するために使う。振り分けは server/http.mjs の `routeSignedIn` を使う。
 //
 // ⚠ 認証は見ない（ログイン済みの1人として扱う）。認証の検査は online-auth-ui-check。
 import { mkdtemp } from 'node:fs/promises';
@@ -11,6 +11,7 @@ import { TEAMS_DATA } from '../../../src/teams-data.js';
 import { rosterGroup } from '../../../src/utils/constants.js';
 import { captureWorld } from '../../../server/worldSnapshot.mjs';
 import { LeagueService } from '../../../server/leagueService.mjs';
+import { routeSignedIn } from '../../../server/http.mjs';
 import {
   openPhase,
   loadLeagueWorld,
@@ -122,27 +123,19 @@ export async function routeToService(context, { service, userId, sessionId }) {
   );
   const commands = [];
   await context.route('**/api/online?*', async (route) => {
-    const url = new URL(route.request().url());
-    const action = url.searchParams.get('action');
-    const query = Object.fromEntries(url.searchParams);
+    const request = route.request();
+    const url = new URL(request.url());
+    const action = url.searchParams.get('action') || 'view';
     try {
       let value;
       if (action === 'config') value = { local: true, allowStep: false };
-      else if (action === 'view') value = await service.view(userId, sessionId);
-      else if (action === 'defaults')
-        value = await service.defaults(userId, sessionId);
-      else if (action === 'team')
-        value = await service.teamInfo(userId, query.team);
-      else if (action === 'player')
-        value = await service.playerInfo(userId, query.id);
-      else if (action === 'games') value = await service.games(userId, query);
-      else if (action === 'game')
-        value = await service.gameInfo(userId, query.id, query.year);
-      else if (action === 'command') {
-        const body = route.request().postDataJSON();
-        commands.push(body);
-        value = await service.command(userId, sessionId, body);
-      } else throw Object.assign(new Error(`unexpected action ${action}`), { status: 404 });
+      else {
+        // ⚠ 振り分けは本番の `server/http.mjs` の `routeSignedIn` をそのまま使う（写しを持たない）
+        const method = request.method();
+        const body = method === 'POST' ? request.postDataJSON() || {} : undefined;
+        if (action === 'command') commands.push(body);
+        value = await routeSignedIn(service, { action, method, url, body, userId, sessionId });
+      }
       return route.fulfill({
         contentType: 'application/json',
         body: JSON.stringify(value),
