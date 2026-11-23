@@ -205,14 +205,11 @@ export const LineupSettingContent = ({
     || team.players.find(p => p.id === pitcherEntry?.playerId && p.position === 'pitcher' && p.isActive !== false);
   const activeStarterCount = activeFielderCount + (useDH ? 0 : Number(!!pitcherEntry && !!nextStarter));
 
-  const { fielders, pitchers, lineupPlayerIds, benchPlayers } = useMemo(() => {
+  const { pitchers, lineupPlayerIds, benchPlayers } = useMemo(() => {
     // isActive=falseの選手（練習生）はスタメン・控えから除外。未設定は全員有効（大学モード以外）
     const isEligible = (p) => p.isActive !== false;
-    const f = team.players.filter(p => p.position !== 'pitcher' && isEligible(p));
     const p = team.players.filter(p => p.position === 'pitcher' && isEligible(p));
     const lpIds = new Set(lineup.map(e => e.playerId));
-    const maxSlot = useDH ? 9 : 8;
-    const fieldIds = new Set(lineup.filter(e => e.battingOrder >= 1 && e.battingOrder <= maxSlot).map(e => e.playerId));
     const seen = new Set();
     const bench = team.players.filter(pl => {
       if (!isEligible(pl)) return false;
@@ -221,7 +218,7 @@ export const LineupSettingContent = ({
       seen.add(pl.id);
       return true;
     });
-    return { fielders: f, pitchers: p, lineupPlayerIds: lpIds, benchPlayers: bench };
+    return { pitchers: p, lineupPlayerIds: lpIds, benchPlayers: bench };
   }, [team.players, lineup, updateTrigger]);
 
   // 初期化：非DH制では投手枠がなければ9番に投手を自動設定
@@ -501,44 +498,6 @@ export const LineupSettingContent = ({
     const idx = lineup.findIndex(e => e.playerId === playerId);
     if (idx !== -1) {
       lineup.splice(idx, 1);
-    }
-    setUpdateTrigger(prev => prev + 1);
-  };
-
-  const handleAddToRotation = (playerId, role) => {
-    const rotation = team.pitchingRotation;
-    if (role === 'starter') {
-      if (!rotation.starters.includes(playerId)) rotation.starters.push(playerId);
-    } else if (role === 'middle') {
-      if (!rotation.middleRelievers) rotation.middleRelievers = [];
-      if (!rotation.middleRelievers.includes(playerId)) rotation.middleRelievers.push(playerId);
-    } else if (role === 'setup') {
-      if (!rotation.setupMen) rotation.setupMen = [];
-      if (!rotation.setupMen.includes(playerId)) rotation.setupMen.push(playerId);
-    } else if (role === 'closer') {
-      rotation.closer = playerId;
-    }
-    setUpdateTrigger(prev => prev + 1);
-  };
-
-  const handleRemoveFromRotation = (playerId, role) => {
-    const rotation = team.pitchingRotation;
-    if (role === 'starter') {
-      rotation.starters = rotation.starters.filter(id => id !== playerId);
-    } else if (role === 'middle') {
-      rotation.middleRelievers = (rotation.middleRelievers || []).filter(id => id !== playerId);
-    } else if (role === 'setup') {
-      rotation.setupMen = (rotation.setupMen || []).filter(id => id !== playerId);
-    } else if (role === 'closer') {
-      if (rotation.closer === playerId) rotation.closer = null;
-    }
-    setUpdateTrigger(prev => prev + 1);
-  };
-
-  const handleChangePitcher = (newPitcherId) => {
-    const pitcherEntry = lineup.find(e => e.position === 'pitcher');
-    if (pitcherEntry) {
-      pitcherEntry.playerId = newPitcherId;
     }
     setUpdateTrigger(prev => prev + 1);
   };
@@ -1966,11 +1925,6 @@ export const LineupSettingContent = ({
           const unassignedPitchers = allPlayers.filter(p => p.position === 'pitcher' && getPitcherRole(p.id) === 'none');
           const fieldersForConvert = allPlayers.filter(p => p.position !== 'pitcher' && getPitcherRole(p.id) === 'none');
 
-          const StatVal = ({ label, value, isVelocity }) => {
-            const rank = isVelocity ? getVelocityRank(value) : getAbilityRank(value);
-            return <span className={`${getRankColor(rank)}`}>{label}{value}</span>;
-          };
-
           // ロールアイコン
           const ROLE_ICON = {
             ace: '👑', complete: '🏔', short: '⚡', quality: '✓', opener: '🚪', auto_s: '🤖',
@@ -2052,9 +2006,9 @@ export const LineupSettingContent = ({
             const open = roleLegendOpen;
             const setOpen = setRoleLegendOpen;
             const starterLegend = [
-              { icon: '👑', role: 'ゲームメーカー', desc: '7-8回を責任投球。エース格。球数上限110球', color: 'text-red-400' },
+              { icon: '👑', role: 'ゲームメーカー', desc: '7-8回を責任投球。エース格。球数上限はスタミナで決まる（60＋スタミナ×0.35＋8、最大120球）', color: 'text-red-400' },
               { icon: '🏔', role: '完投型', desc: 'スタミナ限界まで投げ抜く。球数上限120球', color: 'text-blue-400' },
-              { icon: '✓', role: '勝ち権利', desc: '5-6回を投げて勝ちパターンへ。球数上限100球', color: 'text-blue-300' },
+              { icon: '✓', role: '勝ち権利', desc: '5-6回を投げて勝ちパターンへ。球数上限はスタミナで決まる（60＋スタミナ×0.35、最大120球）', color: 'text-blue-300' },
               { icon: '⚡', role: 'ショート', desc: '3-4回で中継ぎへ繋ぐ。球数上限65球', color: 'text-blue-200' },
             ];
             const reliefLegend = [
@@ -2444,16 +2398,6 @@ export const LineupSettingContent = ({
           const posFullLabels = {
             pitcher: '投手', catcher: '捕手', first: '一塁', second: '二塁',
             short: '遊撃', third: '三塁', left: '左翼', center: '中堅', right: '右翼'
-          };
-
-          const getRangeColor = (range) => {
-            if (range >= 0.90) return { fill: 'rgba(236,72,153,0.18)', stroke: '#ec4899' };
-            if (range >= 0.82) return { fill: 'rgba(248,113,113,0.16)', stroke: '#f87171' };
-            if (range >= 0.70) return { fill: 'rgba(251,146,60,0.14)', stroke: '#fb923c' };
-            if (range >= 0.55) return { fill: 'rgba(251,191,36,0.14)', stroke: '#fbbf24' };
-            if (range >= 0.42) return { fill: 'rgba(74,222,128,0.12)', stroke: '#4ade80' };
-            if (range >= 0.30) return { fill: 'rgba(96,165,250,0.10)', stroke: '#60a5fa' };
-            return { fill: 'rgba(148,163,184,0.08)', stroke: '#94a3b8' };
           };
 
           const getFitnessColor = (fitness) => {
