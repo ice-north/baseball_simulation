@@ -6,6 +6,7 @@
 // ⚠ もう1つは「**画面が出すメニューを、サーバーが必ず受け取れること**」。
 //    `TRAINING_MENUS` にはオンラインのエンジンが動かさないもの
 //    （新球種習得）があり、実測で画面に出ていた。選べるのに提出で弾かれる。
+import { quiet } from './lib/quiet.mjs';
 import assert from 'node:assert/strict';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { readFileSync } from 'node:fs';
@@ -93,15 +94,6 @@ import {
 }
 
 const NOW = '2026-10-26T15:00:00.000Z';
-const quiet = (fn) => {
-  const log = console.log;
-  console.log = () => {};
-  try {
-    return fn();
-  } finally {
-    console.log = log;
-  }
-};
 
 /** セット選択まで済ませて、キャンプの手続きが開いたリーグを作る */
 function leagueAtCamp(seed = undefined) {

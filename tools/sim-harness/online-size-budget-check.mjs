@@ -9,6 +9,7 @@
 // （内訳は online-size-probe.mjs で見られる）。要る増え方なら --update で上限を上げ、
 // 何が増えたかを PR に書く。上限よりずっと小さくなったら（60%未満）下げどきを知らせる。
 // ⚠ 記録（records）は軽い読みでも毎回読む。芯も毎回読み書きする。ここが増えると全員の待ち時間が延びる
+import { quiet } from './lib/quiet.mjs';
 import { createLeague, defaultPhasePlan, submitPhase, advanceLeagueDay } from '../../server/leagueEngine.mjs';
 import { touchPresence } from '../../server/social.mjs';
 import { projectLeague, projectTeamInfo } from '../../server/projection.mjs';
@@ -23,15 +24,6 @@ const UPDATE = process.argv.includes('--update');
 const HEADROOM = 1.2; // --update のときの余裕
 const LOOSE = 0.6; // 上限のこの割合を下回ったら「下げどき」
 
-const quiet = (fn) => {
-  const log = console.log;
-  console.log = () => {};
-  try {
-    return fn();
-  } finally {
-    console.log = log;
-  }
-};
 const rawKb = (v) => Buffer.byteLength(JSON.stringify(v ?? null)) / 1024;
 const gzKb = (v) => gzipSync(JSON.stringify(v ?? null)).length / 1024;
 

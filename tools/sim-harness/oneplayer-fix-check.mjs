@@ -9,6 +9,7 @@
 // 使い方: node tools/sim-harness/oneplayer-fix-check.mjs
 // ============================================================
 
+import { quiet } from './lib/quiet.mjs';
 import './lib/bootstrap.mjs';
 import assert from 'node:assert/strict';
 import { bootstrapWorld, TEAMS_DATA } from './lib/world.mjs';
@@ -30,12 +31,6 @@ import { ensureUserIndependentLeagueTagged } from '../../src/corporate/corporate
 import { UNIVERSITY_TEAMS } from '../../src/university/universityTeamsData.js';
 import { initializeUniversityGame } from '../../src/university/universityInit.js';
 import { processSpringPromotionRelegation, processUniversityPromotionRelegation } from '../../src/university/universityLeagueManager.js';
-
-const quiet = (fn) => {
-  const log = console.log;
-  console.log = () => {};
-  try { return fn(); } finally { console.log = log; }
-};
 
 // --- 監督移籍のあとは、移籍先が自チーム（TEAMS_DATA の先頭）になる ---
 // ⚠ 日程画面・ロスター・契約更改・キャンプ・スカウト・年度替わりの名簿処理が

@@ -4,6 +4,7 @@
 //    若いほど伸びる」、キャンプは「プロ意識・体幹・器用さを見て、フィジカルと技術が中心」に分けたい。
 //    年度更新の式（`growthSystem.js` の `applyOnlineNaturalGrowth`）を変えたらこれを回す。
 //    node tools/sim-harness/online-yearend-growth-probe.mjs [回数=6]
+import { quiet } from './lib/quiet.mjs';
 import { createLeague, submitPhase, loadLeagueWorld } from '../../server/leagueEngine.mjs';
 import { TEAMS_DATA } from '../../src/teams-data.js';
 import { withSeededRandom } from '../../src/game/rng.js';
@@ -11,15 +12,6 @@ import { applyAgeCurveChanges, applyCorporatePlayerGrowth } from '../../src/seas
 import { abilitySnapshot, abilityGains, campGainLabel } from '../../src/online/campGains.js';
 
 const RUNS = Number(process.argv[2] || 6);
-const quiet = (fn) => {
-  const log = console.log;
-  console.log = () => {};
-  try {
-    return fn();
-  } finally {
-    console.log = log;
-  }
-};
 const NOW = '2026-10-26T15:00:00.000Z';
 const league = quiet(() => createLeague({ members: [{ userId: 'a' }], now: NOW }));
 quiet(() =>

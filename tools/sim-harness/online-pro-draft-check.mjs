@@ -5,6 +5,7 @@
 //    だから「達したのに抜かれない」ことがあってはいけない（②で見る）。厳しさを決めるのは
 //    `PRO_DRAFT_THRESHOLD` だけで、人数の釣り合いも②で見る。
 //   node tools/sim-harness/online-pro-draft-check.mjs
+import { quiet } from './lib/quiet.mjs';
 import assert from 'node:assert/strict';
 import { createLeague, submitPhase, loadLeagueWorld } from '../../server/leagueEngine.mjs';
 import { TEAMS_DATA } from '../../src/teams-data.js';
@@ -26,15 +27,6 @@ import { FULL_SEASON_EXPERIENCE } from '../../src/season/campTraining.js';
 import { processSeasonEnd, checkNPBDraftEligibility } from '../../src/season/yearProgressionSystem.js';
 import { qualifiedOuts } from '../../src/season/seasonManager.js';
 
-const quiet = (fn) => {
-  const log = console.log;
-  console.log = () => {};
-  try {
-    return fn();
-  } finally {
-    console.log = log;
-  }
-};
 const NOW = '2026-10-26T15:00:00.000Z';
 const make = (seed) => {
   const league = quiet(() => createLeague({ members: [{ userId: 'a' }], now: NOW, seed }));

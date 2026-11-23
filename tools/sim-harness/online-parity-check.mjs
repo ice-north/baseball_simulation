@@ -26,6 +26,7 @@
 //    共通の部品そのものは、それ専用の検査で水準を数字で押さえる
 //    （`online-pack-check` の制球の水準など）。ここで見るのは
 //    **オンラインだけに効くずれ**（世界の作り方・休養日・名簿の配り方）。
+import { quiet } from './lib/quiet.mjs';
 import assert from 'node:assert/strict';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -42,15 +43,6 @@ import { createSeededRandom } from '../../src/game/rng.js';
 import { PYRAMID_TEAM_COUNT } from '../../src/online/pyramidLeague.js';
 
 const TURNS = Number(process.env.PARITY_TURNS || 18);
-const quiet = (fn) => {
-  const log = console.log;
-  console.log = () => {};
-  try {
-    return fn();
-  } finally {
-    console.log = log;
-  }
-};
 
 /** 両者から同じ形で数字を取り出す */
 function summarize(teams) {

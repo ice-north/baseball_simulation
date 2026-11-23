@@ -3,20 +3,12 @@
 //    始まっていた。その1人が抜けると投手0人になり、大学モードの2年目に試合が
 //    「投手が取得できません」で壊れた（generateCorporateRoster で最低人数を先に取る）。
 //   node tools/sim-harness/corporate-roster-check.mjs
+import { quiet } from './lib/quiet.mjs';
 import './lib/bootstrap.mjs';
 import { SRC } from './lib/bootstrap.mjs';
 import assert from 'node:assert/strict';
 
 const { generateCorporateRoster } = await import(SRC + '/corporate/corporateInit.js');
-const quiet = (fn) => {
-  const log = console.log;
-  console.log = () => {};
-  try {
-    return fn();
-  } finally {
-    console.log = log;
-  }
-};
 
 const cases = [
   { def: { id: 39, name: '検証クラブD', type: 'club', rank: 'D' }, runs: 300 },

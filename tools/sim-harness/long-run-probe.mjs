@@ -3,6 +3,7 @@
 // 人2人（標準案＝指導者任せ）＋CPU40球団。シーズンの終わり（契約更改が開いた時点）ごとに
 // 勝率の散らばり・打撃投手の成績・能力の平均と上位・年齢・名簿・保存の大きさ・不整合を記録する。
 // console.error / console.warn と例外も数える。
+import { quiet } from './lib/quiet.mjs';
 import './lib/bootstrap.mjs';
 import { writeFileSync } from 'node:fs';
 import { gzipSync } from 'node:zlib';
@@ -20,7 +21,6 @@ const note = (kind, msg) => { const k = `${kind}: ${String(msg).slice(0, 300)}`;
 const origLog = console.log;
 console.error = (...a) => note('console.error', a.map(String).join(' '));
 console.warn = (...a) => note('console.warn', a.map(String).join(' '));
-const quiet = (fn) => { console.log = () => {}; try { return fn(); } finally { console.log = origLog; } };
 const out = (...a) => origLog(...a);
 
 let now = new Date('2026-10-28T00:00:00Z');

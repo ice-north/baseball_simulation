@@ -5,6 +5,7 @@
 //    「野手になった選手が登板順に残る」「投手になった選手が守備に就く」。
 // ⚠ 能力は足さない。選手は元から投打の能力と守備適性を持っているので、
 //    登録を変えるだけで成り立つ（下手なまま守るのがコンバート）。
+import { quiet } from './lib/quiet.mjs';
 import assert from 'node:assert/strict';
 import './lib/bootstrap.mjs';
 import {
@@ -18,15 +19,6 @@ import {
 import { CONVERT_POSITIONS, ROSTER_LIMIT } from '../../src/online/shared.js';
 
 const NOW = '2026-10-26T15:00:00.000Z';
-const quiet = (fn) => {
-  const log = console.log;
-  console.log = () => {};
-  try {
-    return fn();
-  } finally {
-    console.log = log;
-  }
-};
 
 const league = quiet(() =>
   createLeague({ members: [{ userId: 'a' }], now: NOW }),

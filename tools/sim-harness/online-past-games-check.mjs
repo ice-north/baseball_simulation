@@ -3,19 +3,11 @@
 //   **終わった年の試合の記録を読まずに**（軽い読みのまま）済むことを見る。
 //   読んでしまうと、命令のたびに全体を読み直すことになり、分けた意味が無い。
 //   node tools/sim-harness/online-past-games-check.mjs
+import { quietAsync } from './lib/quiet.mjs';
 import assert from 'node:assert/strict';
 import { createTestStore } from './lib/testStore.mjs';
 import { LeagueService } from '../../server/leagueService.mjs';
 
-const quiet = async (fn) => {
-  const log = console.log;
-  console.log = () => {};
-  try {
-    return await fn();
-  } finally {
-    console.log = log;
-  }
-};
 const store = createTestStore('past-games-check');
 const service = new LeagueService(store, { local: true, adminId: 'p1', members: [{ userId: 'p1' }] });
 const session = (await service.login('p1')).sessionId;
@@ -24,7 +16,7 @@ const view = () => service.view('p1', session);
 const send = async (type, payload) =>
   service.command('p1', session, { requestId: `past-games-${++seq}`, revision: (await view()).revision ?? 0, type, payload });
 
-await quiet(async () => {
+await quietAsync(async () => {
   await send('create');
   await send('testmode', { on: true });
   for (let guard = 0; guard < 200 && (await view()).year < 2; guard++) {
@@ -47,7 +39,7 @@ const lightOnly = async (label, fn) => {
   assert.equal(store.lastAttempts, 1, `${label}で全体を読み直した（終わった年の試合に触った）`);
 };
 // 手続き中なら抜けるまで進める（編成の保存はシーズン中に見る）
-await quiet(async () => {
+await quietAsync(async () => {
   for (let guard = 0; guard < 20 && (await view()).status !== 'running'; guard++) await send('resolve');
 });
 v = await view();

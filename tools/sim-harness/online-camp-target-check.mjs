@@ -7,6 +7,7 @@
 //    （適性への合わせで一塁手に戻り、捕手が0人になることもあった）
 // 3. フォーム改造・打席変更（先方回答 2026-11-16 B3）: 選んだ形に変わる・変わったあとの
 //    クールで別の形に変わり続けない・対象が無ければ何もしない（基礎体力）・野手にフォーム改造は出さない
+import { quiet } from './lib/quiet.mjs';
 import assert from 'node:assert/strict';
 import {
   createLeague,
@@ -23,15 +24,6 @@ import { campSubKey } from '../../server/leagueEngine.mjs';
 import { subMenusFor } from '../../src/online/campMenus.js';
 
 const NOW = '2026-10-26T15:00:00.000Z';
-const quiet = (fn) => {
-  const log = console.log;
-  console.log = () => {};
-  try {
-    return fn();
-  } finally {
-    console.log = log;
-  }
-};
 const league = quiet(() => createLeague({ members: [{ userId: 'a' }], now: NOW }));
 quiet(() =>
   submitPhase(league, 'a', { phaseId: league.phase.id, plan: { packId: league.packs[0].id }, ready: true }, NOW),

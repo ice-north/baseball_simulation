@@ -6,6 +6,7 @@
 // ⚠ **いちばん大事なのは「半回の点の合計＝スコアボードのその回の数字」**。
 //    打席の外で入った点（暴投・盗塁・サヨナラの暴投）を落とすとここがずれる。
 //   node tools/sim-harness/online-inning-plays-check.mjs
+import { quiet } from './lib/quiet.mjs';
 import assert from 'node:assert/strict';
 import {
   createLeague,
@@ -21,16 +22,6 @@ import {
   inningKey,
   PLAY_TEXT,
 } from '../../src/online/gamePlays.js';
-
-const quiet = (fn) => {
-  const log = console.log;
-  console.log = () => {};
-  try {
-    return fn();
-  } finally {
-    console.log = log;
-  }
-};
 
 // ① 記号は**サーバーと画面で同じ**（片方だけ足すと「本」などが生の記号で出る）
 for (const code of PLAY_CODES)
