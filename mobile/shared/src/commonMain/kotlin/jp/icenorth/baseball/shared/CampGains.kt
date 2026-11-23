@@ -18,15 +18,10 @@ private val GAIN_LABELS = mapOf(
     "fielding.defense" to "守備", "catching.lead" to "リード", "personality.mental" to "精神",
 )
 
-private val FITNESS_LABELS = mapOf(
-    "pitcher" to "投手", "catcher" to "捕手", "first" to "一塁", "second" to "二塁", "third" to "三塁",
-    "short" to "遊撃", "left" to "左翼", "center" to "中堅", "right" to "右翼",
-)
-
 /** 項目の画面の名前。変化球は `pitch.<球種>`、守備適性は `positionFitness.<守備位置>` */
 fun campGainLabel(key: String): String =
     if (key.startsWith("pitch.")) PITCH_TYPE_NAMES[key.removePrefix("pitch.")] ?: key.removePrefix("pitch.")
-    else if (key.startsWith("positionFitness.")) (FITNESS_LABELS[key.removePrefix("positionFitness.")] ?: key.removePrefix("positionFitness.")) + "適性"
+    else if (key.startsWith("positionFitness.")) (POSITION_NAMES[key.removePrefix("positionFitness.")] ?: key.removePrefix("positionFitness.")) + "適性"
     else GAIN_LABELS[key] ?: key
 
 data class CampGainItem(val key: String, val label: String, val diff: Double)

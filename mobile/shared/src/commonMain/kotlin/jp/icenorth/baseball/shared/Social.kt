@@ -79,8 +79,9 @@ fun sinceLabel(millis: Long): String {
     return "$m/$d $hh:${mm.toString().padStart(2, '0')}"
 }
 
-// 暦の計算（Howard Hinnant の days_from_civil / civil_from_days）。端末の時刻帯に左右されない
-private fun daysFromCivil(year: Long, month: Int, day: Int): Long {
+// 暦の計算（Howard Hinnant の days_from_civil / civil_from_days）。端末の時刻帯に左右されない。
+// ⚠ daysFromCivil は Text.kt の turnOfDate も使う（1つにまとめた）
+internal fun daysFromCivil(year: Long, month: Int, day: Int): Long {
     val y = if (month <= 2) year - 1 else year
     val era = y.floorDiv(400L)
     val yoe = y - era * 400

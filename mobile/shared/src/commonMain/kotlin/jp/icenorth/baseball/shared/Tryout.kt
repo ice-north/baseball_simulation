@@ -33,8 +33,7 @@ fun rosterCounts(players: List<JsonObject>): MutableMap<String, Int> {
     return counts
 }
 
-/** 交渉できる人数の上限（1位〜20位）。Web 版 `TRYOUT_WISH_MAX` */
-const val TRYOUT_WISH_MAX = 20
+// 交渉できる人数の上限（1位〜20位。TRYOUT_WISH_MAX）は Tables.kt（Web 版 tryoutPlan.js から書き出す）
 
 /** 交渉できる人数。⚠ 空き枠で切らない（獲得する人数より多く並べ、取られたら繰り上げる）。空きが無ければ0 */
 fun wishLimit(maxCount: Int): Int = if (maxCount > 0) TRYOUT_WISH_MAX else 0

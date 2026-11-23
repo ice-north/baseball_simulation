@@ -160,9 +160,6 @@ fun clampMenu(key: String?, player: JsonObject): String {
 fun clampSub(key: String?, player: JsonObject): String =
     if (key != null && campSubMenusFor(player).any { it.key == key }) key else "physique"
 
-fun campMenuName(key: String?): String =
-    (CAMP_MENUS + CAMP_SUB_MENUS).firstOrNull { it.key == key }?.let { "${it.icon} ${it.name}" } ?: (key ?: "")
-
 /** 一人用のキャンプと同じ分け方 */
 val CAMP_GROUPS: List<Pair<String, String>> = listOf("pitcher" to "投手", "catcher" to "捕手", "infield" to "内野手", "outfield" to "外野手")
 
