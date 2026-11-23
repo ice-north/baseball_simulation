@@ -110,7 +110,9 @@ export const AWAKENING_EXPERIENCE_CAP = 1.5;
 export const TALENT_STAT_MULTIPLIERS = {
   arm: 0.3,       // 肩力: 生まれ持った体格に依存
   speed: 0.4,     // 走力: 先天的な筋繊維に依存
-  power: 0.8,     // パワー: 体幹トレーニングで伸びる余地あり
+  // パワー: 体幹トレーニングで伸びる余地あり。⚠ 0.8 → 0.5（2026-11-23）。10年でリーグのパワーが
+  //   36→48、本塁打が1試合 0.39→0.96 本と2.5倍になっていた（10年の長期シミュ）
+  power: 0.5,
   velocity: 0.8,  // 球速: フォーム改善等で伸びる余地あり
 };
 
@@ -189,7 +191,10 @@ export const TRAINING_MENUS = {
     // ⚠ **ミートと同じ速さになるところまで下げる**。0.7では 制球1.1 対
     //    ミート0.6 でまだ倍近く、投手有利が年々開いていた
     // ⚠ スタミナは据え置き（やれば伸びるもの）
-    growthMultipliers: { control: 0.45, stamina: 0.5 },
+    // ⚠ 0.45 → **0.3**（2026-11-23、いしだ「3件とも直す」）。0.45 でも10年でリーグの制球が
+    //    49→65 と伸び続け、選球眼（横ばい）との差で四球が半分になった。指導者の「長所を伸ばす」の
+    //    制球集中にも同じ係数を掛ける（`executeCampTraining` の `focusStatMult`）
+    growthMultipliers: { control: 0.3, stamina: 0.5 },
     category: 'pitching'
   },
   velocity: {
