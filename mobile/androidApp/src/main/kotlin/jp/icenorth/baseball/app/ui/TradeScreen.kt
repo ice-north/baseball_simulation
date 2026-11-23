@@ -813,8 +813,11 @@ private fun ConfirmSide(title: String, ids: Set<Long>, players: List<Player>?, m
 private fun PlayerLines(model: AppViewModel, team: String, p: Player, tier: String?, tag: String? = null, extra: (@Composable () -> Unit)? = null) {
     Column(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
+            PlayerFace(p, size = 26.dp, team = team, modifier = Modifier.padding(end = 4.dp))
+            val (nameText, nameInline) = conditionName(p.condition, p.name)
             Text(
-                "${jp.icenorth.baseball.shared.conditionIcon(p.condition)} ${p.name}",
+                nameText,
+                inlineContent = nameInline,
                 fontWeight = FontWeight.SemiBold,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,

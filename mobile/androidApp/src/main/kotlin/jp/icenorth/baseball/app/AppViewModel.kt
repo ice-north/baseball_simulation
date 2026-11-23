@@ -179,6 +179,15 @@ class AppViewModel internal constructor(
         store.campSeen = key
     }
 
+    /** 新しい見た目（試作）段4: 見た球団の出来事の場面（同じ場面を2度出さない。Web 版の `baseball-online-look-seen-v1` と同じ） */
+    var lookSeen by mutableStateOf(store.lookSeen)
+        private set
+
+    fun markLookSeen(key: String) {
+        lookSeen = (listOf(key) + lookSeen.filter { it != key }).take(20)
+        store.lookSeen = lookSeen
+    }
+
     /** トライアウトの評価値の重み（端末に覚える。サーバーには送らない） */
     var tryoutWeights by mutableStateOf(sanitizeWeights(store.tryoutWeights))
         private set
@@ -190,6 +199,15 @@ class AppViewModel internal constructor(
     fun changeHomeStyle(name: String) {
         homeStyle = name
         store.homeStyle = name
+    }
+
+    /** 新しい見た目（試作）を出すか（[jp.icenorth.baseball.app.ui.LookState]）。既定は切。端末に覚える */
+    var lookOn by mutableStateOf(store.lookOn)
+        private set
+
+    fun changeLookOn(on: Boolean) {
+        lookOn = on
+        store.lookOn = on
     }
 
     /** スタメンの行に能力まで出すか（既定は成績だけ）。端末に覚える */

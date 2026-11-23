@@ -48,7 +48,6 @@ import androidx.compose.ui.unit.sp
 import jp.icenorth.baseball.shared.PITCH_TYPE_NAMES
 import jp.icenorth.baseball.shared.StatColumn
 import jp.icenorth.baseball.shared.at
-import jp.icenorth.baseball.shared.conditionIcon
 import jp.icenorth.baseball.shared.formatStat
 import jp.icenorth.baseball.shared.int
 import jp.icenorth.baseball.shared.list
@@ -256,8 +255,10 @@ fun pitchesShort(arsenal: List<Pair<String?, Int?>>): List<Pair<String, Int?>> =
 /** 名前・年齢・守備位置の1行（押すと選手の詳細） */
 @Composable
 fun PlayerName(p: JsonObject, onOpen: ((JsonObject) -> Unit)?, modifier: Modifier = Modifier, bold: Boolean = true) {
+    val (text, inline) = conditionName(p.at("condition").int(), p.at("name").str().orEmpty())
     Text(
-        "${conditionIcon(p.at("condition").int())} ${p.at("name").str().orEmpty()}",
+        text,
+        inlineContent = inline,
         fontWeight = if (bold) FontWeight.SemiBold else FontWeight.Normal,
         maxLines = 1,
         overflow = TextOverflow.Ellipsis,
@@ -388,8 +389,10 @@ fun StatTable(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Column {
+                        val (nameText, nameInline) = conditionName(p.at("condition").int(), p.at("name").str().orEmpty(), gap = "")
                         Text(
-                            "${conditionIcon(p.at("condition").int())}${p.at("name").str().orEmpty()}",
+                            nameText,
+                            inlineContent = nameInline,
                             fontSize = 13.sp,
                             // ⚠ 行の高さを決めて詰める。既定（本文の24sp）のままだと2行で行の高さを超え、
                             //    下の「守備 年齢」が次の行に食い込んでいた

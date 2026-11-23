@@ -226,6 +226,10 @@ fun HomeScreen(
         if (showChronicle) ChronicleDialog(model, team, view.teamShort(team)) { showChronicle = false }
         var showInbox by remember { mutableStateOf(false) }
         if (showInbox) InboxDialog(view) { showInbox = false }
+        // 新しい見た目（試作）段4: 優勝・昇格などが決まったときの場面（1度だけ）と、社告の代わりの番記者のメモ。
+        // ⚠ 速報を伏せている間は場面を出さず、番記者も話さない（決着・連勝から結果が分かってしまう）
+        if (!sealed) EventSceneDialog(model, view)
+        val reporterNote = rememberReporterNote(view, sealed)
         val style = homeStyleOf(model.homeStyle)
         val uriHandler = LocalUriHandler.current
         val names = remember(model.raw, team, lastGame, opponent, oppName) {
@@ -280,7 +284,7 @@ fun HomeScreen(
                 // 記事の中の選手名を押すと、その選手の詳細を開く（手元で分かる選手だけ）
                 // ⚠ 共有の画像は、この紙面の描画を層に写したもの（[sharePaper]）
                 Box(Modifier.drawWithContent { shareLayer.record { this@drawWithContent.drawContent() }; drawLayer(shareLayer) }) {
-                CompositionLocalProvider(LocalPaperLinks provides paperLinks) {
+                CompositionLocalProvider(LocalPaperLinks provides paperLinks, LocalReporterNote provides reporterNote) {
                 HomePage(
                     style = style,
                     page = page,
@@ -515,6 +519,12 @@ private fun HomeMenu(model: AppViewModel, style: HomeStyle, onRename: () -> Unit
                     onClick = { open = false; model.changeHomeStyle(s.name) },
                 )
             }
+            HorizontalDivider()
+            // 新しい見た目（試作）: 球団マーク・選手の顔・調子の顔・段位の字（全部の画面）。切なら今までどおり
+            DropdownMenuItem(
+                text = { Text((if (model.lookOn) "● " else "○ ") + "新しい見た目（試作）") },
+                onClick = { open = false; model.changeLookOn(!model.lookOn) },
+            )
             HorizontalDivider()
             // 試合結果の通知（裏でおよそ15分ごとに確かめる。ResultNotifier）。端末が許していなければ「○」
             DropdownMenuItem(

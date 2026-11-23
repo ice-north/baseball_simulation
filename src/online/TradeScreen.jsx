@@ -48,6 +48,7 @@ import {
   tradeSlot,
   valueTiers,
 } from './tradeSearch.js';
+import { PlayerFace, TeamMark } from './look/Art.jsx';
 
 // ============================================================
 // 球団間のトレード（PC）。**出す選手ともらう選手を、同じ物差しで比べて決める**。
@@ -523,11 +524,12 @@ const columnCount = (kind) =>
   5 + KINDS[kind].abilities.length + KINDS[kind].stats.length + (kind === 'pitcher' ? 1 : 0);
 
 /** 1人ぶんの列（自球団と相手で**同じ部品**を使う） */
-function PlayerCells({ player, kind, lineup }) {
+function PlayerCells({ player, kind, lineup, team }) {
   const k = KINDS[kind];
   return (
     <>
       <td className="online-lineup-person">
+        <PlayerFace player={player} team={team} size={24} />
         <span onClick={(e) => e.stopPropagation()}>
           <PlayerStatsButton player={player} category={k.category} group="basic" />
         </span>
@@ -632,7 +634,7 @@ function TradeTable({ kind, sections, onToggle, busy }) {
                     </span>
                   )}
                 </td>
-                <PlayerCells player={player} kind={kind} lineup={section.lineup} />
+                <PlayerCells player={player} kind={kind} lineup={section.lineup} team={section.team} />
               </tr>
             );
           })}
@@ -660,6 +662,7 @@ function TeamImpact({ name, own, before, after }) {
       data-team={name}
     >
       <h4>
+        <TeamMark team={name} size={18} />
         {teamShort(name)}
         <small>{own ? '自球団' : '相手'}</small>
       </h4>
@@ -919,6 +922,7 @@ function TradeComposer({
                   side: 'give',
                   label: '自球団の選手',
                   title: `${teamLabel(view.teamName)}（自球団）`,
+                  team: view.teamName,
                   note: '押すと「出す」に入ります。能力の高い順',
                   players: inGroup(myRoster),
                   picked: giveIds,
@@ -929,6 +933,7 @@ function TradeComposer({
                   side: 'get',
                   label: '相手の選手',
                   title: teamLabel(partner),
+                  team: partner,
                   note: '押すと「もらう」に入ります。能力の高い順',
                   players: theirRoster ? inGroup(theirRoster) : [],
                   picked: getIds,
@@ -1109,6 +1114,7 @@ function TradeCompare({ view, partner, theirRoster, theirError, giveEntries, get
                   side: 'give',
                   label: '出す選手',
                   title: `出す（${teamLabel(view.teamName)}）`,
+                  team: view.teamName,
                   players: give.filter((p) => kindOf(p) === kind),
                   lineup: view.lineup,
                 },
@@ -1117,6 +1123,7 @@ function TradeCompare({ view, partner, theirRoster, theirError, giveEntries, get
                   side: 'get',
                   label: 'もらう選手',
                   title: `もらう（${teamLabel(partner)}）`,
+                  team: partner,
                   players: get.filter((p) => kindOf(p) === kind),
                 },
               ].filter((section) => section.players.length)}
@@ -1599,7 +1606,7 @@ function ReinforcePanel({ view, league, busy, onStart }) {
                       {c.diff > 0 ? '+' : ''}
                       {Math.round(c.diff)}
                     </td>
-                    <PlayerCells player={c.player} kind={kind} />
+                    <PlayerCells player={c.player} kind={kind} team={c.team} />
                   </tr>
                 ))}
                 {!candidates.length && (

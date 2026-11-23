@@ -1,6 +1,7 @@
 package jp.icenorth.baseball.app.ui
 
 import androidx.compose.foundation.layout.Arrangement
+import jp.icenorth.baseball.shared.idKey
 import jp.icenorth.baseball.shared.abilityBarFraction
 import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -125,6 +126,14 @@ private fun PlayerDetail(model: AppViewModel, p: JsonObject) {
     ) {
         Column {
             Row(verticalAlignment = Alignment.CenterVertically) {
+                // 新しい見た目（試作）: 帽子はその選手の球団（他球団の選手なら他球団の帽子）
+                PlayerFace(
+                    p.idKey(), p.at("age").int(), p.at("condition").int(), size = 64.dp,
+                    // 自球団の選手は自球団、読み込んだ他球団の選手はその球団、候補（トライアウト・ドラフト）は所属なし。
+                    // ⚠ 自球団を先に見る（トレードで来たばかりの選手は、読み込んだ名簿の前の球団が残っていることがある）
+                    team = model.view?.teamName?.takeIf { id != null && ownRoster.any { it.at("id").num()?.toLong() == id } } ?: id?.let { model.rosterTeams[it] },
+                    modifier = Modifier.padding(end = 10.dp),
+                )
                 Text(p.at("name").str().orEmpty(), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
                 ProWatchChip(p.at("proWatch"), Modifier.padding(start = 8.dp))
             }
@@ -445,7 +454,10 @@ private fun AbilityGroup(title: String, content: @Composable AbilityScope.() -> 
 private fun AbilityScope.Item(label: String, value: Int?, help: String = label, velocity: Boolean = false, stamina: Boolean = false) {
     val known = ABILITY_HELP[help] != null
     Column(Modifier.width(ABILITY_CELL).clickable(enabled = known) { toggle(help) }) {
-        AbilityNum("$label ", value, velocity, stamina)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            if (value != null) RankChip(value, velocity, stamina, Modifier.padding(end = 4.dp))
+            AbilityNum("$label ", value, velocity, stamina)
+        }
         AbilityBar(value, velocity, stamina)
     }
 }

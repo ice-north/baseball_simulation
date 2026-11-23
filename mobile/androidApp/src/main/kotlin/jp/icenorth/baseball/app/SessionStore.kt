@@ -57,6 +57,11 @@ class SessionStore(context: Context) {
         get() = prefs.getString("homeStyle", null)
         set(value) = prefs.edit().putString("homeStyle", value).apply()
 
+    /** 新しい見た目（試作。球団マーク・選手の顔など）を出すか。既定は切。端末に覚える */
+    var lookOn: Boolean
+        get() = prefs.getBoolean("lookOn", false)
+        set(value) = prefs.edit().putBoolean("lookOn", value).apply()
+
     /** スタメンの行に能力まで出すか（既定は成績だけ。いしだ 2026-11-13）。端末に覚える */
     var lineupDetail: Boolean
         get() = prefs.getBoolean("lineupDetail", false)
@@ -87,6 +92,14 @@ class SessionStore(context: Context) {
     var campSeen: String?
         get() = prefs.getString("campSeen", null)
         set(value) = prefs.edit().putString("campSeen", value).apply()
+
+    /** 新しい見た目（試作）段4: 見た球団の出来事の場面（[jp.icenorth.baseball.shared.EventScene.key]。新しい順に20まで） */
+    // ⚠ JSON で持つ（鍵には球団名が入る。区切りの字を決めると、その字を含む名前で覚えられなくなる）
+    var lookSeen: List<String>
+        get() = prefs.getString("lookSeen", null)?.let { text ->
+            runCatching { OnlineJson.decodeFromString<List<String>>(text) }.getOrNull()
+        }.orEmpty()
+        set(value) = prefs.edit().putString("lookSeen", OnlineJson.encodeToString(value)).apply()
 
     /** ホームで開く新聞（地元紙・全国紙。[jp.icenorth.baseball.shared.FrontPage.Paper] の名前） */
     var homePaper: String?

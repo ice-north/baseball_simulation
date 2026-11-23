@@ -27,6 +27,7 @@ import {
   STARTER_SKIP_FATIGUE,
   RELIEF_REST_FATIGUE,
 } from './pitchingEdit.js';
+import { PlayerFace } from './look/Art.jsx';
 
 // ============================================================
 // PC版の投手起用。スタメン設定（`LineupBoard.jsx`）と**同じ考え方・同じ表**にする。
@@ -81,6 +82,7 @@ function PitcherCells({ player, starter }) {
       starter={starter}
       name={
         <>
+          <PlayerFace player={player} size={26} />
           <span onClick={(e) => e.stopPropagation()}>
             <PlayerStatsButton player={player} category="pitching" group="basic" />
           </span>

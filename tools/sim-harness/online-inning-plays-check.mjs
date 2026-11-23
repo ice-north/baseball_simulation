@@ -15,6 +15,7 @@ import {
   advanceLeagueDay,
 } from '../../server/leagueEngine.mjs';
 import { PLAY_CODES, inningPlaysOf } from '../../server/recordedStats.mjs';
+import { hasLivePlays, liveScenes } from '../../src/online/look/playByPlay.js';
 import {
   hasInningPlays,
   inningPlays,
@@ -145,6 +146,8 @@ let halves = 0;
 let rows = 0;
 let gaps = 0;
 let threeOuts = 0;
+let livePlays = 0;
+let batterOnBase = 0;
 for (const game of games) {
   assert.ok(hasInningPlays(game), `${game.gameId} に回ごとの攻撃が無い`);
   const ls = game.lineScore;
@@ -201,8 +204,37 @@ for (const game of games) {
           assert.ok(row.name && row.name !== '（記録なし）', `打者の名前が引けない: ${JSON.stringify(row)}`);
         }
       }
+      // 打席速報（新しい見た目の試作）の分: 打者の行は塁（打席の後）を持ち、前へ飛んだ打席は打球を持つ
+      let halfOuts = 0;
+      for (const raw of game.plays[inningKey(inning, half)] || []) {
+        halfOuts += Number(raw[3]) || 0;
+        if (raw[0] == null) continue;
+        const [, code, , rowOuts, bases, pos, dir, dist, la] = raw;
+        assert.ok(Number.isInteger(bases) && bases >= 0 && bases <= 7, `塁が無い: ${JSON.stringify(raw)}`);
+        // ⚠ 塁は**その打席の後**（次の打席の途中の盗塁・暴投を混ぜない。2026-11-23 レビュー）。
+        //    本塁打の後は走者なし、アウトの無い出塁の後は打者がその塁に居る（その打席で点が入っていなければ）
+        if (code === '本') assert.equal(bases, 0, `本塁打の後に走者が残っている: ${JSON.stringify(raw)}`);
+        const reached = { 安: 1, 四: 1, 死: 1, 二: 2, 三: 4 }[code];
+        if (reached && !rowOuts && halfOuts < 3) {
+          // ⚠ 点が入った打席は、打者が悪送球などで還っていることがある（三塁打＋失策で走者なし）
+          assert.ok(bases & reached || raw[2] > 0, `出塁した打者が塁に居ない: ${game.gameId} ${inning}${half} ${JSON.stringify(raw)}`);
+          batterOnBase += 1;
+        }
+        if (['本', '三', '二', '併'].includes(code)) {
+          assert.equal(raw.length, 9, `打球が無い: ${JSON.stringify(raw)}`);
+          assert.ok(pos >= 1 && pos <= 9 && Math.abs(dir) <= 45 && dist >= 0 && Number.isInteger(la), `打球の値が変: ${JSON.stringify(raw)}`);
+          livePlays += 1;
+        }
+        if (['振', '四', '死'].includes(code)) assert.equal(raw.length, 5, `前へ飛ばない打席に打球がある: ${JSON.stringify(raw)}`);
+      }
     });
   }
+  // 打席速報の場面: 打席の数と最後の点が試合と合う
+  const scenes = liveScenes(game);
+  assert.equal(scenes.length, Object.values(game.plays).flat().length, '打席速報の場面の数が行の数と違う');
+  assert.deepEqual(scenes.at(-1).score, { away: game.awayScore, home: game.homeScore }, `${game.gameId} 打席速報の最後の点が試合と違う`);
+  for (const scene of scenes) assert.ok(scene.phrase && scene.situation, `実況の文が無い: ${JSON.stringify(scene)}`);
+  assert.ok(hasLivePlays(game), `${game.gameId} が打席速報を出せない`);
   // ② 打席の数は妥当（9回で最低27打席。空の試合を通さない）
   const total = Object.values(game.plays).reduce((a, list) => a + list.length, 0);
   assert.ok(total >= 40, `${game.gameId} の打席が少なすぎる（${total}）`);
@@ -223,6 +255,6 @@ assert.equal(inningPlays({ plays: {} }, 1, 'top'), null, '無い回に中身を�
     `回ごとの攻撃が重い: ${added}B / 箱${all}B（${((added / all) * 100).toFixed(1)}%）`,
   );
   console.log(
-    `online-inning-plays-check PASS（${games.length}試合・${halves}半回・${rows}打席・打席の外の点${gaps}件・3アウトの半回${threeOuts} / 1試合 ${added}B（箱の${((added / all) * 100).toFixed(1)}%））`,
+    `online-inning-plays-check PASS（${games.length}試合・${halves}半回・${rows}打席・打席の外の点${gaps}件・3アウトの半回${threeOuts}・打球つきの長打と併殺${livePlays}・出塁の後の塁${batterOnBase} / 1試合 ${added}B（箱の${((added / all) * 100).toFixed(1)}%））`,
   );
 }

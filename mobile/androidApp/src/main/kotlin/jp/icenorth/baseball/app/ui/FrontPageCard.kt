@@ -176,6 +176,7 @@ private fun Masthead(page: FrontPage, nextAdvanceAt: String?, accent: Color, men
             }
             .padding(vertical = 3.dp),
     ) {
+        TeamMark(LocalLook.current.capTeam, size = 22.dp, modifier = Modifier.align(Alignment.CenterVertically).padding(end = 4.dp))
         Text(page.team, fontFamily = FontFamily.Serif, fontWeight = FontWeight.Black, fontSize = 14.sp, color = Ink, maxLines = 1, modifier = Modifier.weight(1f, fill = false).alignByBaseline())
         page.standing?.let { Text("　$it", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Ink, maxLines = 1, modifier = Modifier.alignByBaseline()) }
     }
@@ -250,9 +251,14 @@ private fun FrontView(page: FrontPage, accent: Color, onLink: (String) -> Unit, 
     }
 }
 
-/** 手続きのお知らせ（社告） */
+/** 手続きのお知らせ（社告）。新しい見た目（試作）では番記者のメモ（[ReporterMemo]）に替える */
 @Composable
 private fun Shako(alerts: List<String>, onOpenProcedures: () -> Unit) {
+    val note = LocalReporterNote.current
+    if (note != null && LocalLook.current.on) {
+        ReporterMemo(note, alerts, onOpenProcedures)
+        return
+    }
     if (alerts.isEmpty()) return
     Column(Modifier.padding(top = 6.dp).fillMaxWidth().border(2.dp, Red).clickable(onClick = onOpenProcedures).padding(horizontal = 8.dp, vertical = 5.dp)) {
         alerts.forEachIndexed { i, a ->

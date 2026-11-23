@@ -30,6 +30,8 @@ import {
   isCatchingGroup,
 } from './statsView.js';
 import { CONDITION_ICONS } from '../game/condition.js';
+import { useLook } from './look/LookContext.jsx';
+import { ConditionFace, PlayerFace } from './look/Art.jsx';
 
 // 能力値1つ。⚠ **PCは数字をランク色で出す**（一人用の `AbilityValue` と同じ）。
 //    以前はオンラインだけ「C」のような字だけで、移植したスタメン設定は数字、
@@ -116,6 +118,7 @@ export function TeamBrief({ view }) {
           {starter && (
             <p>
               先発枠：
+              <PlayerFace player={starter} size={22} />
               <PlayerStatsButton player={starter} panel="abilities" />{' '}
               <ConditionMark player={starter} /> 疲労{starter.fatigue ?? '—'}
             </p>
@@ -199,7 +202,9 @@ function Category({ value, setValue }) {
 //    以前はオンラインの一覧が矢印、成績の表が「普通／不調」の文字、移植した
 //    スタメン設定が顔で、同じ調子が画面ごとに3通りの見た目だった。
 //    文字はマウスを乗せると出る（`title`）。
+// ⚠ 新しい見た目（試作）では絵文字の代わりに自前の5色の顔（`look/Art.jsx`）。
 export function ConditionMark({ player }) {
+  const { on } = useLook();
   const level = conditionValue(player);
   const text = CONDITION_TEXT[level] || '未記録';
   return (
@@ -209,7 +214,7 @@ export function ConditionMark({ player }) {
       aria-label={`調子: ${text}`}
       role="img"
     >
-      {level === null ? '—' : CONDITION_ICONS[level]}
+      {level === null ? '—' : on ? <ConditionFace level={level} /> : CONDITION_ICONS[level]}
     </span>
   );
 }
@@ -371,7 +376,7 @@ function ConvertPosition({ player }) {
   );
 }
 
-function Detail({ player, close }) {
+function Detail({ player, close, lookTeam }) {
   const dialog = useRef(null);
   const [periodId, setPeriodId] = useState('current');
   const [splits, setSplits] = useState(false);
@@ -444,6 +449,8 @@ function Detail({ player, close }) {
       }}
     >
       <header>
+        {/* 新しい見た目（試作）: 顔（切のときは何も出ない） */}
+        <PlayerFace player={player} team={lookTeam} size={64} className="online-detail-face" />
         <div>
           <h2 id="online-player-title">
             {player.name}
@@ -590,6 +597,8 @@ export function PlayerStatsButton({
   children,
   className = '',
   onOpen,
+  // 新しい見た目（試作）: 小窓の顔の帽子の球団（名簿の行の顔と合わせる）。省くと選手に付いた所属か自球団
+  lookTeam,
 }) {
   const [open, setOpen] = useState(false);
   if (!player) return null;
@@ -611,6 +620,7 @@ export function PlayerStatsButton({
           initialCategory={category}
           initialGroup={group}
           initialPane={panel}
+          lookTeam={lookTeam}
           close={() => setOpen(false)}
         />
       )}
@@ -958,9 +968,11 @@ export function CompactRoster({
               group={group.id}
               className="online-roster-row"
               onOpen={onOpen}
+              lookTeam={view.teamName}
             >
               <span className="online-roster-person">
                 <span className="online-roster-name">
+                  <PlayerFace player={player} team={view.teamName} size={24} />
                   <span className="online-roster-player-name">
                     {player.name}
                   </span>

@@ -6,6 +6,7 @@ import { getZoneProfile, zoneHeatmap } from '../game/batterZone.js';
 import { getAbilityRank, getRankColor } from '../utils/constants.js';
 import { teamLabel } from './gameText.js';
 import { withoutPlaceholderHighSchool } from '../utils/careerHistory.js';
+import { useLook } from './look/LookContext.jsx';
 
 // ============================================================
 // 選手の詳細（1画面）。
@@ -79,6 +80,7 @@ function StatRow({ player, category, groups }) {
  * ⚠ 色だけに頼らない——数字そのものを出しているので、色は補助。
  */
 function AbilityBlock({ title, note, rows, help }) {
+  const look = useLook();
   // 説明を開いている項目（押すと出す。もう一度押すと閉じる）。
   // ⚠ 触れると出る（title）だけにしないこと。スマホのブラウザでは触れても出ない
   const [open, setOpen] = useState(null);
@@ -94,56 +96,51 @@ function AbilityBlock({ title, note, rows, help }) {
         {note && <small>{note}</small>}
       </h4>
       <dl>
-        {shown.map(([label, value], i) => (
-          <div key={`${label}:${i}`}>
-            <dt
-              className={ABILITY_HELP[label] ? 'has-help' : undefined}
-              title={ABILITY_HELP[label] || undefined}
-              role={ABILITY_HELP[label] ? 'button' : undefined}
-              tabIndex={ABILITY_HELP[label] ? 0 : undefined}
-              aria-expanded={ABILITY_HELP[label] ? open === label : undefined}
-              onClick={ABILITY_HELP[label] ? () => toggle(label) : undefined}
-              onKeyDown={
-                ABILITY_HELP[label]
-                  ? (e) => {
-                      if (e.key === 'Enter' || e.key === ' ') {
-                        e.preventDefault();
-                        toggle(label);
+        {shown.map(([label, value], i) => {
+          // 段位（S〜F）。数字の色・バー・札で同じものを使う
+          const rank =
+            typeof value === 'number' ? getAbilityRank(value, label === '球速', label === 'スタミナ') : null;
+          const rankColor = rank ? getRankColor(rank) : '';
+          return (
+            <div key={`${label}:${i}`}>
+              <dt
+                className={ABILITY_HELP[label] ? 'has-help' : undefined}
+                title={ABILITY_HELP[label] || undefined}
+                role={ABILITY_HELP[label] ? 'button' : undefined}
+                tabIndex={ABILITY_HELP[label] ? 0 : undefined}
+                aria-expanded={ABILITY_HELP[label] ? open === label : undefined}
+                onClick={ABILITY_HELP[label] ? () => toggle(label) : undefined}
+                onKeyDown={
+                  ABILITY_HELP[label]
+                    ? (e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          toggle(label);
+                        }
                       }
-                    }
-                  : undefined
-              }
-            >
-              {label}
-            </dt>
-            {/* ⚠ 数字にデータバーを添える（先方指摘 2026-11-16: 数字だけで見づらい）。
-                長さは段位と同じ物差し（球速・スタミナは0〜100に直す。`abilityBarPercent`）、
-                色は数字と同じ段位の色（`currentColor`） */}
-            {typeof value === 'number' && (
-              <span
-                className={`online-ability-bar ${getRankColor(getAbilityRank(value, label === '球速', label === 'スタミナ'))}`}
-                aria-hidden="true"
+                    : undefined
+                }
               >
-                <i style={{ width: `${abilityBarPercent(value, label)}%` }} />
-              </span>
-            )}
-            <dd
-              className={
-                typeof value === 'number'
-                  ? getRankColor(
-                      getAbilityRank(
-                        value,
-                        label === '球速',
-                        label === 'スタミナ',
-                      ),
-                    )
-                  : ''
-              }
-            >
-              {value}
-            </dd>
-          </div>
-        ))}
+                {label}
+              </dt>
+              {/* ⚠ 数字にデータバーを添える（先方指摘 2026-11-16: 数字だけで見づらい）。
+                  長さは段位と同じ物差し（球速・スタミナは0〜100に直す。`abilityBarPercent`）、
+                  色は数字と同じ段位の色（`currentColor`） */}
+              {/* 新しい見た目（試作）: 段位の字を札で添える（数字・バーはそのまま） */}
+              {look.on && typeof value === 'number' && (
+                <b className={`online-rank-chip ${rankColor}`} aria-hidden="true">
+                  <span>{rank}</span>
+                </b>
+              )}
+              {typeof value === 'number' && (
+                <span className={`online-ability-bar ${rankColor}`} aria-hidden="true">
+                  <i style={{ width: `${abilityBarPercent(value, label)}%` }} />
+                </span>
+              )}
+              <dd className={rankColor}>{value}</dd>
+            </div>
+          );
+        })}
       </dl>
       {open && ABILITY_HELP[open] && (
         <p className="online-ability-help" role="note">

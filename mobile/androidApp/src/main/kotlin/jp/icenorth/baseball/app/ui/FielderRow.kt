@@ -25,6 +25,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -33,7 +34,6 @@ import jp.icenorth.baseball.shared.FIELDER_REST_FATIGUE
 import jp.icenorth.baseball.shared.subPositions
 import jp.icenorth.baseball.shared.Player
 import jp.icenorth.baseball.shared.SUBSTITUTE_MIN_FITNESS
-import jp.icenorth.baseball.shared.conditionIcon
 import jp.icenorth.baseball.shared.fatigueTone
 import jp.icenorth.baseball.shared.positionGroup
 import jp.icenorth.baseball.shared.positionLabel
@@ -172,8 +172,13 @@ fun FielderRow(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(3.dp),
             ) {
+                if (player != null) PlayerFace(player, size = 28.dp)
+                // ⚠ 空き枠は今まで通り置き字だけ（調子の絵文字も空白も付けない）
+                val (nameText, nameInline) =
+                    if (player != null) conditionName(player.condition, player.name) else AnnotatedString(placeholder) to emptyMap()
                 Text(
-                    if (player != null) "${conditionIcon(player.condition)} ${player.name}" else placeholder,
+                    nameText,
+                    inlineContent = nameInline,
                     fontWeight = FontWeight.SemiBold,
                     color = if (player != null) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.error,
                     maxLines = 1,
