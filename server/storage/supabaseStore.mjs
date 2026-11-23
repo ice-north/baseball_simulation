@@ -560,10 +560,10 @@ export class SupabaseStore {
    * 命令を1回走らせ、変更があれば公開するビュー・記録の索引・保存する形を作る（`transaction` の1回ぶん）。
    * `loaded.run` があれば軽い読み（保存する形は `run.inspect`。null なら全体で読み直す）
    */
-  async attemptCommand(fn, loaded, row) {
+  async attemptCommand(fn, loaded, row, control) {
     let views, archives, prepared;
     const value = loaded.bundle;
-    const outcome = await fn(value);
+    const outcome = await fn(value, control);
     if (!outcome?.unchanged) {
       // ⚠ **ビューはリーグの参加者ぶん作る**。環境変数で固定していた頃の
       //    `this.members` を使うと、招待で増えた人のぶんが作られず、
@@ -641,6 +641,39 @@ export class SupabaseStore {
     }
     return (await this.rpc('online_claim', { p_token: token }))[0];
   }
+  /**
+   * 1回の処理（`transaction`）の中で使う、試行の印（定期処理の打ち切り対策）。
+   * `markAttempt(key)` は重い処理を始める**前に**管理行へ印と回数を書き（`online_attempt`）、
+   * これより前に終わらなかった同じ鍵の試行の数を返す。公開すると印は消える。
+   * ⚠ 印は保存（Storage）とは別に、すぐ書く。Vercel の300秒で打ち切られると保存も例外の処理も
+   *    通らないので、保存の中に持つと打ち切りを数えられない。
+   * ⚠ 関数がまだ無い環境（マイグレーション 202611230001 の適用前）では印を付けずに null を返す
+   *    （従来どおり動く）。軽い読みから全体の読み直しに移っても、同じ鍵は1回しか数えない。
+   */
+  attemptControl(token) {
+    const marks = new Map();
+    let marked = false;
+    return {
+      marked: () => marked,
+      markAttempt: async (key) => {
+        if (marks.has(key)) return marks.get(key);
+        let previous = null;
+        if (!this.attemptUnsupported) {
+          try {
+            previous = await this.rpc('online_attempt', { p_token: token, p_key: key });
+          } catch (error) {
+            if (error.storageStatus !== 404) throw error;
+            this.attemptUnsupported = true;
+            console.error('online: 試行の印の関数（online_attempt）がありません。supabase/migrations の 202611230001_online_attempt.sql を適用してください');
+          }
+        }
+        if (Number.isInteger(previous)) marked = true;
+        else previous = null;
+        marks.set(key, previous);
+        return previous;
+      },
+    };
+  }
   async transaction(fn, { full = false } = {}) {
     const token = randomUUID();
     const row = await this.claim(token);
@@ -651,6 +684,8 @@ export class SupabaseStore {
       'busy',
     );
     let published = false;
+    // 試行の印（`markAttempt`）。印を付けた処理は、公開と同時に印を消す（`online_publish_attempt`）
+    const control = this.attemptControl(token);
     try {
       // ⚠ まず軽い読み、だめなら全体で読み直す判定は `runWithLightRead`（検査用の保存と共通）
       const { loaded, outcome, views, archives, prepared } = await runWithLightRead({
@@ -659,13 +694,13 @@ export class SupabaseStore {
           const loaded = await this.loadSnapshot(row, { light });
           return { ...loaded, run: loaded.light || null };
         },
-        attempt: (loaded) => this.attemptCommand(fn, loaded, row),
+        attempt: (loaded) => this.attemptCommand(fn, loaded, row, control),
       });
       if (outcome?.unchanged) return outcome.value;
       const { path, refs } = await this.writeSnapshot(prepared, loaded.refs);
       const partHistory = [refs, ...(row.views?._parts?.history || [])].slice(0, 3);
       views._parts = { history: partHistory };
-      published = await this.rpc('online_publish', {
+      published = await this.rpc(control.marked() ? 'online_publish_attempt' : 'online_publish', {
         p_token: token,
         p_generation: row.generation,
         p_path: path,

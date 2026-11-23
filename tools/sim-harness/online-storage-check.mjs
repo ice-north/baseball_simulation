@@ -26,6 +26,9 @@ let missingDetail = null;
 const controlSelects = [];
 const claimSelects = [];
 let rejectNarrowSelect = false;
+// 試行の印の関数（`online_attempt`）がまだ無い環境（マイグレーション適用前）をまねる
+let attemptMissing = false;
+const attemptCalls = [];
 const pickColumns = (source, select) =>
   Object.fromEntries(
     select.split(',').map((item) => {
@@ -58,7 +61,18 @@ const fetchImpl = async (url, options) => {
   } else if (path.endsWith('/online_release')) {
     if (lease === body.p_token) lease = null;
     value = null;
-  } else if (path.endsWith('/online_publish')) {
+  } else if (path.endsWith('/online_attempt')) {
+    attemptCalls.push(body.p_key);
+    if (attemptMissing)
+      return new Response(JSON.stringify({ code: 'PGRST202' }), { status: 404 });
+    if (lease !== body.p_token) value = null;
+    else {
+      const count = row.attempt_key === body.p_key ? (row.attempt_count || 0) + 1 : 1;
+      row = { ...row, attempt_key: body.p_key, attempt_count: count };
+      value = count - 1;
+    }
+  } else if (path.endsWith('/online_publish') || path.endsWith('/online_publish_attempt')) {
+    const finishing = path.endsWith('/online_publish_attempt');
     if (rejectPublish) {
       value = false;
       lease = null;
@@ -73,6 +87,9 @@ const fetchImpl = async (url, options) => {
           .slice(0, 2),
         views: body.p_views,
         sessions: body.p_sessions,
+        // 参加者の操作の公開（online_publish）は印を残し、試行を終える公開は消す
+        attempt_key: finishing ? null : row.attempt_key ?? null,
+        attempt_count: finishing ? 0 : row.attempt_count ?? 0,
       };
       lease = null;
       value = true;
@@ -456,6 +473,56 @@ assert.equal(
   'restored-another-year-1',
   '異なるバックアップの確定年度を以前の参照で上書きしない',
 );
+// ⚠ 定期処理の試行の印（監査 2026-11-23）。Vercel の300秒で打ち切られると保存も例外の処理も
+//    通らないので、印は**重い処理の前に**保存とは別に管理行へ書く（`online_attempt`）。
+//    打ち切られた試行の印は残り、正常に終えた公開（`online_publish_attempt`）で消える。
+//    参加者の操作の公開では消さない（打ち切りの合間に操作が通るたびに数え直すと止まらない）
+{
+  const killedAttempt = () =>
+    store.transaction(async (b, control) => {
+      const previous = await control.markAttempt('7|day|D');
+      // 軽い読みから全体の読み直しに移っても、同じ処理の中では1回しか数えない
+      assert.equal(await control.markAttempt('7|day|D'), previous, '同じ処理の中で印を二重に数えた');
+      throw new Error('打ち切り（まね）');
+    });
+  row = { ...row, attempt_key: null, attempt_count: 0 };
+  await assert.rejects(killedAttempt(), /打ち切り/);
+  await assert.rejects(killedAttempt(), /打ち切り/);
+  assert.equal(row.attempt_count, 2, '打ち切られた試行の印が残っていない');
+  assert.equal(lease, null, '打ち切りのまねで占有を返していない');
+  await store.transaction((b) => {
+    b.sessions.a = 'between-attempts';
+  });
+  assert.equal(row.attempt_count, 2, '参加者の操作の公開で試行の回数を消した');
+  let seen;
+  await store.transaction(async (b, control) => {
+    seen = await control.markAttempt('7|day|D');
+    b.sessions.a = 'attempt-done';
+  });
+  assert.equal(seen, 2, 'これより前に終わらなかった試行の数を返していない');
+  assert.equal(row.attempt_count, 0, '正常に終えた試行の公開で回数を消していない');
+  assert.equal(row.attempt_key, null);
+  // 鍵が変われば数え直す
+  await assert.rejects(killedAttempt(), /打ち切り/);
+  await store.transaction(async (b, control) => {
+    seen = await control.markAttempt('7|day|E');
+    throw new Error('打ち切り（まね）');
+  }).catch(() => {});
+  assert.equal(seen, 0, '別の試行の回数を引き継いだ');
+  // 関数がまだ無い環境では印を付けずに従来どおり動く（毎回問い合わせない）
+  attemptMissing = true;
+  const older = new SupabaseStore({ url: 'https://fixture.test', serviceKey: 'test-only', members: [{ userId: 'a' }], adminId: 'a', fetchImpl });
+  attemptCalls.length = 0;
+  for (let i = 0; i < 2; i++)
+    await older.transaction(async (b, control) => {
+      assert.equal(await control.markAttempt('7|day|F'), null, '関数が無いのに回数を返した');
+      b.sessions.a = `older-${i}`;
+    });
+  assert.equal(attemptCalls.length, 1, '関数が無いと分かった後も問い合わせている');
+  assert.equal((await store.read()).sessions.a, 'older-1', '関数が無い環境で公開できない');
+  attemptMissing = false;
+}
+
 // HTTP認証、メソッド、JSON/CORS、ユーザーID偽装の入口を確認する。
 const handler = createHandler(
   {
@@ -704,5 +771,5 @@ assert.equal(
 }
 
 console.log(
-  'online-storage-check PASS（Storage公開境界・リース失効・応答喪失・小さい閲覧・招待された人の入口・HTTP入口 / 外部サービスはfixture）',
+  'online-storage-check PASS（Storage公開境界・リース失効・応答喪失・小さい閲覧・招待された人の入口・HTTP入口・定期処理の試行の印 / 外部サービスはfixture）',
 );

@@ -23,6 +23,18 @@ import {
  *    ときだけでよい（8ターンぶん＝45分なら6時間）。
  */
 const STALL_AFTER_MS = TURN_MINUTES * 8 * 60000;
+/**
+ * 定期処理の同じ試行（同じリーグ・同じ日）が、これだけ続けて終わらなければ止める。
+ *
+ * ⚠ Vercel の300秒で打ち切られると、例外の処理（status を error にする所）を通らず、
+ *    保存も変わらない。リースが切れた後の cron が同じ日を最初からやり直し、
+ *    `STALL_AFTER_MS`（≒6時間）を過ぎるまで約10分おきに繰り返していた。そのたびに約5分
+ *    ロックを持ち、参加者の操作が「処理中」で弾かれた（監査 2026-11-23、いしだ「おすすめで」）。
+ *    重い処理の前に保存とは別の所へ印を付け（`markAttempt`）、公開で消す。
+ */
+const ATTEMPT_LIMIT = 3;
+/** 試行の印の鍵。同じリーグ（種）・同じ処理（手続きの締め切り／進行の枠）なら同じになる */
+const attemptKey = (league, kind, at) => `${league.seed ?? ''}|${kind}|${at}`;
 import { isCurrent, migrateLeague } from '../src/online/leagueMigration.js';
 import {
   projectLeague,
@@ -894,7 +906,13 @@ export class LeagueService {
   async tick() {
     if (this.store.isDue && !(await this.store.isDue(this.clock())))
       return { advanced: false };
-    return this.store.transaction(async (bundle) => {
+    return this.store.transaction(async (bundle, control) => {
+      // 試行の印を付け、これより前に終わらなかった同じ試行が上限に達していれば true。
+      // 印を持たない保存先（ローカルの FileStore・関数の適用前の本番）は数えない
+      const exhausted = async (key) => {
+        const previous = await control?.markAttempt?.(key);
+        return Number.isInteger(previous) && previous >= ATTEMPT_LIMIT;
+      };
       // ⚠ **定期処理でも移行する**。誰も操作しなくても、5分以内（cron の刻み）に自然に直る。
       //    直せない形（作り直すしかない版）なら止めるだけにして、
       //    定期処理そのものを例外で落とさない
@@ -912,6 +930,17 @@ export class LeagueService {
       // ⚠ 自動決定に失敗して止めた後（status が error）は、管理者が再開するまで
       //    やり直さない。定期処理（5分ごとの cron）のたびに同じ失敗を繰り返して記録を埋めないため。
       if (l?.phase?.deadline && l.phase.deadline <= now && l.status !== 'error') {
+        // ⚠ 打ち切られて終わらない試行を繰り返さない（`ATTEMPT_LIMIT`）。止めたことも公開するので印は消え、
+        //    管理者が「再開」すると次の定期処理から数え直す
+        if (await exhausted(attemptKey(l, `phase:${l.phase.id}`, l.phase.deadline))) {
+          console.error('online auto resolve did not finish:', l.phase.id);
+          l.status = 'error';
+          l.nextAdvanceAt = null;
+          l.error = `締め切りの自動決定が${ATTEMPT_LIMIT}回続けて時間内に終わりませんでした。状態を確認して管理者が再開してください`;
+          l.revision++;
+          l.updatedAt = this.clock();
+          return { value: { advanced: false, autoResolveFailed: true, attemptsExhausted: true } };
+        }
         const working = clone(l);
         try {
           const resolved = await this.engine((engine) =>
@@ -964,6 +993,12 @@ export class LeagueService {
         l.nextAdvanceAt = null;
         l.error =
           '定期進行が長く止まっていました。状態を確認して管理者が再開してください';
+      } else if (await exhausted(attemptKey(l, 'day', due))) {
+        // ⚠ 打ち切られて終わらない試行を繰り返さない（`ATTEMPT_LIMIT`）。止めたことも公開するので印は消える
+        console.error('online tick did not finish:', due);
+        l.status = 'error';
+        l.nextAdvanceAt = null;
+        l.error = `日次処理が${ATTEMPT_LIMIT}回続けて時間内に終わりませんでした。状態を確認して管理者が再開してください`;
       } else {
         const working = clone(l);
         try {
