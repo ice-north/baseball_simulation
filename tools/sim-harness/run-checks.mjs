@@ -144,8 +144,8 @@ const DIST_UI = [
   { name: 'online-invite-ui-check', slow: 8 }, // check:online:invite-ui
   { name: 'online-edit-ui-check', slow: 10 }, // check:online:edit-ui
   { name: 'online-label-ui-check', slow: 17 }, // check:online:label-ui
-  { name: 'online-replay-ui-check', slow: 38 }, // check:online:replay-ui
-  { name: 'online-mobile-gameplay-ui-check', slow: 49 }, // check:online:mobile-gameplay-ui
+  { name: 'online-replay-ui-check', slow: 21 }, // check:online:replay-ui
+  { name: 'online-mobile-gameplay-ui-check', slow: 33 }, // check:online:mobile-gameplay-ui
   { name: 'online-paper-ui-check', slow: 12 }, // check:online:paper-ui
   { name: 'online-look-ui-check', slow: 20 }, // check:online:look-ui
 ];

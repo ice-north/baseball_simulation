@@ -3,7 +3,7 @@
 //    `online-records-check` 側で明示的に記録を有効にして作っている。
 //    ここで `process.env` を立てても **ESM の import が先に走るので間に合わない**。
 import assert from 'node:assert/strict';
-import { recordedFixture } from './online-records-check.mjs';
+import { buildRecordedFixture } from './lib/recordedFixture.mjs';
 import {
   projectLeague,
   projectGameInfo,
@@ -17,6 +17,8 @@ import { launchBrowser, distHtml } from './lib/browser.mjs';
 import { shortLastLines } from './lib/textWrap.mjs';
 import { failureShots } from './lib/failureShots.mjs';
 
+let fixture = null;
+const recordedFixture = () => (fixture ??= buildRecordedFixture());
 const html = await distHtml();
 const base = 'http://localhost:3000';
 const browser = await launchBrowser();
@@ -32,7 +34,7 @@ const noScroll = async (locator, message) => {
 };
 try {
   for (const width of [320, 360, 390, 767]) {
-    const league = structuredClone(recordedFixture);
+    const league = structuredClone(recordedFixture());
     const team = league.game.teams[league.members[0].teamName];
     // PCで設定した値を、スマホから一部変更しても失わない。
     team.onlineTactics = {
