@@ -1214,7 +1214,9 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false, observer = 
             assistBy = fieldingPosition || null;
             continue; // 刺された → 進塁も得点もしない
           }
-          if (attempt) newBase++; // 賭けに勝って余分に進塁
+          // 賭けに勝って余分に進塁。ただし先を走る走者がその塁に止まっていたら進まない
+          // （以前は同じ塁に2人が重なり、先の走者が黙って消えていた。手動試合と同じ門番）
+          if (attempt && (newBase + 1 >= 3 || !newBases[newBase + 1])) newBase++;
         }
         // 悪送球・中継ミス: 送球が乱れているので走者が余分に1つ進む
         if (extraAdvance) newBase++;
@@ -1228,13 +1230,9 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false, observer = 
       }
     }
 
-    // 打者自身を塁に配置
-    if (advancement < 3) {
-      newBases[advancement - 1] = batter || true;
-    } else {
-      runsScored++;
-      if (isUnearnedRunner(batter)) unearnedRunsScored++;
-    }
+    // 打者自身を塁に配置（三塁打は三塁に残る。本塁打は上で先に返している。
+    // 以前は `advancement < 3` で分けていたので、三塁打の打者が必ず生還していた）
+    newBases[advancement - 1] = batter || true;
 
     return { bases: newBases, runsScored, unearnedRunsScored, outsMade, assistBy };
   };

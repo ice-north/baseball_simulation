@@ -40,6 +40,8 @@ const CHECKS = [
   { name: 'contract-scope-check', group: 'quick', slow: 2 },
   { name: 'pool-leak-check', group: 'quick', slow: 2 },
   { name: 'base-state-check', group: 'quick', slow: 1 },
+  // 安打の打席で走者が消えない・三塁打の打者が三塁に残る（自動試合）
+  { name: 'runner-count-check', group: 'quick', slow: 3 },
   { name: 'bunt-check', group: 'quick', slow: 1 },
   { name: 'growth-cap-check', group: 'quick', slow: 1 },
   // 自然成長（表示＝実際・係数1.0で平均+1・衰え始めの年齢・衰えの緩さ）
