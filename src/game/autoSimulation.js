@@ -1569,7 +1569,9 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false, observer = 
   // ⚠ 捕手に代打を出すと、代打の野手が捕手の守備位置をそのまま継いでいた（`executePinchHit` は
   //    退いた選手の守備位置を写す）。リード・捕手の守備がその野手の値で回り、捕手別の記録にも
   //    野手が載っていた（1年で約280打席）。実際の野球と同じく、次の守備で控えの捕手が入る。
-  //    控えの捕手が居なければそのまま（守る人が居ないので野手がかぶる）。
+  //    控えの捕手が先に代打で出て別の守備位置に居れば、守備位置を入れ替える。
+  //    どちらも居なければそのまま（代打の側で、控えの捕手を使い切らないようにしている）。
+  //    ⚠ 一人用も同じ試合の式なので同じく効く。
   //    ⚠ 「守備固めをしない」設定でも替える（采配の好みではなく、守備位置を埋め直すだけ）
   const restoreRealCatcher = (team) => {
     const masked = team.players.find(p => p.position === 'catcher' && p.battingOrder > 0 && !p._isDH);
