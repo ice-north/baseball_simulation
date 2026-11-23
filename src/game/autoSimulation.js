@@ -2326,6 +2326,9 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false, observer = 
                 if (gameState.isTopInning) gameState.score.away++;
                 else gameState.score.home++;
                 batter.gameStats.batting.rbis++;
+                // 犠牲フライは打数に入れない（上で足した1を戻し、犠飛として数える）
+                batter.gameStats.batting.atBats--;
+                batter.gameStats.batting.sacrificeFlies = (batter.gameStats.batting.sacrificeFlies || 0) + 1;
                 pitcher.gameStats.pitching.runsAllowed++;
                 creditRuns(pitcher, 1, sfUnearned);
                 atBatDamagePoints += 10; // 失点=10ダメージ
@@ -2437,9 +2440,9 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false, observer = 
 
     if (observed) {
       const after = batter.gameStats.batting;
-      const delta = Object.fromEntries(['atBats','hits','doubles','triples','homeruns','rbis','walks','hitByPitch','strikeouts','sacrificeBunts'].map(key=>[key,(after[key] || 0)-(observed.before[key] || 0)]));
+      const delta = Object.fromEntries(['atBats','hits','doubles','triples','homeruns','rbis','walks','hitByPitch','strikeouts','sacrificeBunts','sacrificeFlies'].map(key=>[key,(after[key] || 0)-(observed.before[key] || 0)]));
       // 盗塁死や暴投サヨナラ、球数上限の未完了打席は対戦打席へ加えない。
-      const completed = delta.atBats + delta.walks + delta.hitByPitch + delta.sacrificeBunts > 0;
+      const completed = delta.atBats + delta.walks + delta.hitByPitch + delta.sacrificeBunts + delta.sacrificeFlies > 0;
       observer.plateAppearance({ ...observed, delta, completed, scoreAfter: { ...gameState.score }, outs: pitcher.gameStats.pitching.outs - (observed.resultStartOuts ?? pitcher.gameStats.pitching.outs),
         runs: (pitcher.gameStats.pitching.runsAllowed || 0) - observed.runsBefore,
         earnedRuns: (pitcher.gameStats.pitching.earnedRuns || 0) - observed.earnedBefore });
@@ -3041,6 +3044,7 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false, observer = 
         const gb = player.gameStats.batting || {};
         const gp = player.gameStats.pitching || {};
         const appeared = (gb.atBats || 0) > 0 || (gb.walks || 0) > 0 || (gb.hitByPitch || 0) > 0
+          || (gb.sacrificeFlies || 0) > 0
           || (gp.outs || 0) > 0 || (gp.pitches || 0) > 0
           || (player.battingOrder || 0) > 0;
         if (appeared) playerData._playedToday = true;
@@ -3052,7 +3056,8 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false, observer = 
       if (player.gameStats.batting.atBats > 0
           || player.gameStats.batting.walks > 0
           || player.gameStats.batting.hitByPitch > 0
-          || (player.gameStats.batting.sacrificeBunts || 0) > 0) {   // 犠打だけの試合も出場
+          || (player.gameStats.batting.sacrificeBunts || 0) > 0     // 犠打だけの試合も出場
+          || (player.gameStats.batting.sacrificeFlies || 0) > 0) {  // 犠飛だけの試合も
         const b = player.gameStats.batting;
         const season = playerData.seasonStats.batting;
 
@@ -3069,6 +3074,8 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false, observer = 
         season.stolenBases = (season.stolenBases || 0) + (b.stolenBases || 0);
         season.caughtStealing = (season.caughtStealing || 0) + (b.caughtStealing || 0);
         season.sacrificeBunts = (season.sacrificeBunts || 0) + (b.sacrificeBunts || 0);
+        // 犠飛は打った選手にだけ項目を足す（保存を膨らませない。読む側は無ければ 0）
+        if (b.sacrificeFlies) season.sacrificeFlies = (season.sacrificeFlies || 0) + b.sacrificeFlies;
 
         // 経験値蓄積（出場1 + 打席数/3）
         const expGained = 1 + Math.floor(b.atBats / 3);

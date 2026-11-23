@@ -11,6 +11,7 @@
 //  - 1球も投げていない投手に勝ちが付かない（攻撃中に継投していた）
 //  - 投手の失点の合計＝相手の得点（1死も取れずに降りた投手の失点が消えていた）
 //  - DHへの代打は守備に就かない（本来の野手と守備位置が重なっていた）
+//  - 犠牲フライは打数に入れず犠飛として数える（以前は打数に入り、犠飛の項目が無かった）
 //
 // 使い方: node tools/sim-harness/sim-integrity-check.mjs
 // ============================================================
@@ -30,6 +31,16 @@ const note = (key, example) => {
 };
 
 let games = 0;
+let sacFlies = 0;
+// 打席ごとの記録（対人版と同じ観測。乱数と試合の記録には触れない）
+const observer = {
+  runnerOut() {},
+  plateAppearance(e) {
+    if (!e.completed || !e.result?.isOutfieldFly || !(e.delta.rbis > 0)) return;
+    sacFlies++;
+    if (e.delta.atBats !== 0 || e.delta.sacrificeFlies !== 1) note('犠牲フライが打数に入った', e.delta);
+  },
+};
 for (const useDH of [false, true]) {
   LEAGUE_SETTINGS.useDH = useDH;
   const names = buildLeague(8, 26, 1);
@@ -40,7 +51,7 @@ for (const useDH of [false, true]) {
       for (const n of [home, away]) {
         for (const p of TEAMS_DATA[n].players) before[p.id] = p.seasonStats?.pitching?.runsAllowed || 0;
       }
-      const r = autoSimulateGame(home, away, false, 4242 + games);
+      const r = autoSimulateGame(home, away, false, 4242 + games, observer);
       games++;
 
       for (const ch of r.pitcherChanges || []) {
@@ -75,6 +86,7 @@ for (const useDH of [false, true]) {
   }
 }
 LEAGUE_SETTINGS.useDH = false;
+if (sacFlies === 0) note('犠牲フライが1本も無い（検査が効いていない）', { games });
 
 assert.deepEqual(problems, {}, `自動試合の継投・記録に不整合がある（${games}試合）: ${JSON.stringify(problems)}`);
-console.log(`■ 自動試合の継投と記録: OK（${games}試合 / 守護神の空振り継投なし / 再登板なし / 0球の勝ちなし / 失点の合計一致 / DH代打は守備に就かない）`);
+console.log(`■ 自動試合の継投と記録: OK（${games}試合 / 守護神の空振り継投なし / 再登板なし / 0球の勝ちなし / 失点の合計一致 / DH代打は守備に就かない / 犠飛${sacFlies}本は打数に入らない）`);
