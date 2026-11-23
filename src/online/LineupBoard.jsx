@@ -29,6 +29,7 @@ import {
   REST_TEXT,
   LOW_FITNESS,
 } from './lineupEdit.js';
+import { PlayerFace, TeamMark } from './look/Art.jsx';
 
 // ============================================================
 // PC版のスタメン設定。**スタメンを決めるときに比べたいものを、1つの表で比べる**。
@@ -107,7 +108,10 @@ function NextOpponents({ view }) {
                 ? `第${turnOfDate(game.date, view.seasonTurns)}ターン`
                 : ''}
             </small>
-            <strong>{teamShort(opponent)}</strong>
+            <strong>
+              <TeamMark team={opponent} size={18} />
+              {teamShort(opponent)}
+            </strong>
             {name ? (
               <span>
                 {name}
@@ -151,6 +155,7 @@ function PlayerCells({ player, fitness, fitnessPosition, restAt = REST_FATIGUE }
         className={`online-lineup-person online-fatigue-${getFatigueTone(player.fatigue) || 'none'}`}
         title={FATIGUE_TONE_TEXT[getFatigueTone(player.fatigue)]}
       >
+        <PlayerFace player={player} size={26} />
         <span onClick={(e) => e.stopPropagation()}>
           <PlayerStatsButton player={player} category="batting" group="basic" />
         </span>

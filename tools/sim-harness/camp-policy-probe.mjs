@@ -4,6 +4,7 @@
 //    書いている。練習の式（`campTraining.js`・`trainingPolicy.js`）を変えたら
 //    これを回して、目安の数字を書き直すこと。
 //    node tools/sim-harness/camp-policy-probe.mjs [回数=6]
+import { quiet } from './lib/quiet.mjs';
 import {
   createLeague,
   submitPhase,
@@ -21,15 +22,6 @@ import {
 import { CAMP_DIRECTIONS, CAMP_PHASES } from '../../src/online/shared.js';
 
 const RUNS = Number(process.argv[2] || 6);
-const quiet = (fn) => {
-  const log = console.log;
-  console.log = () => {};
-  try {
-    return fn();
-  } finally {
-    console.log = log;
-  }
-};
 const NOW = '2026-10-26T15:00:00.000Z';
 const league = quiet(() => createLeague({ members: [{ userId: 'a' }], now: NOW }));
 quiet(() =>

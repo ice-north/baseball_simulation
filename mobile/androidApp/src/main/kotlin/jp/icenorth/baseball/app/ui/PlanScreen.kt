@@ -82,7 +82,6 @@ import jp.icenorth.baseball.shared.FIELDER_FORCE_REST_FATIGUE
 import jp.icenorth.baseball.shared.RestPlan
 import jp.icenorth.baseball.shared.TACTIC_FIELDS
 import jp.icenorth.baseball.shared.at
-import jp.icenorth.baseball.shared.conditionIcon
 import jp.icenorth.baseball.shared.list
 import jp.icenorth.baseball.shared.num
 import jp.icenorth.baseball.shared.obj
@@ -822,7 +821,9 @@ private fun PitcherRow(order: String, player: Player?, role: String?, starter: B
         Column(Modifier.weight(1f).clickable(onClick = onRole)) {
             // ⚠ 札は折り返す（名前が長い・札が3つ並ぶと、1行に収まらず右の札が切れていた）
             FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Text("${conditionIcon(player?.condition)} ${player?.name ?: "?"}", fontWeight = FontWeight.SemiBold, modifier = Modifier.align(Alignment.CenterVertically))
+                if (player != null) PlayerFace(player, size = 28.dp, modifier = Modifier.align(Alignment.CenterVertically))
+                val (nameText, nameInline) = conditionName(player?.condition, player?.name ?: "?")
+                Text(nameText, inlineContent = nameInline, fontWeight = FontWeight.SemiBold, modifier = Modifier.align(Alignment.CenterVertically))
                 val tag = Modifier.align(Alignment.CenterVertically)
                 if (role != null) Box(tag) { Tag(roleLabel(role), MaterialTheme.colorScheme.primary) }
                 // 野手登録の選手（二刀流）。本職の守備位置も出す

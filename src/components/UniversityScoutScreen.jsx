@@ -94,13 +94,6 @@ const UniversityScoutScreen = ({ seasonData, onComplete, onBack }) => {
 
   const remainingSlots = maxSlots - recruited.length;
 
-  const getRateColor = (rate) => {
-    if (rate >= 70) return 'text-red-400';
-    if (rate >= 50) return 'text-yellow-400';
-    if (rate >= 30) return 'text-green-400';
-    return 'text-gray-300';
-  };
-
   const recColor = (g) => ({ S: 'text-red-400', A: 'text-orange-400', B: 'text-yellow-400', C: 'text-green-400', D: 'text-blue-400' }[g] || 'text-gray-400');
 
   const handleInvestigate = (id) => {

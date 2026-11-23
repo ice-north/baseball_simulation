@@ -5,7 +5,7 @@ import { POSITION_NAMES, getAbilityColor, getPositionSortIndex } from '../utils/
 import { AbilityValue } from './AbilityValue.jsx';
 import { processCorporateRetirements, executeDepartures } from '../corporate/scoutingSystem.js';
 import { getPlayerSalary, getStaffSalary, convertPlayerToStaff, STAFF_ABILITIES, MAX_STAFF } from '../corporate/staffData.js';
-import { getReputationBudgetBonus, getManagingBudgetBonus, getTournamentBudgetBonus, getSponsorIncome, generateSponsorOffers, acceptSponsor, SPONSOR_TIERS } from '../corporate/corporateInit.js';
+import { budgetBreakdown, generateSponsorOffers, acceptSponsor, SPONSOR_TIERS } from '../corporate/corporateInit.js';
 import { getTeamStaffBonus, STAFF_GRADES } from '../corporate/staffData.js';
 import { hashSeed, withSeededRandom } from '../game/rng.js';
 import ConfirmBar from './ConfirmBar.jsx';
@@ -43,13 +43,7 @@ const CorporateDepartureScreen = ({ seasonData, allTeams, onComplete }) => {
 
   // 予算計算
   const staffBonus = getTeamStaffBonus(staff);
-  const baseBudget = cd?.budget || 12000;
-  const reputation = cd?.reputation || 0;
-  const reputationBonus = cd?.yearlyBudgetBonus ?? getReputationBudgetBonus(reputation);
-  const managingValue = Math.max(...staff.map(s => s.abilities?.managing || 0), 0);
-  const managingBonus = getManagingBudgetBonus(managingValue);
-  const tournamentBonus = getTournamentBudgetBonus(cd);
-  const currentSponsorIncome = getSponsorIncome(cd);
+  const { baseBudget, reputationBonus, managingBonus, tournamentBonus, sponsorIncome: currentSponsorIncome } = budgetBreakdown(cd, staff);
   const staffSalaryTotal = staff.reduce((sum, s) => sum + getStaffSalary(s), 0);
 
   // スタッフ転向する選手の追加人件費

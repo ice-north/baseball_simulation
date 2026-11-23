@@ -150,8 +150,7 @@ fun defensePositionLabel(pos: String?): String = if (pos == "dh") "DH" else posi
 // 球団の歩み（折れ線）。縦軸はリーグ全体の中の位置（1部1位＝1 … 2部6位＝12）
 // ------------------------------------------------------------
 
-/** 1部・2部のそれぞれの球団の数 */
-const val TEAMS_PER_LEAGUE: Int = 6
+// 1部・2部のそれぞれの球団の数（TEAMS_PER_LEAGUE）は Tables.kt（Web 版 pyramidLeague.js から書き出す）
 
 /** 折れ線の1点（[current] は今季の途中） */
 data class HistoryPoint(

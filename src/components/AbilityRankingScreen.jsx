@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { ScreenShell, ScreenHeader } from './GameUIComponents.jsx';
-import { TEAMS_DATA, getTeamAbbreviation } from '../teams-data.js';
+import { TEAMS_DATA } from '../teams-data.js';
 import { calcPlayerOverall } from '../season/dispatchSystem.js';
 import { POSITION_NAMES, getOverallColor } from '../utils/constants.js';
 import { universityPool, highSchoolPool } from '../season/universityPool.js';

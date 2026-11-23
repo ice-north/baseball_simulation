@@ -32,19 +32,10 @@ export const getAbilityColor = (value) => {
 };
 
 /**
- * 能力値のテキスト色を取得（0-100）
- * @param {number} value - 能力値
- * @returns {string} Tailwind CSSクラス名
+ * 能力値のテキスト色（0-100。SS 90〜 / S 80〜 / A 70〜 / B 60〜 / C 50〜 / D 40〜 / E）。
+ * 中身は `constants.js` の `getAbilityColor`（同じ段と色。写しを置かない）
  */
-export const getAbilityTextColor = (value) => {
-  if (value >= 90) return 'text-pink-400';     // SS級
-  if (value >= 80) return 'text-red-400';      // S級
-  if (value >= 70) return 'text-orange-400';   // A級
-  if (value >= 60) return 'text-yellow-400';   // B級
-  if (value >= 50) return 'text-green-400';    // C級
-  if (value >= 40) return 'text-blue-400';     // D級
-  return 'text-gray-300';                       // E級
-};
+export { getAbilityColor as getAbilityTextColor } from './constants.js';
 
 /**
  * 選手の最高適正ポジションを取得

@@ -7,6 +7,7 @@ import { GameRecordButton } from './GameHistory.jsx';
 import { TeamPlayerButton } from './PlayerPerformance.jsx';
 import { turnOfDate } from './shared.js';
 import { InboxCard, OwnersCard } from './SocialPages.jsx';
+import { TeamMark } from './look/Art.jsx';
 
 // ============================================================
 // 「ホーム」に出すリーグ全体の眺め。
@@ -158,7 +159,10 @@ function Played({ row, view }) {
       <b className="online-slot-score">
         {ours}–{theirs}
       </b>
-      <span className="online-slot-foe">{teamShort(home ? game.away : game.home)}</span>
+      <span className="online-slot-foe">
+        <TeamMark team={home ? game.away : game.home} size={16} />
+        {teamShort(home ? game.away : game.home)}
+      </span>
     </>
   );
   return (
@@ -309,7 +313,10 @@ function Upcoming({ row, view }) {
     <li className="online-slot is-next">
       <span className="online-slot-turn">第{row.turn}ターン</span>
       <span className="online-slot-side">{home ? 'ホーム' : 'ビジター'}</span>
-      <span className="online-slot-foe">{teamShort(home ? game.away : game.home)}</span>
+      <span className="online-slot-foe">
+        <TeamMark team={home ? game.away : game.home} size={16} />
+        {teamShort(home ? game.away : game.home)}
+      </span>
       {/* ⚠ 先発は**2行目**に置く。1行に詰めると勝敗と防御率が切れて、
           「右投げかどうか」しか読めなくなる（実測で相手の成績が消えていた）。
           ⚠ **自軍と相手を1人ずつ縦に並べる**（いしだ要望: 見やすく）。

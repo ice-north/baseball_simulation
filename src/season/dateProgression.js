@@ -3,7 +3,7 @@
 // 日付を進めてフェーズを遷移
 // ============================================================
 
-import { advanceDate, getCurrentPhase, SEASON_PHASES, updateStandings, generatePlayoffSchedule, updatePlayoffProgress } from './seasonManager.js';
+import { advanceDate, getCurrentPhase, SEASON_PHASES, updateStandings, generatePlayoffSchedule, updatePlayoffProgress, compareStandings } from './seasonManager.js';
 import { recoverAllPitcherFatigue } from '../game/autoSimulation.js';
 import { updateAllPlayersCondition } from '../game/condition.js';
 import { getModeCapabilities } from '../game/modeCapabilities.js';
@@ -140,7 +140,7 @@ export const handlePhaseTransition = (seasonData, newPhase) => {
         const league1Teams = allTeamNames.slice(0, halfTeams);
         const league2Teams = allTeamNames.slice(halfTeams);
 
-        const sorted = [...seasonData.standings].sort((a, b) => b.winRate - a.winRate || b.wins - a.wins);
+        const sorted = [...seasonData.standings].sort(compareStandings);
         const l1Sorted = sorted.filter(s => league1Teams.includes(s.team));
         const l2Sorted = sorted.filter(s => league2Teams.includes(s.team));
 
@@ -158,7 +158,7 @@ export const handlePhaseTransition = (seasonData, newPhase) => {
         const eligible = seasonData.settings.playoffTeamNames;
         topTeams = [...seasonData.standings]
           .filter(t => !Array.isArray(eligible) || eligible.includes(t.team))
-          .sort((a, b) => b.winRate - a.winRate || b.wins - a.wins)
+          .sort(compareStandings)
           .slice(0, teamsNeeded)
           .map(t => t.team);
       }

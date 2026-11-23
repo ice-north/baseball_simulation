@@ -231,17 +231,33 @@ select
   (select count(*) from public.online_control where id = 'pennant')            as 制御行,
   (select count(*) from pg_proc p join pg_namespace n on n.oid = p.pronamespace
      where n.nspname = 'public'
-       and p.proname in ('online_claim','online_publish','online_release'))    as 関数の数,
+       and p.proname in ('online_claim','online_publish','online_release',
+                         'online_attempt','online_publish_attempt'))          as 関数の数,
   (select b.public from storage.buckets b where b.id = 'online-world')         as バケットが公開,
   (select relrowsecurity from pg_class where oid = 'public.online_control'::regclass) as RLS有効;
 ```
 
-期待値: `1` / `3` / `false` / `true`。
+期待値: `1` / `5` / `false` / `true`。
+関数が `3` なら、定期処理の試行の印（`supabase/migrations/202611230001_online_attempt.sql`）が未適用（下）。
 **`バケットが公開 = false` と `RLS有効 = true` が安全性の要**。
 ブラウザに配られる鍵でデータを直接読まれないことを、この2つで担保している。
 
 この構成では `src/` 配下に Supabase への参照が**1件も無い**。
 ブラウザは `/api/online` としか話さず、鍵はサーバー（Vercel の関数）の中だけで使われる。
+
+### 定期処理の試行の印（2026-11-23 に追加。未適用なら適用する）
+
+定期処理が Vercel の300秒で打ち切られると、例外の処理を通らずに終わる。以前はリースが切れるたびに
+同じ日を最初からやり直し、6時間（`STALL_AFTER_MS`）まで約10分おきに繰り返して、そのたびに参加者の
+操作が「処理中」で弾かれた。いまは重い処理の前に制御行へ印（`attempt_key`・`attempt_count`）を書き、
+**同じ試行が3回続けて終わらなければ** status を error にして止める（画面に理由と「再開」が出る）。
+
+- 適用: Supabase の SQL Editor で `supabase/migrations/202611230001_online_attempt.sql` をそのまま流す
+  （再実行しても同じ結果）。**サーバーの更新より先に**流すのがよい
+- 適用前のサーバー・適用前のDBでも動く（印を付けない従来の動き。ログに「online_attempt がありません」と出る）
+- 止まったら、管理者が「再開」を押す。止めたときに回数は消えているので、次の定期処理から数え直す
+- 確かめ: `select attempt_key, attempt_count from public.online_control where id = 'pennant';`
+  （ふだんは `null` / `0`。打ち切られた試行があると数が残る）
 
 ## 停止・再開・バックアップ・復元
 

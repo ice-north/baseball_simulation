@@ -30,34 +30,12 @@
 
 import { colAxis, rowAxis, cellWeakness, cellQuality } from './pitchZone.js';
 import { getPitchQualityEffect } from './pitchCalling.js';
+import { hashBell } from './rng.js';
 
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 
-/** FNV-1a + avalanche。同じ文字列からは常に同じ値 */
-function hash32(str, seed) {
-  let h = seed >>> 0;
-  for (let i = 0; i < str.length; i++) {
-    h ^= str.charCodeAt(i);
-    h = Math.imul(h, 16777619) >>> 0;
-  }
-  h ^= h >>> 15; h = Math.imul(h, 2246822507) >>> 0;
-  h ^= h >>> 13; h = Math.imul(h, 3266489909) >>> 0;
-  h ^= h >>> 16;
-  return h >>> 0;
-}
-
-const unit = (h) => h / 4294967296;
-
-/**
- * 一様乱数3つの平均で釣鐘型にする（Irwin-Hall）。
- * 範囲 -1〜+1、σ≈0.33。極端な弱点を持つ打者は稀にしか出ない。
- */
-function bell(key, seed) {
-  const a = unit(hash32(key, seed));
-  const b = unit(hash32(key, seed ^ 0x9e3779b9));
-  const c = unit(hash32(key, seed ^ 0x85ebca6b));
-  return (a + b + c - 1.5) / 1.5;
-}
+// 釣鐘型（-1〜+1、σ≈0.33）。極端な弱点を持つ打者は稀にしか出ない。中身は `rng.js` の `hashBell`
+const bell = hashBell;
 
 export const NEUTRAL_ZONE_PROFILE = Object.freeze({ inside: 0, low: 0, middle: 0 });
 

@@ -6,6 +6,7 @@
 //    疲れた野手の入れ替え `restTiredFielders`・休養日）で、レギュラーが何試合目に初めて休むかと
 //    出場の割合を体力の帯ごとに数える。
 // ⚠ 回復力や控えの顔ぶれで揺れるので、帯の中央値で見る。幅は実測から決めた（下の各行の注記）。
+import { quietAsync } from './lib/quiet.mjs';
 import assert from 'node:assert/strict';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -17,15 +18,6 @@ import { defaultPhasePlan } from '../../server/leagueEngine.mjs';
 import { onlineFielderGameFatigue, onlineFielderFatigueFor } from '../../src/online/shared.js';
 
 const TURNS = Number(process.env.FATIGUE_TURNS || 60);
-const quiet = async (fn) => {
-  const log = console.log;
-  console.log = () => {};
-  try {
-    return await fn();
-  } finally {
-    console.log = log;
-  }
-};
 
 // 式そのもの（帯の端）
 assert.equal(onlineFielderGameFatigue(80), 12);
@@ -59,7 +51,7 @@ try {
       payload,
     });
   };
-  await quiet(() => send('create'));
+  await quietAsync(() => send('create'));
   for (let i = 0; i < 4; i += 1) {
     const l = (await store.read()).league;
     if (!l.phase) break;
@@ -119,7 +111,7 @@ try {
   };
   let before = snapshot((await store.read()).league);
   for (let i = 0; i < TURNS; i += 1) {
-    await quiet(() => send('step'));
+    await quietAsync(() => send('step'));
     now = new Date(Date.parse(now) + 3600000).toISOString();
     const after = snapshot((await store.read()).league);
     for (const [id, a] of after) {

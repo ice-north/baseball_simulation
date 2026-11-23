@@ -9,6 +9,8 @@
 // 保存するのは能力・素質のみ（成績ログは持たない）。容量肥大を防ぐため上限を設ける。
 // ============================================================
 
+import { createEmptyStats } from '../utils/constants.js';
+
 const OB_REGISTRY_KEY = 'baseballSim_obRegistry';
 const MAX_ENTRIES = 500;
 
@@ -78,12 +80,6 @@ export const convertObToPlayer = (ob, id) => ({
   condition: 2,
   // 由来を残す（表示・懐古用）
   obOrigin: { fromTeam: ob.fromTeam || null, draftYear: ob.draftYear, npbTeam: ob.npbTeam, draftRound: ob.draftRound },
-  seasonStats: {
-    batting: { games: 0, atBats: 0, hits: 0, doubles: 0, triples: 0, homeruns: 0, rbis: 0, walks: 0, strikeouts: 0, stolenBases: 0, sacrificeBunts: 0 },
-    pitching: { games: 0, wins: 0, losses: 0, saves: 0, holds: 0, inningsPitched: 0, runsAllowed: 0, earnedRuns: 0, hits: 0, homeruns: 0, walks: 0, strikeouts: 0, pitches: 0 },
-  },
-  careerStats: {
-    batting: { games: 0, atBats: 0, hits: 0, doubles: 0, triples: 0, homeruns: 0, rbis: 0, walks: 0, strikeouts: 0, stolenBases: 0, sacrificeBunts: 0 },
-    pitching: { games: 0, wins: 0, losses: 0, saves: 0, holds: 0, inningsPitched: 0, runsAllowed: 0, earnedRuns: 0, hits: 0, homeruns: 0, walks: 0, strikeouts: 0, pitches: 0 },
-  },
+  seasonStats: createEmptyStats(),
+  careerStats: createEmptyStats(),
 });

@@ -38,8 +38,6 @@ export const soloRoleLabel = (role) => (role === NO_ROLE ? '役割なし' : role
 export const soloRoleHint = (role) =>
   role === NO_ROLE ? 'ほかに投げる投手が居ないときだけ' : ROLE_HINT[role];
 
-const isStarterId = (rotation, id) => (rotation?.starters || []).includes(id);
-
 /** 保存されている役割を、先発か救援かに合う役割に読む（合わなければ「おまかせ」） */
 function savedRole(rotation, id, starter) {
   const raw = rotation?.pitcherRoles?.[id];

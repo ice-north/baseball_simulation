@@ -141,13 +141,16 @@ export const getCurrentPhase = (month, day, options, year) => {
   return SEASON_PHASES.OFF_SEASON;
 };
 
+/** ゲームの年度（1年目=1）の暦年。1年目が2024年 */
+export const calendarYearOf = (gameYear) => 2024 + gameYear - 1;
+
 /**
  * シーズン初期データ作成
  */
 export const createSeasonData = (year = 1) => {
   return {
     year,                           // シーズン年数
-    currentDate: { year: 2024 + (year - 1), month: 1, day: 1 },  // 現在の日付（年数に連動）
+    currentDate: { year: calendarYearOf(year), month: 1, day: 1 },  // 現在の日付（年数に連動）
     phase: SEASON_PHASES.SPRING_CAMP,  // 現在のフェーズ
     schedule: [],                   // 試合スケジュール
     results: [],                    // 試合結果
@@ -477,47 +480,6 @@ export const initializeStandings = (teams) => {
   }));
 };
 
-/**
- * カレンダー月データを生成
- * @param {number} year - 年
- * @param {number} month - 月
- * @param {Array} schedule - 試合スケジュール
- * @returns {Array} カレンダーデータ
- */
-export const generateMonthCalendar = (year, month, schedule) => {
-  const daysInMonth = getDaysInMonth(year, month);
-  const firstDayOfWeek = getDayOfWeek({ year, month, day: 1 });
-
-  const calendar = [];
-
-  // 前月の空白日
-  for (let i = 0; i < firstDayOfWeek; i++) {
-    calendar.push({ day: null, games: [] });
-  }
-
-  // 当月の日付
-  for (let day = 1; day <= daysInMonth; day++) {
-    const date = { year, month, day };
-    const phase = getCurrentPhase(month, day);
-    const gamesThisDay = schedule.filter(game =>
-      game.date.year === year &&
-      game.date.month === month &&
-      game.date.day === day
-    );
-
-    calendar.push({
-      day,
-      date,
-      phase,
-      games: gamesThisDay,
-      isGameDay: isGameDay(date, phase)
-    });
-  }
-
-  return calendar;
-};
-
-
 // ============================================================
 // 規定打席・規定投球回（タイトルの資格）
 //
@@ -546,8 +508,12 @@ export const qualifiedPA = (totalGames, progress = 1) =>
 export const qualifiedOuts = (totalGames, progress = 1) =>
   Math.max(3, Math.floor((totalGames || 0) * INNINGS_PER_GAME * Math.max(0, Math.min(1, progress))) * 3);
 
-/** 打席数。打席そのものは保存していないので 打数+四球+死球 で近似する（犠打犠飛は未集計） */
+/**
+ * 打席数。打席そのものは保存していないので 打数+四球+死球+犠飛 で近似する（犠打は数えない）。
+ * ⚠ 犠飛は 2026-11-23 から打数に入れず `sacrificeFlies` に数える。前は打数に入っていたので、
+ *    犠飛を足しておくと規定打席の判定が前と同じになる
+ */
 export const plateAppearances = (b) =>
-  (b?.atBats || 0) + (b?.walks || 0) + (b?.hitByPitch || 0);
+  (b?.atBats || 0) + (b?.walks || 0) + (b?.hitByPitch || 0) + (b?.sacrificeFlies || 0);
 
 // ES module exports

@@ -1,9 +1,9 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useRef, useState } from 'react';
 import { ConditionMark, PlayerStatsButton } from './PlayerPerformance.jsx';
 import { overviewGroup, formatStat } from './statsView.js';
 import { BoardPage } from './BoardParts.jsx';
 import { useBoardHistory } from './useBoardHistory.js';
-import { PitchingHeaderRow, PitchingCells, pitchingColumnCount } from './PitchingRows.jsx';
+import { PitchingHeaderRow, PitchingCells, pitchingColumnCount, useRoleMenuDismiss } from './PitchingRows.jsx';
 import {
   MAX_STARTERS,
   STARTER_ORDER,
@@ -27,6 +27,7 @@ import {
   STARTER_SKIP_FATIGUE,
   RELIEF_REST_FATIGUE,
 } from './pitchingEdit.js';
+import { PlayerFace } from './look/Art.jsx';
 
 // ============================================================
 // PC版の投手起用。スタメン設定（`LineupBoard.jsx`）と**同じ考え方・同じ表**にする。
@@ -81,6 +82,7 @@ function PitcherCells({ player, starter }) {
       starter={starter}
       name={
         <>
+          <PlayerFace player={player} size={26} />
           <span onClick={(e) => e.stopPropagation()}>
             <PlayerStatsButton player={player} category="pitching" group="basic" />
           </span>
@@ -101,26 +103,7 @@ function PitcherCells({ player, starter }) {
 /** 役割の選び直し。先発の型と救援の役割を並べて出す（押した札の下に出る） */
 function RoleMenu({ menu, state, close, choose, remove }) {
   const ref = useRef(null);
-  useEffect(() => {
-    // ⚠ 開いた札を押したときは閉じない（札の側で閉じる。ここで閉じると、続く
-    //    クリックで開き直してしまい、同じ札で閉じられない）
-    const away = (e) => {
-      if (ref.current?.contains(e.target)) return;
-      if (e.target.closest?.('.online-role-chip[aria-expanded="true"]')) return;
-      close();
-    };
-    const onKey = (e) => e.key === 'Escape' && close();
-    window.addEventListener('mousedown', away);
-    window.addEventListener('keydown', onKey);
-    window.addEventListener('scroll', close, true);
-    window.addEventListener('resize', close);
-    return () => {
-      window.removeEventListener('mousedown', away);
-      window.removeEventListener('keydown', onKey);
-      window.removeEventListener('scroll', close, true);
-      window.removeEventListener('resize', close);
-    };
-  }, [close]);
+  useRoleMenuDismiss(ref, close);
   const current = state.roles[menu.id];
   const starter = state.starters.includes(menu.id);
   const option = (role) => {

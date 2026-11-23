@@ -41,9 +41,10 @@ const FITNESS_LOW = 60;
 const n = (v) => (Number.isFinite(v) ? v : 0);
 const rate3 = (v) => v.toFixed(3).replace(/^0/, '');
 const era2 = (er, outs) => (outs > 0 ? (er * 27) / outs : null);
-// ⚠ 出塁率の分母には犠飛を入れる（成績の表 `recordStats.js` の rates と同じ式。数字を食い違わせない）
+// ⚠ 出塁率の分母には犠飛を入れる（成績の表 `recordStats.js` の rates と同じ式。数字を食い違わせない）。
+//    `plateAppearances` が犠飛を含む
 const obpOf = (b) => {
-  const d = plateAppearances(b || {}) + n(b?.sacrificeFlies);
+  const d = plateAppearances(b || {});
   return d > 0 ? (n(b.hits) + n(b.walks) + n(b.hitByPitch)) / d : null;
 };
 /** 起用できる選手か（今は使えない選手を「試す手があります」と勧めない） */

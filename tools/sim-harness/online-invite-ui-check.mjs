@@ -8,17 +8,17 @@
 //    ログインした状態で「リーグに参加する」へ進む。URL から合言葉が消える
 //  - 使ったリンクをもう一度開くと「使用済み」と出て、ログイン画面へ戻れる
 import assert from 'node:assert/strict';
-import { readFile, mkdtemp } from 'node:fs/promises';
+import { mkdtemp } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { chromium } from 'playwright';
+import { launchBrowser, distHtml } from './lib/browser.mjs';
 import { createTestStore } from './lib/testStore.mjs';
 import { AUTH_KEY } from './lib/serviceRoute.mjs';
 import { LeagueService } from '../../server/leagueService.mjs';
 import { createHandler } from '../../server/http.mjs';
 import { failureShots } from './lib/failureShots.mjs';
 
-const html = await readFile(new URL('../../dist/index.html', import.meta.url), 'utf8');
+const html = await distHtml();
 const base = 'http://localhost:3000';
 const shots = process.env.INVITE_UI_SHOTS || null;
 
@@ -79,7 +79,7 @@ const serve = async (context) => {
   });
 };
 
-const browser = await chromium.launch({ headless: true });
+const browser = await launchBrowser();
 const errors = [];
 try {
   // --- 管理者（PC）: リンクを作る ---------------------------------------

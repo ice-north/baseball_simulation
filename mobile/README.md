@@ -25,7 +25,7 @@
   `tools/expect-logic.mjs` が書き出す期待値（`logic-expected.json`）と `LogicTest` で答え合わせする。
 - 得点経過・最終ログイン・留守中のまとめの文（`social.js`・`awaySummary.js`）は `Social.kt`・`AwaySummary.kt` に写してあり、
   `tools/expect-social.mjs` が書き出す期待値（`social-expected.json`）と `SocialTest` で答え合わせする。
-- CI はどれも `--check` で、Web 版だけ直して写しが古くなっていないかを見る。
+- CI はどれも `--check` で、Web 版だけ直して写しが古くなっていないかを見る（`npm run check:quick` の `app-*`。`tools/sim-harness/run-checks.mjs`）。
 
 - 接続先の既定は本番（`https://baseball-simulation-neon.vercel.app/api/online`）。ログイン画面の「接続先を変える（開発用）」でローカルの開発サーバーにも繋げる（エミュレーターから PC へは `http://10.0.2.2:3002/`）。
 - ログインは Web 版と同じアカウント。1アカウントで同時に操作できるのは**ブラウザ1台とアプリ1台**まで（`server/sessions.mjs`）。アプリはログインのときに `client: "app"` を送る。同じ種類の別の端末でログインすると、前の端末だけが閲覧のみになる。

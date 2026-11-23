@@ -6,6 +6,7 @@
 //    - 疲れ切った選手（疲労120以上）の代わりに捕手が二塁や中堅に入る
 //    - 一人用のCPUは遊撃→二塁→…と1か所ずつ取るので、後ろの守備ほど穴になる
 //    ことがあった。ここは小さな名簿の場面と、本物の初期の名簿12球団の全部の場面で確かめる。
+import { quietAsync } from './lib/quiet.mjs';
 import assert from 'node:assert/strict';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -213,15 +214,6 @@ const snapshot = (t) => JSON.stringify(t.lineupSettings.battingOrder);
 }
 
 // --- 6. 本物の初期の名簿（12球団）で、疲れたレギュラーの全部の組み合わせ
-const quiet = async (fn) => {
-  const log = console.log;
-  console.log = () => {};
-  try {
-    return await fn();
-  } finally {
-    console.log = log;
-  }
-};
 const dir = await mkdtemp(join(tmpdir(), 'rest-swap-'));
 let league;
 try {
@@ -244,7 +236,7 @@ try {
       payload,
     });
   };
-  await quiet(() => send('create'));
+  await quietAsync(() => send('create'));
   for (let i = 0; i < 4; i += 1) {
     const l = (await store.read()).league;
     if (!l.phase) break;

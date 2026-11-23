@@ -4,7 +4,6 @@
 //    キャンプや年度更新でどれだけ伸びたか、契約更改・トライアウトの判断材料が
 //    分からない。ここでは画面が読む**決まりの部分**を確かめる。
 import assert from 'node:assert/strict';
-import { readFile } from 'node:fs/promises';
 import { SEASON_STEPS, seasonStage, CAMP_POLICY_GUIDE, CAMP_DIRECTIONS, CAMP_PHASES } from '../../src/online/shared.js';
 import { relevantGains } from '../../src/online/campGains.js';
 import { teamFitRank, DEFAULT_WEIGHTS } from '../../src/online/tryoutPlan.js';
@@ -34,14 +33,7 @@ assert.deepEqual(stage({ phaseKind: 'pack_select', date: at(4, 1) }), { key: 'pa
 for (const key of ['season', 'postseason', 'contract', 'tryout', 'year_end', 'camp', 'opening'])
   assert.ok(SEASON_STEPS.some((s) => s.key === key), `段階 ${key} の説明が無い`);
 
-// アプリの表と同じ文であること（帯の文が片方だけ古くならない）
-const kotlin = await readFile(
-  new URL('../../mobile/shared/src/commonMain/kotlin/jp/icenorth/baseball/shared/Tables.kt', import.meta.url),
-  'utf8',
-);
-for (const s of SEASON_STEPS)
-  for (const text of [s.label, s.when, s.todo])
-    assert.ok(kotlin.includes(`"${text}"`), `アプリの SEASON_STEPS に「${text}」が無い`);
+// ⚠ アプリの表（Tables.kt の SEASON_STEPS）と同じ文であることは gen-tables.mjs --check（run-checks の app-gen-tables）が見る
 
 // --- キャンプの目安は全方針ぶんある -------------------------------------
 for (const d of CAMP_DIRECTIONS)

@@ -1,7 +1,4 @@
 
-// 調査で上げられる最大レベル
-export const MAX_SCOUT_LEVEL = 3;
-
 // 真の値と精度から推定レンジを求める。精度が高いほど幅が狭い。
 export function abilityRange(trueValue, accuracy, spread = 16) {
   const margin = Math.round((1 - accuracy) * spread);
@@ -11,12 +8,6 @@ export function abilityRange(trueValue, accuracy, spread = 16) {
     margin,
     exact: margin <= 1,
   };
-}
-
-// レンジの表示文字列（確定なら単一値）。
-export function formatRange(trueValue, accuracy, spread = 16) {
-  const r = abilityRange(trueValue, accuracy, spread);
-  return r.exact ? `${trueValue}` : `${r.lo}〜${r.hi}`;
 }
 
 // 精度のラベルと確度ドット数（1-3）。

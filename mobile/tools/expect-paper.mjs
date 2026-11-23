@@ -4,6 +4,7 @@
 // 材料は紙面の検査と同じ窓口の答え（resources/front/。view-fixture.mjs が作る）。
 // CI は `--check`（PC 版だけ直したときに気づく）。答え合わせは `FrontPageWebTest`（同じ書き方で1行ずつ比べる）。
 // ⚠ 行の書き方（paperLines）は FrontPageWebTest.kt の paperLines と同じにすること
+import { emitExpected } from './expected.mjs';
 import fs from 'node:fs';
 import { paperView, player, gameResult } from '../../src/online/paper/paperView.js';
 import { buildFrontPage, loadOwnHistory } from '../../src/online/paper/frontPage.js';
@@ -93,15 +94,4 @@ for (const [name, s] of Object.entries(scenes)) {
 }
 
 const text = JSON.stringify(result);
-if (process.argv.includes('--check')) {
-  const file = new URL('../shared/src/jvmTest/resources/front/paper-expected.json', import.meta.url);
-  if (fs.readFileSync(file, 'utf8').trim() !== text) {
-    console.error(
-      'paper-expected.json が古い。node mobile/tools/expect-paper.mjs > mobile/shared/src/jvmTest/resources/front/paper-expected.json で書き出し直し、アプリの FrontPage*.kt も揃えること',
-    );
-    process.exit(1);
-  }
-  console.log('paper-expected.json は最新');
-} else {
-  process.stdout.write(text + '\n');
-}
+emitExpected(text, { script: 'expect-paper.mjs', file: 'front/paper-expected.json', also: 'アプリの FrontPage*.kt も揃えること' });

@@ -14,8 +14,13 @@ import { expectedNaturalGrowth, teamRankMult } from '../src/season/growthSystem.
 import {
   PHASE_LABELS,
   ONLINE_SCHEMA,
+  ONLINE_ENGINE_VERSION,
   CAMP_ROUNDS,
   phaseDeadlineAt,
+  requireOnline,
+  seasonStage,
+  ROSTER_LIMIT,
+  ROSTER_STANDARD,
 } from '../src/online/shared.js';
 import { isCurrent, migrationState } from '../src/online/leagueMigration.js';
 import {
@@ -34,7 +39,7 @@ import { ownerRecords } from './ownerRecords.mjs';
 import { seasonReview } from './seasonReview.mjs';
 import { strategyStats } from '../src/online/strategyStats.js';
 import { tiesArticles } from '../src/online/hometown.js';
-import { teamDisplayOf, teamHomeOf } from '../src/online/membership.js';
+import { teamDisplayOf, teamHomeOf, teamLabelIn } from '../src/online/membership.js';
 import {
   currentPlayerStats,
   currentSeasonStats,
@@ -47,16 +52,10 @@ import {
   statisticsContext,
 } from './recordedViews.mjs';
 import { recordForPlayer } from './recordedStats.mjs';
-import {
-  requireOnline,
-  seasonStage,
-  ROSTER_LIMIT,
-  ROSTER_STANDARD,
-} from '../src/online/shared.js';
 import { getAIReleaseCandidates, releaseScore } from '../src/game/contractRules.js';
 import { SEASON_TURNS, PYRAMID_LEAGUES } from '../src/online/pyramidLeague.js';
 import { ownStaffView, leagueStaffView, teamStaffView, phasePlanBy } from './coachView.mjs';
-import { releaseBiasFor, campPlanFor, phaseDelegated, staffOf } from './coachEngine.mjs';
+import { releaseBiasFor, campPlanFor, phaseDelegated, staffOf, waitsFor } from './coachEngine.mjs';
 import { createTradeJudge } from './tradeJudge.mjs';
 import { yearSummaryFor } from './yearSummary.mjs';
 import { CPU_ACCEPT_MARGIN } from '../src/online/trades.js';
@@ -68,7 +67,7 @@ import {
   STARTER_LOCK_TURNS,
   STARTER_PICK_GAMES,
 } from '../src/online/social.js';
-import { canPickStarters, starterContext } from './starterPicks.mjs';
+import { canPickStarters, starterContext, ownGamesByDate } from './starterPicks.mjs';
 import { exhibitionsView } from './exhibition.mjs';
 import { proWatchList } from './proDraft.mjs';
 import { tryoutInterest, tryoutPickOrder } from '../src/online/tryoutPlan.js';
@@ -220,15 +219,7 @@ export function ownUpcomingGames(schedule, ownTeam, size = 6) {
   // ⚠ **その球団の何試合目かを数える**。日付はゲーム内の暦で、1ターン＝1日の
   //    うえ休養日が飛ぶので、「4/18」と言われても何試合目かが読めない。
   //    消化済みも含めて日付順に並べ、その位置を番号にする。
-  const own = schedule
-    .filter(
-      (g) =>
-        g.date &&
-        g.home !== 'TBD' &&
-        g.away !== 'TBD' &&
-        (g.home === ownTeam || g.away === ownTeam),
-    )
-    .sort((a, b) => dateKey(a.date) - dateKey(b.date) || a.id - b.id);
+  const own = ownGamesByDate(schedule, ownTeam);
   const upcoming = [];
   own.forEach((g, i) => {
     if (g.result) return;
@@ -309,15 +300,7 @@ function homerunsOf(league, game, year) {
  *    数え方を変えると、同じ試合が画面の左右で違う番号になる。
  */
 export function ownRecentGames(schedule, ownTeam, size = 5, league = null) {
-  const own = schedule
-    .filter(
-      (g) =>
-        g.date &&
-        g.home !== 'TBD' &&
-        g.away !== 'TBD' &&
-        (g.home === ownTeam || g.away === ownTeam),
-    )
-    .sort((a, b) => dateKey(a.date) - dateKey(b.date) || a.id - b.id);
+  const own = ownGamesByDate(schedule, ownTeam);
   const played = [];
   own.forEach((g, i) => {
     if (!g.result) return;
@@ -556,6 +539,8 @@ export function projectLeague(bundle, userId, sessionId, adminId) {
     //    読まないので `assertLeagueVersion` が一度も走らない。実際、
     //    固定4球団の頃のリーグが2部制のコードで**そのまま表示された**。
     schema: ONLINE_SCHEMA,
+    // ⚠ 計算の版も押す（形が同じで計算だけ上がったときに、保存済みのビューを止めるため）
+    engineVersion: ONLINE_ENGINE_VERSION,
     revision: l.revision,
     status: l.status,
     error: l.error,
@@ -625,12 +610,10 @@ export function projectLeague(bundle, userId, sessionId, adminId) {
       teamName: m.teamName,
       // ⚠ 自チーム情報の画面が「いまの球団名」を出すのに使う
       displayName: m.displayName || teamLabels[m.teamName]?.label || m.teamName,
-      ready:
-        !!phase?.submissions[m.userId]?.ready ||
-        pendingPackAuto(phase, m) ||
-        phaseDelegated(l, m),
+      // ⚠ 手続きが待つかどうかと同じ判定（`coachEngine` の `waitsFor`）。2か所に書かない
+      ready: !!phase && !waitsFor(l, m),
       // ⚠ 途中参加でセットを待っている人の球団は、キャンプまでCPUが決める
-      //    （手続きはこの人の決定を待たない。`leagueEngine` の `waitsFor`）
+      //    （手続きはこの人の決定を待たない。`coachEngine` の `waitsFor`）
       ...(pendingPackAuto(phase, m) && !phase?.submissions[m.userId]?.ready
         ? { cpu: true }
         : {}),
@@ -803,7 +786,7 @@ export function projectLeague(bundle, userId, sessionId, adminId) {
           // 標準案を出した人（「山田監督の案」）と、任せているか。手続きの画面の見出しに出す
           planBy: phasePlanBy(l, member.teamName, phase.kind),
           // ⚠ この手続きを指導者に任せているか。任せた手続きはこの人の決定を待たない
-          //    （`leagueEngine` の `waitsFor`）ので、「決めてください」の知らせを出さない（`notices.js`）。
+          //    （`coachEngine` の `waitsFor`）ので、「決めてください」の知らせを出さない（`notices.js`）。
           //    `planBy` は案を出す人が居ないと null になるので、これとは別に渡す
           delegated: phaseDelegated(l, member),
           submission: phase.submissions[userId] || null,
@@ -945,8 +928,7 @@ export function projectTeamInfo(bundle, userId, teamName, context = null) {
       .filter((p) => p.onlinePlayerId)
       .map((p) => [p.onlinePlayerId, p.id]),
   );
-  const labelOf = (name) =>
-    (l.teams || []).find((t) => t.name === name)?.displayName || name;
+  const labelOf = (name) => teamLabelIn(l, name);
   // トレードの値段。⚠ **CPUの判断と同じ関数**（`tradeJudge`）で作ること。画面の見込み
   //    メーターはこの値段で境目を引くので、別の式だと「受けるはず」と出したのに断られる。
   // ⚠ CPU球団の名簿は**その球団の事情こみ**（抜けると穴が空く主力ほど高く、代わりが

@@ -15,6 +15,8 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { build } from 'esbuild';
 import { delegationSettles, staffModesDoneText } from '../../src/online/notices.js';
 import { PYRAMID_LEAGUES } from '../../src/online/pyramidLeague.js';
+import { FORM_PITCH_SYNERGY } from '../../src/utils/constants.js';
+import { FORM_PITCH_AFFINITY } from '../../src/season/campTraining.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const entry = `
@@ -472,6 +474,13 @@ try {
       !labels.cutter?.includes('★') && !labels.cutter?.includes('◆'),
       `適性の無い球種に印が付いている: ${labels.cutter}`,
     );
+    // ⚠ 印は**試合の表（`FORM_PITCH_SYNERGY`）と同じ**（以前のキャンプの表は
+    //    アンダーの適性を changeup・twoSeam としていて、試合では×0.88に下がっていた）
+    assert.ok(labels.curve?.includes('★'), `試合の表の適性球に印が無い: ${labels.curve}`);
+    assert.ok(!labels.changeup?.includes('★'), `試合の表で適性外の球に★: ${labels.changeup}`);
+    for (const [form, list] of Object.entries(FORM_PITCH_SYNERGY))
+      assert.deepEqual(Object.keys(FORM_PITCH_AFFINITY[form] || {}), list,
+        `キャンプの適性が試合の表と食い違う: ${form}`);
     // ⚠ 持っている球種は新球種の対象に出さない（選んでも1クール捨てる）
     const owned = {
       ...player,

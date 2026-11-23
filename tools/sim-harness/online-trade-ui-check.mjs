@@ -15,10 +15,10 @@
 //    片側が空なら注意）。CPU球団の答え（断った・受けた）を**文で**出す（u1 高3。以前は押した
 //    瞬間に成立し、出たのは「保存しました」だけだった）
 import assert from 'node:assert/strict';
-import { readFile, mkdtemp } from 'node:fs/promises';
+import { mkdtemp } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { chromium } from 'playwright';
+import { launchBrowser, distHtml } from './lib/browser.mjs';
 import { createTestStore } from './lib/testStore.mjs';
 import { routeToService } from './lib/serviceRoute.mjs';
 import { LeagueService } from '../../server/leagueService.mjs';
@@ -35,10 +35,7 @@ import { rosterCounts } from '../../src/utils/constants.js';
 import { shortLastLines } from './lib/textWrap.mjs';
 import { failureShots } from './lib/failureShots.mjs';
 
-const html = await readFile(
-  new URL('../../dist/index.html', import.meta.url),
-  'utf8',
-);
+const html = await distHtml();
 const base = 'http://localhost:3000';
 
 // --- 2人のリーグ（開幕して数日） ---------------------------------------
@@ -104,12 +101,7 @@ await send('b', sb, 'tradeOffer', {
   want: [wantedPitcher.id],
 });
 
-const browser = await chromium.launch({
-  ...(process.env.PLAYWRIGHT_CHROME_CHANNEL
-    ? { channel: process.env.PLAYWRIGHT_CHROME_CHANNEL }
-    : {}),
-  headless: true,
-});
+const browser = await launchBrowser();
 const errors = [];
 try {
   // --- スマホWeb: 返事が必要な提案をホームの帯で知らせる -----------------

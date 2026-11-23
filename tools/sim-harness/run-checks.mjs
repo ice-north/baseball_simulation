@@ -8,7 +8,7 @@
 //   node tools/sim-harness/run-checks.mjs check --serial   # 1本ずつ（出力を追いたいとき）
 //   node tools/sim-harness/run-checks.mjs check -j 2       # 同時に走らせる数を決める
 //   node tools/sim-harness/run-checks.mjs check --shard 1/2  # 2台に分けたうちの1台目の分だけ（CI 用）
-//   node tools/sim-harness/run-checks.mjs season-check online-parity-check  # 名前で選ぶ
+//   node tools/sim-harness/run-checks.mjs season-check online-parity-check  # 名前で選ぶ（DIST_UI の画面検査も）
 //
 // 各検査は別プロセスで動くので、互いの TEAMS_DATA などは混ざらない。出力は検査ごとに
 // ためておき、落ちた検査の分だけ最後にそのまま出す。最後に所要時間の一覧を出す。
@@ -72,6 +72,8 @@ const CHECKS = [
   { name: 'online-owner-five-check', group: 'quick', online: true, slow: 2 },
   { name: 'online-owner-extra-check', group: 'quick', online: true, slow: 1 },
   { name: 'online-history-analysis-check', group: 'quick', online: true, slow: 1 },
+  // 新しい見た目（試作）: 土地・愛称の表、12球団で色と字が重ならない、年齢で顔が変わらない
+  { name: 'online-look-check', group: 'quick', online: true, slow: 1 },
   { name: 'online-migration-check', group: 'check', online: true, slow: 21 },
   { name: 'online-join-check', group: 'check', online: true, slow: 9 },
   { name: 'online-deadline-check', group: 'check', online: true, slow: 85 },
@@ -107,6 +109,14 @@ const CHECKS = [
   // 人どうしの関わり（ひとこと・取引の記録・おるすばん・予告先発・練習試合・得点経過）
   { name: 'online-social-check', group: 'check', online: true, slow: 125 },
   { name: 'progression-check', group: 'full', slow: 38 },
+  // アプリの共通部（mobile/shared）に写した表と計算の期待値が、Web 版と食い違っていないか（どれも0.2秒未満）。
+  // ⚠ 写し元（src/）だけを変えたときに気づくため、mobile を触らなくても毎回回す（android.yml は paths で絞っている）
+  ...['gen-tables', 'expect-logic', 'expect-social', 'expect-chronicle', 'expect-paper'].map((tool) => ({
+    name: `app-${tool}`,
+    group: 'quick',
+    slow: 1,
+    args: [join('mobile', 'tools', `${tool}.mjs`), '--check'],
+  })),
 ];
 
 // オンラインの画面検査のうち、配布HTML（dist/index.html）を開くだけでサーバーが要らないもの。
@@ -126,6 +136,7 @@ const DIST_UI = [
   { name: 'online-replay-ui-check', slow: 38 }, // check:online:replay-ui
   { name: 'online-mobile-gameplay-ui-check', slow: 49 }, // check:online:mobile-gameplay-ui
   { name: 'online-paper-ui-check', slow: 12 }, // check:online:paper-ui
+  { name: 'online-look-ui-check', slow: 20 }, // check:online:look-ui
 ];
 
 // ここに無い *-check.mjs は、別の手順で回すもの。サーバーやブラウザが要る通し検査と、
@@ -169,8 +180,9 @@ function parseArgs(argv) {
     } else if (a in LEVEL || a === 'online' || a === 'online-ui') opts.preset = a;
     else opts.names.push(a);
   }
-  // 画面検査はブラウザを開くので、指定が無ければ1本ずつ
-  opts.jobs ??= opts.preset === 'online-ui' ? 1 : availableParallelism();
+  // 画面検査はブラウザを開くので、指定が無ければ1本ずつ（名前で選んだときも、画面検査が混ざれば）
+  const ui = opts.preset === 'online-ui' || opts.names.some((n) => DIST_UI.some((c) => c.name === n));
+  opts.jobs ??= ui ? 1 : availableParallelism();
   if (process.env.SIM_HARNESS_JOBS)
     opts.jobs = Math.max(1, Number(process.env.SIM_HARNESS_JOBS) || 1);
   return opts;
@@ -178,13 +190,15 @@ function parseArgs(argv) {
 
 function select({ preset, names }) {
   if (names.length) {
-    const unknown = names.filter((n) => !CHECKS.some((c) => c.name === n));
+    // 画面検査（DIST_UI）も名前で選べる（混ざれば1本ずつ走る。parseArgs）
+    const all = [...CHECKS, ...DIST_UI];
+    const unknown = names.filter((n) => !all.some((c) => c.name === n));
     if (unknown.length) {
       console.error(`知らない検査: ${unknown.join(', ')}`);
-      console.error(`使える名前: ${CHECKS.map((c) => c.name).join(', ')}`);
+      console.error(`使える名前: ${all.map((c) => c.name).join(', ')}`);
       process.exit(2);
     }
-    return CHECKS.filter((c) => names.includes(c.name));
+    return all.filter((c) => names.includes(c.name));
   }
   if (preset === 'online') return CHECKS.filter((c) => c.online);
   if (preset === 'online-ui') return DIST_UI;

@@ -88,6 +88,7 @@ import jp.icenorth.baseball.shared.int
 import jp.icenorth.baseball.shared.pid
 import jp.icenorth.baseball.shared.positionLabel
 import jp.icenorth.baseball.shared.rosterCounts
+import jp.icenorth.baseball.shared.ROSTER_GROUP_LABELS
 import jp.icenorth.baseball.shared.rosterGroup
 import jp.icenorth.baseball.shared.rosterLimitOf
 import jp.icenorth.baseball.shared.rostersAfterTrade
@@ -435,8 +436,6 @@ private fun AfterCounts(view: LeagueView, partner: String, mine: List<JsonObject
     Muted("交換後  ${view.teamLabel(partner)} ${countsText(after.theirs, limit)}")
 }
 
-private val GROUPS = listOf("pitcher" to "投手", "catcher" to "捕手", "infielder" to "内野手", "outfielder" to "外野手")
-
 /**
  * 新しい提案・逆提案を作る画面。「相手 → 選手 → 確認」の段を進み、**確認の段でだけ送れる**。
  * 戻るボタンは1つ前の段へ（最初の段なら閉じる）。
@@ -589,7 +588,7 @@ private fun PlayersStep(
     val inGroup = { p: Player -> rosterGroup(p.position) == group }
     Column(modifier) {
         ChipTabs(
-            GROUPS.map { (key, label) ->
+            ROSTER_GROUP_LABELS.map { (key, label) ->
                 val n = (theirPlayers.filter { it.id in draft.get } + myPlayers.filter { it.id in draft.give }).count { rosterGroup(it.position) == key }
                 key to (label + if (n > 0) " $n" else "")
             },
@@ -814,8 +813,11 @@ private fun ConfirmSide(title: String, ids: Set<Long>, players: List<Player>?, m
 private fun PlayerLines(model: AppViewModel, team: String, p: Player, tier: String?, tag: String? = null, extra: (@Composable () -> Unit)? = null) {
     Column(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
+            PlayerFace(p, size = 26.dp, team = team, modifier = Modifier.padding(end = 4.dp))
+            val (nameText, nameInline) = conditionName(p.condition, p.name)
             Text(
-                "${jp.icenorth.baseball.shared.conditionIcon(p.condition)} ${p.name}",
+                nameText,
+                inlineContent = nameInline,
                 fontWeight = FontWeight.SemiBold,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,

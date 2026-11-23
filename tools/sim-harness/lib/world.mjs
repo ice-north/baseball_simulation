@@ -19,6 +19,7 @@
 // 人口保存・年齢ピラミッド・引退規模・クラブ指名・無クラッシュ性の検証には十分。
 // ============================================================
 
+import { quiet } from './quiet.mjs';
 import { SRC } from './bootstrap.mjs';
 
 const { TEAMS_DATA, initializeTeamsForCount, initializeAllPitchingRotations } =
@@ -32,13 +33,6 @@ const { generatePitchingRotation } = await import(SRC + '/game/lineupGenerator.j
 const { createSeasonData } = await import(SRC + '/season/seasonManager.js');
 
 export { TEAMS_DATA };
-
-// 内部診断ログを黙らせて関数を実行する。
-function quiet(fn) {
-  const orig = console.log;
-  console.log = () => {};
-  try { return fn(); } finally { console.log = orig; }
-}
 
 // 独立リーグモードのフルワールドを構築する。戻り値 { seasonData, userTeams }。
 export function bootstrapWorld(opts = {}) {

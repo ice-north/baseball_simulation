@@ -3,8 +3,9 @@ import { createDecisionLog, observeDecisionLog, decisionsFromResult, recordDecis
 import { TEAMS_DATA, LEAGUE_SETTINGS, normalizeMaxExtraInnings } from '../teams-data.js';
 import { calculatePhysicsContact, calculateBattedBallPhysics, judgeFielderReach, getTunnelingEffect, getThrowErrorRate, spinAdjustedArsenal } from '../simulation-logic.js';
 import { PITCHING_FORM_EFFECTS, adjustGrowthModifier, applyFatigueGrowthPenalty, DP_BASE,
-  pitchVelocityDrop, isUnreadablePitch, registeredAsFielder, addFatigue } from '../utils/constants.js';
-import { conditionBattingMod, CONDITION_PITCHING_MODIFIER, CONDITION_LEVELS, initializeCondition } from './condition.js';
+  pitchVelocityDrop, isUnreadablePitch, isPitcherPlayer, addFatigue } from '../utils/constants.js';
+import { conditionBattingMod, CONDITION_PITCHING_MODIFIER, CONDITION_LEVELS, initializeCondition,
+  lineupConditionMod, batterFatiguePenalty } from './condition.js';
 import { getPositionFitness, getHandednessEffect } from '../utils/physics.js';
 import { contactFoulProbability, isDirectionalFoul } from './contactRules.js';
 import { getTeamStaffBonus } from '../corporate/staffData.js';
@@ -23,7 +24,8 @@ import { classifyBuntContact, rollBuntQuality, buntFieldDefense,
          buntThrowOutChance, squeezeHomeThrowChance } from './bunting.js';
 import { effectiveArsenalSize, activeArsenal } from './arsenal.js';
 import { withSeededRandom } from './rng.js';
-import { nextRotationStarterId, bestFieldAssignment } from './lineup.js';
+import { forceAdvance } from './baseState.js';
+import { nextRotationStarterId, bestFieldAssignment, applyBattingOrderEntries } from './lineup.js';
 
 // CPU の打順作りで、守備の適性がこれ未満の守備に就けるときの減点の境（オンラインの代役の下限と同じ値）
 const AI_LINEUP_MIN_FITNESS = 60;
@@ -99,20 +101,6 @@ const closerCanEnter = (rotation, gs, teamKey, currentPitcherId, players) => {
 const addRemovedIds = (ids, gs) => {
   for (const id of gs.removedIds || []) ids.add(id);
   return ids;
-};
-
-// 選手が投手かどうかを判定（positionだけでなく能力値も確認）
-export const isPitcherPlayer = (player) => {
-  // ⚠ **コンバートで野手にした選手は投手にしない**。下の「スタミナ100以上」は
-  //    当て推量なので、投手から野手へ移した選手が投げ続けてしまう
-  if (registeredAsFielder(player)) return false;
-  // 明示的にpitcherと設定されている場合
-  if (player.position === 'pitcher') return true;
-  // 投手としての能力を持っている（スタミナ100以上は投手専用）
-  if (player.pitching?.stamina >= 100) return true;
-  // primaryRoleが設定されている場合はそれを優先
-  if (player.primaryRole === 'pitcher') return true;
-  return false;
 };
 
 // 野手から救援に回すときの代役。退いた選手や抹消中の選手は戻さない。
@@ -227,9 +215,8 @@ export const generateAILineup = (teamData, teamName) => {
 
   // コンディション・疲労による実効打撃力の計算
   const getEffectiveBatting = (p) => {
-    const condMod = { 4: 5, 3: 2, 2: 0, 1: -2, 0: -5 }[p.condition ?? 2] || 0;
-    const fatigue = p.fatigue || 0;
-    const fatiguePenalty = fatigue > 0 ? Math.round(fatigue * fatigue / 1200) : 0;
+    const condMod = lineupConditionMod(p.condition);
+    const fatiguePenalty = batterFatiguePenalty(p.fatigue);
     const meet = (p.batting?.meet || 50) + condMod - fatiguePenalty;
     const power = (p.batting?.power || 50) + condMod - fatiguePenalty;
     return { meet, power, condMod, fatiguePenalty };
@@ -339,18 +326,9 @@ export const generateAILineup = (teamData, teamName) => {
   }
 
   // 打順を選手に適用（DHは打順のみ設定し、選手の守備ポジションは変更しない）
-  battingOrder.forEach(entry => {
-    const player = teamData.players.find(p => p.id === entry.player.id);
-    if (player) {
-      player.battingOrder = entry.battingOrder;
-      if (entry.position === 'dh') {
-        player._isDH = true;
-      } else {
-        player.position = entry.position;
-        delete player._isDH;
-      }
-    }
-  });
+  applyBattingOrderEntries(teamData.players, battingOrder.map(entry => ({
+    playerId: entry.player.id, battingOrder: entry.battingOrder, position: entry.position,
+  })));
 
   // 今日の先発（DH制では打順に入らないので、呼ぶ側はこれで先発を知る。`gameSetup.js`）
   return starter;
@@ -390,11 +368,45 @@ export const setRecommendedLineup = (teamData, teamName) => {
 
 };
 
+/**
+ * 1試合に出た打者の経験を積む（出場1 + 打数/3、ポジション別・打順別の出場数）。
+ * ⚠ **自動試合（`updatePlayerSeasonStats`）と采配試合（`gameSetup` の
+ *    `updateManagedGameStats`）で共有する**。以前は自動試合にしか無く、采配した試合では
+ *    経験値が一切増えなかった（キャンプの覚醒率・ポジション別の伸びが采配するほど損）。
+ * ⚠ **DH はポジションの経験に数えない**（DH は守備位置ではなく `_isDH` の印。position は
+ *    本来の守備位置のままなので、以前は守っていない位置の経験として積まれていた）。
+ *    打順の経験と経験値は DH でも積む。
+ * @param {Object} playerData - TEAMS_DATA の選手（書き込む先）
+ * @param {Object} gamePlayer - 試合中の選手（position・battingOrder・_isDH を読む）
+ * @param {number} atBats - この試合の打数
+ */
+export function accrueBatterExperience(playerData, gamePlayer, atBats) {
+  playerData.experience = (playerData.experience || 0) + 1 + Math.floor((atBats || 0) / 3);
+
+  if (!playerData.positionExperience) playerData.positionExperience = {};
+  if (!gamePlayer._isDH) {
+    const pos = gamePlayer.position || 'unknown';
+    playerData.positionExperience[pos] = (playerData.positionExperience[pos] || 0) + 1;
+  }
+
+  if (!playerData.battingOrderExperience) playerData.battingOrderExperience = {};
+  const bo = gamePlayer.battingOrder || 0;
+  if (bo >= 1 && bo <= 9) {
+    playerData.battingOrderExperience[bo] = (playerData.battingOrderExperience[bo] || 0) + 1;
+  }
+}
+
+/** 1試合に登板した投手の経験値（登板1 + 投球回）。自動試合と采配試合で共有する */
+export function accruePitcherExperience(playerData, outs) {
+  playerData.experience = (playerData.experience || 0) + 1 + Math.floor((outs || 0) / 3);
+}
+
 // 野手が1試合（3打席以上）で溜める疲労。一人用は体力100→7・体力1→15。
 // ⚠ オンラインは休養日（4ターンに1回）があるので、この式だと疲労が溜まらない（先方指摘 2026-11-15）。
 //    オンラインの1日の処理だけ `withFielderGameFatigue` で式を差し替える（一人用の数字は変えない）。
 // `batting` はその試合の打撃成績（`gameStats.batting`）。溜まらない出場（代打など）は 0 を返す。
-const singleFielderGameFatigue = (bodyStamina, batting) =>
+// 采配した試合（`gameSetup.js`）も同じ式を使う（一人用なので差し替えは見ない）。
+export const singleFielderGameFatigue = (bodyStamina, batting) =>
   batting.atBats >= 3 ? Math.round(15 - (bodyStamina / 100) * 8) : 0;
 let fielderGameFatigue = singleFielderGameFatigue;
 /** `run` の間だけ、野手の1試合の疲労を `gain(体力, その試合の打撃成績)` にする（終われば必ず戻す） */
@@ -408,9 +420,6 @@ export const withFielderGameFatigue = (gain, run) => {
   }
 };
 
-// 野手の日次回復ベース量（投手は別途 recoveryAmount を使用）
-export const POSITION_PLAYER_RECOVERY_BASE = 7;
-
 // 全チームの疲労を回復（日次処理）
 //
 // ⚠ **既定値は実ゲームと同じ 20 にすること**。以前は既定25で、実ゲームだけ
@@ -420,7 +429,6 @@ export const POSITION_PLAYER_RECOVERY_BASE = 7;
 //    `reliefFatigue` もこの量で減るので、リリーフの起用分散に直接効く。
 //
 // ⚠ 野手はこの引数を使わない。体力比例の別式（下記）で回復する。
-//    `POSITION_PLAYER_RECOVERY_BASE = 7` は**参照されていない死んだ定数**。
 //
 // スタッフの身体ケア能力で回復量にボーナス（0→×1.0、50→×1.1、100→×1.2）
 export const recoverAllPitcherFatigue = (recoveryAmount = 20) => {
@@ -444,7 +452,7 @@ export const recoverAllPitcherFatigue = (recoveryAmount = 20) => {
         const recoveryAbility = player.physical?.recovery || 50;
         let actualRecovery;
         if (player.position === 'pitcher') {
-          // 投手: ベース回復25 ×(0.7〜1.3)（ローテ維持のため従来式）
+          // 投手: ベース回復 recoveryAmount（既定20）×(0.7〜1.3)（ローテ維持のため従来式）
           const recoveryMult = 0.7 + (recoveryAbility / 100) * 0.6;
           actualRecovery = Math.round(recoveryAmount * recoveryMult * bodyCareMult);
         } else {
@@ -471,6 +479,9 @@ export const recoverAllPitcherFatigue = (recoveryAmount = 20) => {
 // 試合シミュレーション用のチーム複製。試合中に一切参照しない重い履歴/通算系
 // フィールドを除外して複製することで、1試合あたりのディープコピーを約2倍高速化する。
 // 成績は最後に TEAMS_DATA（原本）へ書き戻すため、コピーに履歴がなくても問題ない。
+/** 塁の走者を数にする（一塁＝1・二塁＝2・三塁＝4 の和）。対人版の観測だけが使う */
+const basesMask = (bases) => bases.reduce((n, r, i) => (r ? n | (1 << i) : n), 0);
+
 const SIM_CLONE_OMIT = new Set([
   'growthHistory', 'statsHistory', 'careerHistory', 'careerStats', 'previousSeasonStats',
 ]);
@@ -514,18 +525,7 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false, observer = 
     teamData.players.forEach(p => { p.battingOrder = 0; delete p._isDH; });
 
     // lineupSettingsから打順と守備位置を適用（DHは打順のみ、ポジション変更しない）
-    settings.battingOrder.forEach(entry => {
-      const player = teamData.players.find(p => p.id === entry.playerId);
-      if (player) {
-        player.battingOrder = entry.battingOrder;
-        if (entry.position === 'dh') {
-          player._isDH = true;
-        } else {
-          player.position = entry.position;
-          delete player._isDH;
-        }
-      }
-    });
+    applyBattingOrderEntries(teamData.players, settings.battingOrder);
   };
 
   applyLineupSettings(homeTeamData, homeTeamName);
@@ -651,10 +651,6 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false, observer = 
   const homeStarter = selectStarterFromRotation(homeTeamData, homeTeamName);
   const awayStarter = selectStarterFromRotation(awayTeamData, awayTeamName);
 
-  // 先発投手を確認
-  const homePitchers = homeTeamData.players.filter(p => p.position === 'pitcher' && (p.battingOrder === pitcherBattingOrder || p.battingOrder === 9));
-  const awayPitchers = awayTeamData.players.filter(p => p.position === 'pitcher' && (p.battingOrder === pitcherBattingOrder || p.battingOrder === 9));
-
   // 試合状態の初期化
   let gameState = {
     // 回ごとの得点（表＝away、裏＝home）。サヨナラの回は決まった時点までの得点
@@ -708,15 +704,13 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false, observer = 
         starterLeftInning: null,  // 先発が降板したイニング
         currentRelieverId: null,  // 現在のリリーフ投手ID
         relieverOutsPitched: 0,   // 現在のリリーフの投球アウト数
-        relieverBattersFaced: 0,  // 現在のリリーフの対戦打者数
-        relieverInningRuns: 0     // 現在のリリーフの今イニング失点
+        relieverBattersFaced: 0   // 現在のリリーフの対戦打者数
       },
       away: {
         starterLeftInning: null,
         currentRelieverId: null,
         relieverOutsPitched: 0,
-        relieverBattersFaced: 0,
-        relieverInningRuns: 0     // 現在のリリーフの今イニング失点
+        relieverBattersFaced: 0
       }
     },
     // イニング開始時の失点記録（イニング失点計算用）
@@ -753,10 +747,6 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false, observer = 
   };
 
   // 現在の投手を取得
-  // 選手が投手かどうかを判定（ローカル版）
-  // ⚠ 写しを置かない（判定が食い違う）。同じモジュールの `isPitcherPlayer` を使う
-  const isPitcher = (player) => isPitcherPlayer(player);
-
   const getCurrentPitcher = (team) => {
     // currentPitcherIdで追跡（DH制で複数pitcherがbattingOrder=0を持つ問題を回避）
     const teamKey = team === gameState.homeTeam ? 'home' : 'away';
@@ -769,7 +759,7 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false, observer = 
     const pitcher = team.players.find(p => p.position === 'pitcher' && (p.battingOrder === pitcherBattingOrder || p.battingOrder === 9));
     if (pitcher) return pitcher;
 
-    const reliever = team.players.find(p => isPitcher(p) && p.pitching && p.isActive !== false);
+    const reliever = team.players.find(p => isPitcherPlayer(p) && p.pitching && p.isActive !== false);
     if (reliever) return reliever;
 
     return team.players.find(p => p.pitching?.stamina >= 100);
@@ -811,10 +801,22 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false, observer = 
     return defense;
   };
 
+  // 投手の持ち球（打席の間は変わらないので、打席の頭で1回だけ作って `simulateOnePitch` に渡す）。
+  // 封印した球は投げない（arsenal.js）。練習・成長からは消さない。
+  // 回転数を変化量へ織り込む（回転の高い投手は変化球も少し曲がる）。
+  // ここで一度だけ掛けることで、球種選択・球速減・コース・スイング判断・
+  // 物理エンジンのすべてが同じ実効変化量で動く（simulation-logic.js）。
+  // `arsenalSize` は似た球を打ち消した実効的な持ち球数（狙い球の的中率に使う）。乱数は引かない
+  const pitchArsenalOf = (pitcherPlayer) => {
+    const arsenal = spinAdjustedArsenal(
+      activeArsenal(pitcherPlayer.pitching?.arsenal), pitcherPlayer.pitching?.spinRate ?? 50);
+    return { arsenal, arsenalSize: effectiveArsenalSize(arsenal) };
+  };
+
   // 直前の1球で打者が狙い球を当てたか（対人の記録だけが読む。試合の判定には使わない）
   let lastGuessRight = false;
   // 一球シミュレーション（自己完結型）
-  const simulateOnePitch = (batterPlayer, pitcherPlayer, catcherPlayer, defense, count, pitcherStamina, bases, sequence, offenseStrategy, defenseStrategy) => {
+  const simulateOnePitch = (batterPlayer, pitcherPlayer, catcherPlayer, defense, count, pitcherStamina, bases, sequence, offenseStrategy, defenseStrategy, pitchArsenal) => {
     lastGuessRight = false;
     // 前球（打席内の配球メモリ。詳細は pitchSequence.js）
     const lastPitch = lastCall(sequence);
@@ -836,8 +838,7 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false, observer = 
     const pitcherCondMod = CONDITION_PITCHING_MODIFIER[pitcherCondition] || 0;
 
     // 疲労による能力低下（疲労0→0%, 疲労50→-5%, 疲労100→-15%）
-    const batterFatigue = batterPlayer.fatigue || 0;
-    const fatiguePenalty = batterFatigue > 0 ? Math.round(batterFatigue * batterFatigue / 1200) : 0;
+    const fatiguePenalty = batterFatiguePenalty(batterPlayer.fatigue);
 
     // 精神力によるチャンス/ピンチ補正
     const isClutch = bases[1] || bases[2]; // 得点圏にランナー
@@ -882,12 +883,8 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false, observer = 
     // 従来はここで変化球を完全ランダムに選んでおり、采配モードだけが
     // リードでスコア選択していた。リーグ成績を作るのは自動側なので、
     // 捕手のリード能力が成績にまったく反映されていなかった。
-    // 封印した球は投げない（arsenal.js）。練習・成長からは消さない
-    // 回転数を変化量へ織り込む（回転の高い投手は変化球も少し曲がる）。
-    // ここで一度だけ掛けることで、球種選択・球速減・コース・スイング判断・
-    // 物理エンジンのすべてが同じ実効変化量で動く（simulation-logic.js）
-    const arsenal = spinAdjustedArsenal(
-      activeArsenal(pitcherPlayer.pitching?.arsenal), pitcher.spinRate);
+    // 持ち球（`arsenal`・`arsenalSize`）は打席の頭で1回だけ作る（`pitchArsenalOf`）
+    const { arsenal, arsenalSize } = pitchArsenal;
     const selectedPitch = selectPitchType({
       arsenal,
       catcherLead: catcherPlayer?.catching?.lead ?? 50,
@@ -976,7 +973,7 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false, observer = 
         catcherLead: catcherPlayer?.catching?.lead ?? 50,
         // **何球種持っているかではなく、どれだけ幅があるか**（arsenal.js）。
         // 似た球（スライダー＋カット等）は同じ引き出しとして数えない
-        arsenalSize: effectiveArsenalSize(arsenal), batterEye: batter.eye,
+        arsenalSize, batterEye: batter.eye,
         // 崩された直後は球種を読むどころではない
         fooled: fooledLevel(sequence),
         // 出どころが見えなければ球種も判断できない（deception.js）
@@ -1058,9 +1055,14 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false, observer = 
 
       // 守備判定
       const fieldResult = judgeFielderReach(battedBall, defense, effBatter);
+      // 打球の向き・飛距離・角度と処理した野手（オンラインの打席速報が読む。表示専用で、判定には使わない）
+      const batted = {
+        direction: battedBall.direction, distance: battedBall.distance, launchAngle: battedBall.launchAngle,
+        fielder: fieldResult.fieldingPosition || null,
+      };
 
       if (fieldResult.result === 'homerun') {
-        return { type: 'homerun' };
+        return { type: 'homerun', batted };
       } else if (fieldResult.result === 'out') {
         // 2アウトからは併殺が成立しない（打者アウトで3アウト目）。
         // outs のチェックが無かったため、2アウトから「4アウト目」が記録され
@@ -1077,7 +1079,7 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false, observer = 
           const runnerSpeed = bases[0]?.physical?.speed ?? 55;
           const dpBase = DP_BASE + (ifAvg - 50) * 0.35 - (runnerSpeed - 55) * 0.30;
           if (Math.random() * 100 < dpBase) {
-            return { type: 'double_play' };
+            return { type: 'double_play', batted };
           }
         }
         return {
@@ -1086,12 +1088,13 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false, observer = 
           // 内野ゴロは走者を進める（ゴロGO・進塁打）。フライ・ライナーは進まない
           isGroundOut: battedBall.launchAngle < 10 && !fieldResult.isOutfieldFly,
           tagupThrowbackChance: fieldResult.tagupThrowbackChance || 0,
-          fieldingPosition: fieldResult.fieldingPosition
+          fieldingPosition: fieldResult.fieldingPosition,
+          batted,
         };
       } else if (fieldResult.result === 'triple') {
-        return { type: 'triple', fieldingPosition: fieldResult.fieldingPosition };
+        return { type: 'triple', fieldingPosition: fieldResult.fieldingPosition, batted };
       } else if (fieldResult.result === 'double') {
-        return { type: 'double', fieldingPosition: fieldResult.fieldingPosition };
+        return { type: 'double', fieldingPosition: fieldResult.fieldingPosition, batted };
       } else {
         return {
           type: 'single',
@@ -1101,6 +1104,7 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false, observer = 
           fieldingPosition: fieldResult.fieldingPosition,
           // 悪送球・中継ミスは走者が余分に1つ進む
           extraAdvance: !!fieldResult.extraAdvance || !!fieldResult.isThrowingError,
+          batted,
         };
       }
     };
@@ -1247,6 +1251,23 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false, observer = 
     ps.earnedRuns = (ps.earnedRuns || 0) + earned;
   };
 
+  // 四球・死球の押し出し（`baseState.forceAdvance`。詰まっている走者だけが1つ進む）。
+  // 満塁なら三塁走者が生還し、失点と打点が付く（押し出しも打点）。失策で出た走者
+  // （`_reachedOnError`）の生還は非自責。塁の配列は入れ替えず中身を書き換える。
+  // 戻り値は生還した人数
+  const forceAdvanceOnWalk = (batter, pitcher) => {
+    const { bases, scored } = forceAdvance(gameState.bases, batter);
+    for (const runner of scored) {
+      if (gameState.isTopInning) gameState.score.away++;
+      else gameState.score.home++;
+      pitcher.gameStats.pitching.runsAllowed++;
+      creditRuns(pitcher, 1, runner?._reachedOnError ? 1 : 0);
+      batter.gameStats.batting.rbis++;
+    }
+    for (let i = 0; i < 3; i++) gameState.bases[i] = bases[i];
+    return scored.length;
+  };
+
   // 盗塁判定（AI監督）- 走者の実際の走力を使用
   const attemptStolenBase = (offenseTeam, defenseTeam) => {
     if (offenseTeam.strategy?.baseRunning === 'never') return null;
@@ -1378,7 +1399,7 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false, observer = 
     const batterTotal = (batter.batting?.meet || 0) + (batter.batting?.power || 0);
     const batterSpeed = batter.physical?.speed || 50;
     // ⚠ 「投手が打席に立っている」は**その試合の守備位置**で見る。登録や能力
-    //    （`isPitcher` はスタミナ100以上も投手とみなす）で見ると、野手で出ている
+    //    （`isPitcherPlayer` はスタミナ100以上も投手とみなす）で見ると、野手で出ている
     //    二刀流の投手まで投手扱いになり、送りバントや代打の対象になっていた
     const isPitcherBatter = batter.position === 'pitcher';
 
@@ -1417,7 +1438,7 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false, observer = 
   const considerPinchHitter = (offenseTeam, batter) => {
     if (offenseTeam.onlineTactics?.pinchHit === 'never' || gameState.inning < (offenseTeam.onlineTactics?.pinchHitFrom || 0)) return batter;
     const benchFielders = offenseTeam.players.filter(p =>
-      p.isActive !== false && p.battingOrder === 0 && !isPitcher(p) && !gameState.removedIds.has(p.id)
+      p.isActive !== false && p.battingOrder === 0 && !isPitcherPlayer(p) && !gameState.removedIds.has(p.id)
     );
     if (benchFielders.length === 0) return batter;
     const offenseKey = offenseTeam === gameState.homeTeam ? 'home' : 'away';
@@ -1447,7 +1468,7 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false, observer = 
             ...(rotation.middleRelievers || []), ...(rotation.setupMen || []), rotation.closer,
           ].filter(Boolean));
           if (!offenseTeam.players.some(p =>
-            ((isPitcher(p) && (p.battingOrder || 0) === 0) ||
+            ((isPitcherPlayer(p) && (p.battingOrder || 0) === 0) ||
               (bullpen.has(p.id) && (reliefFatigue[p.id] || 0) < 50)) &&
             canEnterRelief(offenseTeam.players, p.id, batterData.id, removed)
           )) return batter;
@@ -1530,15 +1551,16 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false, observer = 
   // 守備固め判定（AI監督）- イニング終了時に呼ばれる
   const considerDefensiveReplacement = (defenseTeam) => {
     if (defenseTeam.onlineTactics?.defensiveSub === 'never' || gameState.inning < (defenseTeam.onlineTactics?.defenseFrom || 0)) return;
-    const isLeading = gameState.isTopInning
-      ? gameState.score.home > gameState.score.away
-      : gameState.score.away > gameState.score.home;
-    const scoreDiff = gameState.isTopInning
+    // ⚠ **その球団の点差で見ること**。半イニングの終わりに両球団へ呼ばれるので、
+    //    以前の「次に守る側（isTopInning）の点差」では負けている球団まで
+    //    「リードしている」として守備固め・大差の控え起用をしていた
+    const scoreDiff = defenseTeam === gameState.homeTeam
       ? gameState.score.home - gameState.score.away
       : gameState.score.away - gameState.score.home;
+    const isLeading = scoreDiff > 0;
 
     const benchFielders = defenseTeam.players.filter(p =>
-      p.isActive !== false && p.battingOrder === 0 && !isPitcher(p) && !gameState.removedIds.has(p.id)
+      p.isActive !== false && p.battingOrder === 0 && !isPitcherPlayer(p) && !gameState.removedIds.has(p.id)
     );
     if (benchFielders.length === 0) return;
 
@@ -1575,8 +1597,9 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false, observer = 
       if (activeBench.length > 0) {
         // 出場機会が少ない控えを優先
         const leastUsed = activeBench.reduce((best, p) => {
-          const pGames = (p.seasonStats?.games || 0);
-          const bGames = (best.seasonStats?.games || 0);
+          // ⚠ 出場数は seasonStats.batting.games（seasonStats.games は無く、いつも 0 だった）
+          const pGames = (p.seasonStats?.batting?.games || 0);
+          const bGames = (best.seasonStats?.batting?.games || 0);
           return pGames < bGames ? p : best;
         }, activeBench[0]);
 
@@ -1836,7 +1859,7 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false, observer = 
       const starterIds = new Set(rotation.starters || []);
       reliever = defenseTeam.players
         .filter(p =>
-          isPitcher(p) &&
+          isPitcherPlayer(p) &&
           p.battingOrder === 0 &&
           p.isActive !== false &&
           !alreadyPitchedIds.has(p.id) &&
@@ -1856,7 +1879,7 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false, observer = 
     if (!reliever) {
       const starterIdsSet = new Set(rotation.starters || []);
       const nonStarterPitchers = defenseTeam.players
-        .filter(p => isPitcher(p) && p.isActive !== false && p.battingOrder === 0 && !alreadyPitchedIds.has(p.id) && !starterIdsSet.has(p.id))
+        .filter(p => isPitcherPlayer(p) && p.isActive !== false && p.battingOrder === 0 && !alreadyPitchedIds.has(p.id) && !starterIdsSet.has(p.id))
         // currentStamina は登板のたびにリセットされるため、スタミナ順だと常に同じ投手が
         // 選ばれてしまう。reliefFatigue の少ない順を主キーにする（守護神は最後）
         .sort(closerLast(fatigue, rotation.closer, (a, b) => (b.currentStamina || 0) - (a.currentStamina || 0)));
@@ -1866,7 +1889,7 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false, observer = 
       } else {
         // 本当に誰もいない場合のみ先発投手を緊急起用
         const starterPitchers = defenseTeam.players
-          .filter(p => isPitcher(p) && p.isActive !== false && p.battingOrder === 0 && !alreadyPitchedIds.has(p.id))
+          .filter(p => isPitcherPlayer(p) && p.isActive !== false && p.battingOrder === 0 && !alreadyPitchedIds.has(p.id))
           .sort((a, b) => ((fatigue[a.id] || 0) - (fatigue[b.id] || 0)) || ((b.currentStamina || 0) - (a.currentStamina || 0)));
         if (starterPitchers.length > 0) {
           reliever = starterPitchers[0];
@@ -1931,7 +1954,6 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false, observer = 
       reliefTrack.currentRelieverId = reliever.id;
       reliefTrack.relieverOutsPitched = 0;
       reliefTrack.relieverBattersFaced = 0;
-      reliefTrack.relieverInningRuns = 0;
 
       // currentPitcherId を更新
       const pitcherTeamKey = defenseTeam === gs.homeTeam ? 'home' : 'away';
@@ -1996,6 +2018,9 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false, observer = 
     const scheduledBatterId = observer ? batter.id : null;
     // AI監督: 代打を検討
     batter = considerPinchHitter(offenseTeam, batter);
+    // 失策で出た印は塁に居る間だけのもの。⚠ 以前はイニングの頭でしか消さず、
+    //    打者一巡で同じ回にまた打席に立つと、安打で出ても非自責の走者のままだった
+    delete batter._reachedOnError;
 
     // AI監督: 打席間のピンチ投手交代（ランナー状況・スタミナ考慮）
     considerMidInningPitcherChange(defenseTeam, pitcher, gameState);
@@ -2051,6 +2076,8 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false, observer = 
       // 最後の1球の前の得点（その打席の途中に暴投などで入った点を、打者の点と分けるため。
       // オンラインの「回の攻撃」が読む。⚠ 2026-11-20 監査「三振 1点」）
       observed.resultScore = { ...gameState.score };
+      // 最後の1球の前の塁（一塁＝1・二塁＝2・三塁＝4 の和）。打席の途中に暴投などで点が入った後の塁
+      observed.resultBases = basesMask(gameState.bases);
     };
 
     let atBatOver = false;
@@ -2058,15 +2085,16 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false, observer = 
     const maxPitches = 20;
     // 打席ごとの配球メモリ（前球の位置・球速・引き出し）。pitchSequence.js
     const sequence = createSequence();
+    const pitchArsenal = pitchArsenalOf(pitcher);
     gameState._stolenAttempted = false;
     let atBatDamagePoints = 0; // この打席で先発に蓄積するダメージポイント
 
     // AI監督: バント判定（投球ループ前に決定）
     const buntDecision = decideBunt(batter, offenseTeam, gameState);
     if (buntDecision) {
-      const pitcherData = defenseTeam.players.find(p => p.id === pitcher.id);
-      pitcherData.currentStamina = Math.max(0, pitcherData.currentStamina - 1);
-      pitcherData.gameStats.pitching.pitches++;
+      // `pitcher` は `defenseTeam.players` の中の選手そのもの（`getCurrentPitcher`）
+      pitcher.currentStamina = Math.max(0, pitcher.currentStamina - 1);
+      pitcher.gameStats.pitching.pitches++;
 
       observeSituation();
       const buntResult = executeBunt(buntDecision, batter, pitcher, catcher, defense, gameState.bases, gameState.outs);
@@ -2164,7 +2192,7 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false, observer = 
       if (pitchCount <= 3 && gameState.outs < 2 && !gameState._stolenAttempted) {
         const stealBefore = observed ? {outs:pitcher.gameStats.pitching.outs,risp:!!(gameState.bases[1] || gameState.bases[2])} : null;
         const stealResult = attemptStolenBase(offenseTeam, defenseTeam);
-        if (observed && pitcher.gameStats.pitching.outs > stealBefore.outs) observer.runnerOut?.({...observed,risp:stealBefore.risp,outs:pitcher.gameStats.pitching.outs-stealBefore.outs});
+        if (observed && pitcher.gameStats.pitching.outs > stealBefore.outs) observer.runnerOut?.({...observed,risp:stealBefore.risp,outs:pitcher.gameStats.pitching.outs-stealBefore.outs,endBases:basesMask(gameState.bases)});
         if (stealResult) gameState._stolenAttempted = true;
         if (stealResult) observeReplay('steal', { success: stealResult.success, base: stealResult.base });
         if (stealResult && !stealResult.success && gameState.outs >= 3) {
@@ -2183,8 +2211,7 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false, observer = 
         const wpRate = Math.max(0.001,
           0.010 * (1 - pControl / 200) * (1 - (cDef - 30) / 140));
         if (Math.random() < wpRate) {
-          const pd = defenseTeam.players.find(p => p.id === pitcher.id);
-          if (pd?.gameStats?.pitching) pd.gameStats.pitching.wildPitches = (pd.gameStats.pitching.wildPitches || 0) + 1;
+          if (pitcher.gameStats?.pitching) pitcher.gameStats.pitching.wildPitches = (pitcher.gameStats.pitching.wildPitches || 0) + 1;
           // 全走者が1つ進塁（三塁走者は生還）
           for (let b = 2; b >= 0; b--) {
             if (!gameState.bases[b]) continue;
@@ -2210,8 +2237,7 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false, observer = 
       if (isWalkOff()) break;
 
       // 投手のスタミナを取得
-      const pitcherData = defenseTeam.players.find(p => p.id === pitcher.id);
-      const pitcherStamina = pitcherData.currentStamina;
+      const pitcherStamina = pitcher.currentStamina;
 
       // チームの作戦設定を取得
       const offenseStrategy = (gameState.isTopInning ? gameState.awayTeam : gameState.homeTeam).strategy;
@@ -2223,7 +2249,7 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false, observer = 
         observeSituation();
         observed.twoStrikes ||= gameState.count.strikes >= 2;
       }
-      const result = simulateOnePitch(batter, pitcher, catcher, defense, gameState.count, pitcherStamina, gameState.bases, sequence, offenseStrategy, defenseStrategy);
+      const result = simulateOnePitch(batter, pitcher, catcher, defense, gameState.count, pitcherStamina, gameState.bases, sequence, offenseStrategy, defenseStrategy, pitchArsenal);
       if (observed) {
         observed.pitches++;
         observed.calls++;
@@ -2236,8 +2262,8 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false, observer = 
       }
 
       // スタミナ減少
-      pitcherData.currentStamina = Math.max(0, pitcherData.currentStamina - 1);
-      pitcherData.gameStats.pitching.pitches++;
+      pitcher.currentStamina = Math.max(0, pitcher.currentStamina - 1);
+      pitcher.gameStats.pitching.pitches++;
 
       // 結果処理
   
@@ -2249,22 +2275,7 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false, observer = 
             batter.gameStats.batting.walks++;
             pitcher.gameStats.pitching.walks++;
             atBatDamagePoints += 4; // 四球=4ダメージ
-            if (gameState.bases[0] && gameState.bases[1] && gameState.bases[2]) {
-              // 満塁押し出し: 3塁走者が生還
-              if (gameState.isTopInning) gameState.score.away++;
-              else gameState.score.home++;
-              pitcher.gameStats.pitching.runsAllowed++;
-              creditRuns(pitcher, 1, gameState.bases[2]?._reachedOnError ? 1 : 0);
-              batter.gameStats.batting.rbis++;   // 押し出しは打点（以前は付いていなかった）
-              atBatDamagePoints += 10; // 失点=10ダメージ
-              gameState.bases[2] = gameState.bases[1];
-              gameState.bases[1] = gameState.bases[0];
-              gameState.bases[0] = batter;
-            } else {
-              if (gameState.bases[1] && gameState.bases[0]) gameState.bases[2] = gameState.bases[1];
-              if (gameState.bases[0]) gameState.bases[1] = gameState.bases[0];
-              gameState.bases[0] = batter;
-            }
+            atBatDamagePoints += 10 * forceAdvanceOnWalk(batter, pitcher); // 押し出しの失点=10ダメージ
             atBatOver = true;
           }
           break;
@@ -2278,21 +2289,7 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false, observer = 
             (batter.gameStats.batting.hbpFatigue || 0)
             + hitByPitchFatigue(result.velocity, batter.physical?.bodyStamina ?? 50);
           atBatDamagePoints += 4;
-          if (gameState.bases[0] && gameState.bases[1] && gameState.bases[2]) {
-            if (gameState.isTopInning) gameState.score.away++;
-            else gameState.score.home++;
-            pitcher.gameStats.pitching.runsAllowed++;
-            creditRuns(pitcher, 1, gameState.bases[2]?._reachedOnError ? 1 : 0);
-            batter.gameStats.batting.rbis++;   // 押し出し死球も打点
-            atBatDamagePoints += 10;
-            gameState.bases[2] = gameState.bases[1];
-            gameState.bases[1] = gameState.bases[0];
-            gameState.bases[0] = batter;
-          } else {
-            if (gameState.bases[1] && gameState.bases[0]) gameState.bases[2] = gameState.bases[1];
-            if (gameState.bases[0]) gameState.bases[1] = gameState.bases[0];
-            gameState.bases[0] = batter;
-          }
+          atBatDamagePoints += 10 * forceAdvanceOnWalk(batter, pitcher);
           atBatOver = true;
           break;
         }
@@ -2374,6 +2371,9 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false, observer = 
                 if (gameState.isTopInning) gameState.score.away++;
                 else gameState.score.home++;
                 batter.gameStats.batting.rbis++;
+                // 犠牲フライは打数に入れない（上で足した1を戻し、犠飛として数える）
+                batter.gameStats.batting.atBats--;
+                batter.gameStats.batting.sacrificeFlies = (batter.gameStats.batting.sacrificeFlies || 0) + 1;
                 pitcher.gameStats.pitching.runsAllowed++;
                 creditRuns(pitcher, 1, sfUnearned);
                 atBatDamagePoints += 10; // 失点=10ダメージ
@@ -2485,10 +2485,11 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false, observer = 
 
     if (observed) {
       const after = batter.gameStats.batting;
-      const delta = Object.fromEntries(['atBats','hits','doubles','triples','homeruns','rbis','walks','hitByPitch','strikeouts','sacrificeBunts'].map(key=>[key,(after[key] || 0)-(observed.before[key] || 0)]));
+      const delta = Object.fromEntries(['atBats','hits','doubles','triples','homeruns','rbis','walks','hitByPitch','strikeouts','sacrificeBunts','sacrificeFlies'].map(key=>[key,(after[key] || 0)-(observed.before[key] || 0)]));
       // 盗塁死や暴投サヨナラ、球数上限の未完了打席は対戦打席へ加えない。
-      const completed = delta.atBats + delta.walks + delta.hitByPitch + delta.sacrificeBunts > 0;
-      observer.plateAppearance({ ...observed, delta, completed, scoreAfter: { ...gameState.score }, outs: pitcher.gameStats.pitching.outs - (observed.resultStartOuts ?? pitcher.gameStats.pitching.outs),
+      const completed = delta.atBats + delta.walks + delta.hitByPitch + delta.sacrificeBunts + delta.sacrificeFlies > 0;
+      // endBases: 打席の後の塁（オンラインの打席速報が読む）
+      observer.plateAppearance({ ...observed, delta, completed, scoreAfter: { ...gameState.score }, endBases: basesMask(gameState.bases), outs: pitcher.gameStats.pitching.outs - (observed.resultStartOuts ?? pitcher.gameStats.pitching.outs),
         runs: (pitcher.gameStats.pitching.runsAllowed || 0) - observed.runsBefore,
         earnedRuns: (pitcher.gameStats.pitching.earnedRuns || 0) - observed.earnedBefore });
     }
@@ -2539,8 +2540,6 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false, observer = 
       const defPitcherData = defenseTeamForInning.players.find(p => p.id === defPitcher.id);
       gameState.inningStartRuns[defenseKey] = defPitcherData?.gameStats?.pitching?.runsAllowed || 0;
     }
-    // リリーフのイニング失点をリセット
-    gameState.reliefTracking[defenseKey].relieverInningRuns = 0;
 
     let atBats = 0;
     while (gameState.outs < 3 && atBats < 50) {  // 無限ループ防止（打席数制限）
@@ -2582,14 +2581,8 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false, observer = 
     // ⚠ **試合が終わった半イニングの後は、継投も守備固めもしない**。以前はここが
     //    試合終了後にも走り、投げない投手に登板記録と救援疲労（+50）が付き、
     //    守備固めで入った控えは「出場した」扱いで翌日の回復を失っていた。
-    //    判定は下の試合ループ（`MAX_INNINGS`）と同じ。
-    {
-      const endedTop = !gameState.isTopInning;
-      const inn = endedTop ? gameState.inning : gameState.inning - 1;
-      const { home, away } = gameState.score;
-      if (gameState.walkOff || (inn >= 9 && ((endedTop && home > away)
-          || (!endedTop && (home !== away || inn >= MAX_INNINGS))))) return;
-    }
+    //    判定は下の試合ループと同じ `isGameOver`（サヨナラもここで終わりになる）。
+    if (isGameOver()) return;
 
     // 投手スタミナ回復 & AI監督機能（役割ベースの投手交代・登板制限）
     [gameState.homeTeam, gameState.awayTeam].forEach(team => {
@@ -2625,11 +2618,6 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false, observer = 
           if (reliefTrack.currentRelieverId === pitcher.id && defendedThisInning) {
             reliefTrack.relieverOutsPitched = pitcherData.gameStats?.pitching?.outs || 0;
           }
-          // 今イニングの失点数を計算
-          const inningRunsAllowed = defendedThisInning
-            ? (pitcherData.gameStats?.pitching?.runsAllowed || 0) - (gameState.inningStartRuns[teamKey] || 0)
-            : 0;
-
           // AI監督: ロール別の投手交代判定（pitcherRoles対応）
           const staminaRate = pitcherData.currentStamina / pitcher.pitching.stamina;
           const rotation = TEAMS_DATA[teamName]?.pitchingRotation;
@@ -2915,7 +2903,7 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false, observer = 
               //    reliefFatigue の少ない順にし、守護神は最後へ回す（`closerLast`）
               reliever = team.players
                 .filter(p =>
-                  isPitcher(p) &&
+                  isPitcherPlayer(p) &&
                   p.battingOrder === 0 &&
                   p.isActive !== false &&
                   !alreadyPitchedIds.has(p.id) &&
@@ -2928,7 +2916,7 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false, observer = 
                 // 最終手段: 先発ローテーション投手も除外せず最もスタミナの残っている投手を選ぶ
                 // （先発がpitcherAppearancesに入るとセーブ判定が狂うため、先発は除外して探す）
                 const allPitchers = team.players
-                  .filter(p => isPitcher(p) && p.battingOrder === 0 && p.isActive !== false && !alreadyPitchedIds.has(p.id) && !starterIds.has(p.id))
+                  .filter(p => isPitcherPlayer(p) && p.battingOrder === 0 && p.isActive !== false && !alreadyPitchedIds.has(p.id) && !starterIds.has(p.id))
                   .sort(closerLast(fatigue, rotation?.closer, (a, b) => (b.currentStamina || 0) - (a.currentStamina || 0)));
                 if (allPitchers.length > 0) {
                   reliever = allPitchers[0];
@@ -2936,7 +2924,7 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false, observer = 
                 } else {
                   // 本当に誰もいない場合のみ先発投手を緊急起用
                   const starterPitchers = team.players
-                    .filter(p => isPitcher(p) && p.battingOrder === 0 && p.isActive !== false && !alreadyPitchedIds.has(p.id) && starterIds.has(p.id))
+                    .filter(p => isPitcherPlayer(p) && p.battingOrder === 0 && p.isActive !== false && !alreadyPitchedIds.has(p.id) && starterIds.has(p.id))
                     .sort((a, b) => (b.currentStamina || 0) - (a.currentStamina || 0));
                   if (starterPitchers.length > 0) {
                     reliever = starterPitchers[0];
@@ -3010,7 +2998,6 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false, observer = 
               reliefTrack.currentRelieverId = reliever.id;
               reliefTrack.relieverOutsPitched = 0;
               reliefTrack.relieverBattersFaced = 0;
-      reliefTrack.relieverInningRuns = 0;
 
               // currentPitcherId を更新
               const pitcherTeamKey2 = team === gameState.homeTeam ? 'home' : 'away';
@@ -3031,6 +3018,17 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false, observer = 
     });
   };
 
+  // 半イニングを終えた時点で試合が終わったか（`isTopInning` は反転済み）。
+  // 半イニングの後の継投・守備固め（`simulateInning`）と下の試合ループが共用する。
+  // サヨナラ（`walkOff`）は「9回以降の裏を終えて差がある」に含まれる
+  const isGameOver = () => {
+    const endedTop = !gameState.isTopInning;  // いま終わったのが表か
+    const inn = endedTop ? gameState.inning : gameState.inning - 1;
+    if (inn < 9) return false;
+    const { home, away } = gameState.score;
+    return endedTop ? home > away : (home !== away || inn >= MAX_INNINGS);
+  };
+
   // 試合実行
   // ⚠ 終了判定は**半イニングごと**に行うこと。以前は
   //    `inning <= 9 || (inning > 9 && 同点)` だったので、延長の表に勝ち越した瞬間に
@@ -3043,12 +3041,7 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false, observer = 
   const MAX_INNINGS = isCupGame ? 12 : normalizeMaxExtraInnings(LEAGUE_SETTINGS.maxExtraInnings);
   for (;;) {
     simulateInning();                         // 終わると isTopInning が反転済み
-    const endedTop = !gameState.isTopInning;  // いま終わったのが表か
-    const inn = endedTop ? gameState.inning : gameState.inning - 1;
-    if (inn < 9) continue;
-    const { home, away } = gameState.score;
-    if (endedTop && home > away) break;
-    if (!endedTop && (home !== away || inn >= MAX_INNINGS)) break;
+    if (isGameOver()) break;
   }
 
   // 試合結果
@@ -3070,7 +3063,7 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false, observer = 
 
 
   // 試合終了後、選手のシーズン成績と通算成績を更新
-  const updatePlayerSeasonStats = (team, isWinner) => {
+  const updatePlayerSeasonStats = (team) => {
     // 先発投手のIDを特定（pitcherAppearancesはリリーフ投手のみ記録されるため、
     // リリーフリストに含まれない＆投球イニングがある投手＝先発投手）
     const teamKey = team === gameState.homeTeam ? 'home' : 'away';
@@ -3097,6 +3090,7 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false, observer = 
         const gb = player.gameStats.batting || {};
         const gp = player.gameStats.pitching || {};
         const appeared = (gb.atBats || 0) > 0 || (gb.walks || 0) > 0 || (gb.hitByPitch || 0) > 0
+          || (gb.sacrificeFlies || 0) > 0
           || (gp.outs || 0) > 0 || (gp.pitches || 0) > 0
           || (player.battingOrder || 0) > 0;
         if (appeared) playerData._playedToday = true;
@@ -3108,7 +3102,8 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false, observer = 
       if (player.gameStats.batting.atBats > 0
           || player.gameStats.batting.walks > 0
           || player.gameStats.batting.hitByPitch > 0
-          || (player.gameStats.batting.sacrificeBunts || 0) > 0) {   // 犠打だけの試合も出場
+          || (player.gameStats.batting.sacrificeBunts || 0) > 0     // 犠打だけの試合も出場
+          || (player.gameStats.batting.sacrificeFlies || 0) > 0) {  // 犠飛だけの試合も
         const b = player.gameStats.batting;
         const season = playerData.seasonStats.batting;
 
@@ -3125,21 +3120,11 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false, observer = 
         season.stolenBases = (season.stolenBases || 0) + (b.stolenBases || 0);
         season.caughtStealing = (season.caughtStealing || 0) + (b.caughtStealing || 0);
         season.sacrificeBunts = (season.sacrificeBunts || 0) + (b.sacrificeBunts || 0);
+        // 犠飛は打った選手にだけ項目を足す（保存を膨らませない。読む側は無ければ 0）
+        if (b.sacrificeFlies) season.sacrificeFlies = (season.sacrificeFlies || 0) + b.sacrificeFlies;
 
-        // 経験値蓄積（出場1 + 打席数/3）
-        const expGained = 1 + Math.floor(b.atBats / 3);
-        playerData.experience = (playerData.experience || 0) + expGained;
-
-        // ポジション・打順別経験を蓄積
-        if (!playerData.positionExperience) playerData.positionExperience = {};
-        const pos = player.position || 'unknown';
-        playerData.positionExperience[pos] = (playerData.positionExperience[pos] || 0) + 1;
-
-        if (!playerData.battingOrderExperience) playerData.battingOrderExperience = {};
-        const bo = player.battingOrder || 0;
-        if (bo >= 1 && bo <= 9) {
-          playerData.battingOrderExperience[bo] = (playerData.battingOrderExperience[bo] || 0) + 1;
-        }
+        // 経験値・ポジション別・打順別の経験（采配試合と共有）
+        accrueBatterExperience(playerData, player, b.atBats);
 
         // 野手疲労蓄積: スタメン出場(3打席以上)のみ疲労が溜まる
         // 代打(1-2打席)や守備固めは疲労の蓄積なし（ただし回復もしない）
@@ -3213,10 +3198,8 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false, observer = 
           }
         }
 
-        // 経験値蓄積（登板1 + 投球回数）
-        const inningsPitched = Math.floor(p.outs / 3);
-        const expGained = 1 + inningsPitched;
-        playerData.experience = (playerData.experience || 0) + expGained;
+        // 経験値蓄積（登板1 + 投球回数。采配試合と共有）
+        accruePitcherExperience(playerData, p.outs);
 
         // QS/HQS判定（先発投手のみ）
         if (wasStarter) {
@@ -3250,8 +3233,8 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false, observer = 
   };
 
   // ホームチームとアウェイチームの成績を更新
-  updatePlayerSeasonStats(gameState.homeTeam, winner === homeTeamName ? true : winner === awayTeamName ? false : null);
-  updatePlayerSeasonStats(gameState.awayTeam, winner === awayTeamName ? true : winner === homeTeamName ? false : null);
+  updatePlayerSeasonStats(gameState.homeTeam);
+  updatePlayerSeasonStats(gameState.awayTeam);
 
   // 勝利・敗戦・セーブ・ホールド（リードの移り変わりから。pitcherDecisions.js）
   const decisions = decisionsFromResult({

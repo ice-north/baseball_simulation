@@ -13,24 +13,16 @@
 //  - タブの移動・再読み込みで保存していない編集が残る。PCの幅（スタメン設定）へ切り替えても渡る
 //  - 保存して読み直しても残る
 import assert from 'node:assert/strict';
-import { readFile, copyFile } from 'node:fs/promises';
-import { chromium } from 'playwright';
+import { copyFile } from 'node:fs/promises';
+import { launchBrowser, distHtml } from './lib/browser.mjs';
 import { seasonService, routeToService } from './lib/serviceRoute.mjs';
 import { shortLastLines } from './lib/textWrap.mjs';
 import { positionFitness, LOW_FITNESS } from '../../src/online/lineupEdit.js';
 import { failureShots } from './lib/failureShots.mjs';
 
-const html = await readFile(
-  new URL('../../dist/index.html', import.meta.url),
-  'utf8',
-);
+const html = await distHtml();
 const base = 'http://localhost:3000';
-const browser = await chromium.launch({
-  ...(process.env.PLAYWRIGHT_CHROME_CHANNEL
-    ? { channel: process.env.PLAYWRIGHT_CHROME_CHANNEL }
-    : {}),
-  headless: true,
-});
+const browser = await launchBrowser();
 const errors = [];
 const shots = [];
 try {

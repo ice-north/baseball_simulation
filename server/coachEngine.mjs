@@ -42,6 +42,7 @@ import {
 } from '../src/online/coaches.js';
 import { PYRAMID_LEAGUES } from '../src/online/pyramidLeague.js';
 import { requireOnline } from '../src/online/shared.js';
+import { teamLabelIn } from '../src/online/membership.js';
 
 const KEEP_EVENTS = 40;
 /** 市場の人数の上限（多すぎれば年長から引退）。下限は `coaches.js` の `MARKET_MIN` */
@@ -191,12 +192,35 @@ export function effectiveStaffModes(league, member) {
 
 /**
  * いまの手続き（トライアウト・契約更改の退団・キャンプ）を、その人が指導者に任せているか。
- * ⚠ **任せた手続きはその人の決定を待たない**（`leagueEngine` の `waitsFor`）。提出があっても
+ * ⚠ **任せた手続きはその人の決定を待たない**（`waitsFor`）。提出があっても
  *    指導者の案で決めるので（`resolvePhase`）、待つ意味が無い。画面の「指導者に任せています」もこれ
  */
 export function phaseDelegated(league, member) {
   const area = PHASE_STAFF_AREA[league.phase?.kind];
   return !!area && !!member && effectiveStaffModes(league, member)[area] === 'delegate';
+}
+
+/**
+ * 手続きがこの人の決定をまだ待っているか。
+ *
+ * ⚠ **途中参加でセットを待っている人は待たない**。その人の球団は次のキャンプで
+ *    名簿がセットに丸ごと入れ替わり、それまではCPUが動かす（画面もそう書いている）。
+ *    以前はこの人も「決定」を待っていたが、画面には初期メンバーの選択しか
+ *    出さないので決定する手段が無く、ストーブリーグとキャンプが毎回
+ *    締め切りまで止まっていた（ほかの全員が決めても進まない）。
+ *    自分で出した案があればそれを使い、無ければ標準案で決める（`resolvePhase`）。
+ * ⚠ **手続きを指導者に任せた人も待たない**（トライアウト・契約更改の退団・キャンプ。
+ *    `phaseDelegated`）。任せた手続きは提出があっても指導者の案で決めるので、待つ意味が無い。
+ *    以前は待っていたので、ほかの全員が決めても締め切りまで進まず、「決定」の無いキャンプは
+ *    任せた人がいると必ず締め切り待ちになっていた（総合監査 2026-11-10 の判断7）。
+ *    キャンプの残りのクールは締め切りのときと同じく指導者の方針で回る（`resolvePhase`）
+ * ⚠ 画面の参加者の「決定済み」（`projection.mjs` の `members[].ready`）もこれで決める。
+ *    手続きの無いときは誰も待たないが、画面は「決定済み」と出さない。
+ */
+export function waitsFor(league, member) {
+  if (league.phase?.submissions?.[member.userId]?.ready) return false;
+  if (phaseDelegated(league, member)) return false;
+  return !(member.packSeed && league.phase?.kind !== 'pack_select');
 }
 
 /**
@@ -413,7 +437,7 @@ export function hirePlayerAsCoach(league, teamName, player, role, career = null)
   const c = ensureCoaches(league);
   const year = league.season.year;
   c.teams[teamName] ||= { manager: null, pitching: null, batting: null };
-  const label = (league.teams || []).find((t) => t.name === teamName)?.displayName || teamName;
+  const label = teamLabelIn(league, teamName);
   let coach = null;
   seededIn(league, `offer:${year}:${teamName}:${role}`, () => {
     coach = newCoach(c, {
@@ -692,8 +716,7 @@ export function coachOffseason(league, { rows = {}, retirees = [] } = {}) {
   const entry = league.history?.at(-1);
   const year = entry?.year ?? league.season.year - 1;
   const nextYear = league.season.year;
-  const teamLabel = (name) =>
-    (league.teams || []).find((t) => t.name === name)?.displayName || name;
+  const teamLabel = (name) => teamLabelIn(league, name);
   const events = [];
   // 終わった年の監督（引退した選手の恩師）。⚠ 勇退・解任で席が空く前に控える
   const managers = Object.fromEntries(

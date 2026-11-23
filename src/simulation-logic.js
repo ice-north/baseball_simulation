@@ -1043,7 +1043,8 @@ export const judgeFielderReach = (battedBall, defense, batter) => {
 export const calculateDefensiveFitness = (player, position) => {
   const defense = player.fielding?.defense || 50;
   const speed = player.physical?.speed || 50;
-  const arm = player.fielding?.arm || 50;
+  // ⚠ 肩は physical.arm（fielding.arm は無く、いつも 50 になっていた）
+  const arm = player.physical?.arm || 50;
 
   let fitness = 0;
   let comments = [];

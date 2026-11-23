@@ -1,20 +1,12 @@
 package jp.icenorth.baseball.shared
 
-/** Web 版と同じ表記。出どころ: src/online/api.js / shared.js / src/utils/constants.js / src/game/condition.js */
+/**
+ * Web 版と同じ表記。出どころ: src/online/api.js / shared.js / src/utils/constants.js / src/game/condition.js
+ * ⚠ SEASON_TURNS・SEASON_START_MONTH・POSITION_LABELS・STATUS_LABELS は Tables.kt（gen-tables.mjs が Web 版から書き出す）
+ */
 
-const val SEASON_TURNS = 160
-const val SEASON_START_MONTH = 4
-
-val POSITION_LABELS = mapOf(
-    "pitcher" to "投", "catcher" to "捕", "first" to "一", "second" to "二", "third" to "三",
-    "short" to "遊", "left" to "左", "center" to "中", "right" to "右",
-)
-
-val STATUS_LABELS = mapOf(
-    "running" to "進行中", "waiting" to "決定待ち", "paused" to "一時停止", "error" to "要確認・停止中",
-)
-
-val LEAGUE_NAMES = mapOf("A" to "1部", "B" to "2部")
+/** リーグの名前（"A" → "1部"）。階層リーグの表（[PYRAMID_LEAGUES]）から作る */
+val LEAGUE_NAMES: Map<String, String> = PYRAMID_LEAGUES.associate { it.id to it.name }
 
 fun positionLabel(pos: String?): String = POSITION_LABELS[pos] ?: (pos ?: "")
 
@@ -23,7 +15,6 @@ fun conditionIcon(condition: Int?): String = when (condition) {
     4 -> "🔥"; 3 -> "😊"; 2 -> "😐"; 1 -> "😞"; 0 -> "😰"; else -> ""
 }
 
-/** 能力値のランク（S〜F）。球速は (v-115)×2.5、投手スタミナは v/2 に直してから測る（getAbilityRank） */
 /** 能力を0〜100の物差しにそろえる（球速は km/h、スタミナは0〜200）。Web 版 `normalizeAbility` と同じ */
 fun normalizedAbility(value: Int, velocity: Boolean = false, stamina: Boolean = false): Double = when {
     velocity -> (value - 115) * 2.5
@@ -38,6 +29,7 @@ fun normalizedAbility(value: Int, velocity: Boolean = false, stamina: Boolean = 
 fun abilityBarFraction(value: Int, velocity: Boolean = false, stamina: Boolean = false): Float =
     (kotlin.math.round(normalizedAbility(value, velocity, stamina)) / 100.0).coerceIn(0.0, 1.0).toFloat()
 
+/** 能力値のランク（S〜F）。球速は (v-115)×2.5、投手スタミナは v/2 に直してから測る（getAbilityRank） */
 fun abilityRank(value: Int, velocity: Boolean = false, stamina: Boolean = false): Char {
     val v = normalizedAbility(value, velocity, stamina)
     return when {
@@ -45,19 +37,10 @@ fun abilityRank(value: Int, velocity: Boolean = false, stamina: Boolean = false)
     }
 }
 
-private fun daysFromCivil(y: Int, m: Int, d: Int): Long {
-    val yy = if (m <= 2) y - 1 else y
-    val era = (if (yy >= 0) yy else yy - 399) / 400
-    val yoe = yy - era * 400
-    val doy = (153 * (m + (if (m > 2) -3 else 9)) + 2) / 5 + d - 1
-    val doe = yoe * 365 + yoe / 4 - yoe / 100 + doy
-    return era * 146097L + doe - 719468
-}
-
 /** シーズンの何ターン目か。範囲外は null（shared.js の turnOfDate） */
 fun turnOfDate(date: GameDate?, turns: Int = SEASON_TURNS): Int? {
     date ?: return null
-    val turn = (daysFromCivil(date.year, date.month, date.day) - daysFromCivil(date.year, SEASON_START_MONTH, 1)).toInt() + 1
+    val turn = (daysFromCivil(date.year.toLong(), date.month, date.day) - daysFromCivil(date.year.toLong(), SEASON_START_MONTH, 1)).toInt() + 1
     return if (turn in 1..turns) turn else null
 }
 

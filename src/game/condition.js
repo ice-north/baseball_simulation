@@ -79,6 +79,24 @@ export const conditionBattingMod = (condition) =>
   CONDITION_BATTING_MODIFIER[condition ?? CONDITION_LEVELS.NORMAL]
   || CONDITION_BATTING_MODIFIER[CONDITION_LEVELS.NORMAL];
 
+/**
+ * スタメンを選ぶときに見る調子の補正（絶好調+5 … 絶不調-5。ミートとパワーに同じ値）。
+ * ⚠ 試合の中の補正（上の `CONDITION_BATTING_MODIFIER`）とは別の表。CPU の
+ *    `generateAILineup` と一人用の自動スタメン（`lineupGenerator.js`）がこれを使う。
+ *    片方だけ変えると、自軍と相手で「誰を使うか」の判断が食い違う。
+ */
+export const lineupConditionMod = (condition) =>
+  ({ 4: 5, 3: 2, 2: 0, 1: -2, 0: -5 })[condition ?? CONDITION_LEVELS.NORMAL] || 0;
+
+/**
+ * 疲労による打撃の目減り（疲労²/1200 → 41で1・61で3・81で5・100で8）。
+ * 試合の打者（`simulateAtBat`）とスタメン選び（`generateAILineup`・`lineupGenerator.js`）が同じ値を使う。
+ */
+export const batterFatiguePenalty = (fatigue) => {
+  const f = fatigue || 0;
+  return f > 0 ? Math.round((f * f) / 1200) : 0;
+};
+
 // 投手への影響（制球）
 export const CONDITION_PITCHING_MODIFIER = {
   [CONDITION_LEVELS.BEST]: 10,

@@ -3,7 +3,7 @@
 // アプリの Kotlin の表（shared/.../Tables.kt）を書き出す。
 //
 // ⚠ **表を手で写さないこと**。Web 側で選択肢やしきい値を変えたとき、写しだけ古くなる。
-//    `node mobile/tools/gen-tables.mjs` で作り直し、`--check` で食い違いを検査する（CI で回す）。
+//    `node mobile/tools/gen-tables.mjs` で作り直し、`--check` で食い違いを検査する（`npm run check:quick` の app-gen-tables で回る）。
 // ============================================================
 import fs from 'node:fs';
 import path from 'node:path';
@@ -20,6 +20,7 @@ const constants = await import(at('src/utils/constants.js'));
 const pyramid = await import(at('src/online/pyramidLeague.js'));
 const api = await import(at('src/online/api.js'));
 const social = await import(at('src/online/social.js'));
+const tryoutPlan = await import(at('src/online/tryoutPlan.js'));
 
 // ⚠ Kotlin の文字列では `$` が式の始まりになるので逃がす
 const q = (s) => JSON.stringify(String(s)).replaceAll('$', '\\$');
@@ -150,6 +151,18 @@ map('POSITION_NAMES', api.POS_FULL);
 for (const k of ['TRADE_NOTE_MAX', 'OWNER_COMMENT_MAX', 'CHALLENGE_NOTE_MAX', 'AWAY_DAYS', 'STARTER_LOCK_TURNS', 'STARTER_PICK_GAMES', 'EXHIBITIONS_PER_DAY']) {
   if (!Number.isInteger(social[k])) throw new Error(`${k} が読めない`);
   out(`const val ${k}: Int = ${social[k]}`);
+}
+// シーズンの長さ・開幕の月・守備位置の1字・進行の状態（Web 版 pyramidLeague.js / shared.js / api.js）
+for (const [k, v] of Object.entries({ SEASON_TURNS: pyramid.SEASON_TURNS, SEASON_START_MONTH: shared.SEASON_START_MONTH })) {
+  if (!Number.isInteger(v)) throw new Error(`${k} が読めない`);
+  out(`const val ${k}: Int = ${v}`);
+}
+map('POSITION_LABELS', api.POS);
+map('STATUS_LABELS', api.STATUS);
+// 1部・2部のそれぞれの球団の数（pyramidLeague.js）と、交渉できる人数の上限（1位〜20位。tryoutPlan.js）
+for (const [k, v] of Object.entries({ TEAMS_PER_LEAGUE: pyramid.TEAMS_PER_LEAGUE, TRYOUT_WISH_MAX: tryoutPlan.TRYOUT_WISH_MAX })) {
+  if (!Number.isInteger(v)) throw new Error(`${k} が読めない`);
+  out(`const val ${k}: Int = ${v}`);
 }
 const text = lines.join('\n') + '\n';
 const file = path.join(root, 'mobile/shared/src/commonMain/kotlin/jp/icenorth/baseball/shared/Tables.kt');

@@ -1,6 +1,7 @@
 // 球団の顔（C2）の検査: 背番号・主将・永久欠番・在籍。
 //   node tools/sim-harness/online-team-face-check.mjs
 // ⚠ 効き目は無い（試合・能力に触らない）。背番号はリーグの12球団にだけ付ける。
+import { quiet } from './lib/quiet.mjs';
 import assert from 'node:assert/strict';
 import { createLeague, submitPhase, loadLeagueWorld, setTeamFace } from '../../server/leagueEngine.mjs';
 import { captureWorld } from '../../server/worldSnapshot.mjs';
@@ -9,15 +10,6 @@ import { teamChronicle, recordRetirements } from '../../server/chronicle.mjs';
 import { numberLeagueTeams, captainsOfYear, tenureOf, RETIRED_NUMBERS_MAX } from '../../server/teamFace.mjs';
 import { ensureTeamJerseyNumbers } from '../../src/utils/jerseyNumbers.js';
 
-const quiet = (fn) => {
-  const log = console.log;
-  console.log = () => {};
-  try {
-    return fn();
-  } finally {
-    console.log = log;
-  }
-};
 const NOW = '2026-10-26T15:00:00.000Z';
 const league = quiet(() => createLeague({ members: [{ userId: 'a' }], now: NOW, seed: 3 }));
 quiet(() => submitPhase(league, 'a', { phaseId: league.phase.id, plan: { packId: league.packs[0].id }, ready: true }, NOW));

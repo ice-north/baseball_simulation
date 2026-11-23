@@ -388,6 +388,7 @@ private fun CoachBlock(roleLabel: String, coach: CoachCard?) {
     Column(Modifier.fillMaxWidth().clickable { open = !open }, verticalArrangement = Arrangement.spacedBy(2.dp)) {
         Caption(roleLabel)
         Row(verticalAlignment = Alignment.CenterVertically) {
+            StaffFace(coach, size = 44.dp, modifier = Modifier.padding(end = 8.dp))
             Text(
                 coach.name,
                 style = MaterialTheme.typography.titleMedium,
@@ -434,6 +435,7 @@ fun CoachDialog(coach: CoachCard, onClose: () -> Unit) {
         confirmButton = { TextButton(onClick = onClose) { Text("閉じる") } },
         title = {
             Column {
+                StaffFace(coach, size = 64.dp, modifier = Modifier.padding(bottom = 6.dp))
                 Text(coach.name, fontWeight = FontWeight.Bold)
                 Text(
                     listOfNotNull(

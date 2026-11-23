@@ -44,6 +44,7 @@ import {
   tapLineup,
   lineupNotes,
 } from './tapLineup.js';
+import { PlayerFace } from './look/Art.jsx';
 
 // ============================================================
 // スマホの打順・守備・控え（767px以下）。**2回のタップで入れ替える縦の表**。
@@ -275,6 +276,7 @@ function NameLine({ player }) {
     <span
       className={`online-tap-line1 online-fatigue-${getFatigueTone(player.fatigue) || 'none'}`}
     >
+      <PlayerFace player={player} size={22} />
       <ConditionMark player={player} />
       <span className="online-tap-name">{player.name}</span>
       {/* 投手登録の選手が野手の枠に居る・控えに居る（二刀流） */}

@@ -1,7 +1,7 @@
 import { getAIReleaseCandidates } from '../game/contractRules.js';
-import React, { useState, useMemo, useCallback, useRef } from 'react';
+import React, { useState, useMemo, useRef } from 'react';
 import { departedEntry } from '../season/departedStats.js';
-import { TEAMS_DATA, releasedPlayersPool } from '../teams-data.js';
+import { TEAMS_DATA } from '../teams-data.js';
 import { addToReleasedPool } from '../state/pools.js';
 import { POSITION_NAMES, getAbilityColor, getAbilityRank, getRankColor, getPositionSortIndex } from '../utils/constants.js';
 import { finalizePlayerSeason, getPitchTypeName } from '../season/yearProgressionSystem.js';

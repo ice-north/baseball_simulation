@@ -30,6 +30,28 @@ console.log(`\n▶ 多年次プログレッション検証: フルワールド�
 
 const { seasonData: initial } = bootstrapWorld();
 
+// 大会成績の予算ボーナスが年度更新（advanceToNextYear）で入るか: 1年目に社会人4チームの
+// 都市対抗本戦を置き、ほかの社会人チームには前年の分（9999）を残しておく。
+// 計算の中身は corporate-roster-check が見る。ここは「年度更新から呼ばれ、毎年置き換わる」だけ
+const { SRC } = await import('./lib/bootstrap.mjs');
+const { createBracket, recordResult } = await import(SRC + '/corporate/toshitaikou.js');
+const corpNames = Object.keys(TEAMS_DATA).filter(n => TEAMS_DATA[n]?.corporateData && !TEAMS_DATA[n].independentLeagueId
+  && TEAMS_DATA[n].corporateData.type !== 'club');
+const bonusTeams = corpNames.slice(0, 4);
+const bonusOutsider = corpNames[4];
+{
+  const b = createBracket(bonusTeams);
+  for (let r = 0; r < b.rounds.length; r++) {
+    b.rounds[r].forEach((m, i) => {
+      if (!m.isBye && m.team1 && m.team2) recordResult(b, r, i, bonusTeams.indexOf(m.team1) < bonusTeams.indexOf(m.team2) ? m.team1 : m.team2, '1-0');
+    });
+  }
+  initial.toshitaikou = { generated: true, mainTournament: { bracket: b, champion: b.champion } };
+  TEAMS_DATA[bonusOutsider].corporateData.tournamentBudgetBonus = 9999;
+}
+const bonusOf = n => TEAMS_DATA[n]?.corporateData?.tournamentBudgetBonus;
+let bonusAfterY1 = null, bonusAfterY2 = null;
+
 const history = [];
 let crashed = null;
 let sd = initial;
@@ -38,6 +60,8 @@ for (let y = 1; y <= YEARS; y++) {
   try {
     const m = advanceYear(sd);
     history.push(m);
+    if (y === 1) bonusAfterY1 = [...bonusTeams, bonusOutsider].map(bonusOf);
+    if (y === 2) bonusAfterY2 = [...bonusTeams, bonusOutsider].map(bonusOf);
     sd = m.nextSeasonData;
   } catch (e) {
     crashed = { year: y, error: e?.message || String(e) };
@@ -120,6 +144,13 @@ for (const a of alumni) {
 r.assert('OB名鑑に能力なしの幽霊レコードが無い', ghosts.length === 0,
   `${alumni.length}件中 ${ghosts.length}件が playerId/draftYear/能力 のいずれかを欠く`);
 r.assert('OB名鑑に同一選手の二重登録が無い', dupes === 0, `重複 ${dupes}件`);
+// 4チームの都市対抗: 優勝2000・準優勝1000・ベスト4（初戦負け）500。出ていない球団は0
+r.assert('大会成績の予算ボーナスが年度更新で入る（優勝/準優勝/ベスト4/不出場）',
+  JSON.stringify(bonusAfterY1) === JSON.stringify([2000, 1000, 500, 500, 0]), `1年目の後: ${JSON.stringify(bonusAfterY1)}`);
+if (YEARS >= 2) {
+  r.assert('大会の無い翌年は大会成績ボーナスが0に戻る（持ち越さない）',
+    bonusAfterY2?.every(v => !v), `2年目の後: ${JSON.stringify(bonusAfterY2)}`);
+}
 r.print();
 
 // --- 参考: ドラフト比率の推移（初年が最も忠実）---

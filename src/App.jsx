@@ -50,7 +50,7 @@ import { CONDITION_LEVELS, CONDITION_COLORS, CONDITION_ICONS, conditionBattingMo
 import { readSaveSlots, readSaveSlotsSync, setCachedSlots, ensureMigration, migrateOldSaveData, saveGameToSlot, loadGameFromSlot, deleteSaveSlot, autoSave, isAutosaveEnabled, AUTOSAVE_KEY, resumeTargetOf } from './game/saveSystem.js';
 
 // Game controls imports
-import { executeResetGame, executeMultiPitch, executeStartSimMode } from './game/gameControls.js';
+import { executeResetGame, executeStartSimMode } from './game/gameControls.js';
 import { executeSetupManagedGame, executeHandleManagedGameEnd } from './game/gameSetup.js';
 
 // AI Manager imports
@@ -73,8 +73,7 @@ import { WORLD_DATA } from './corporate/worldData.js';
 // Component imports
 import ManagementScreen from './components/ManagementScreen.jsx';
 import GameFlowScreens from './components/GameFlowScreens.jsx';
-import { Sidebar, RenderBases, AccordionSection, TeamPitcherPanel, TeamMemberPanel } from './components/GameUIComponents.jsx';
-import { PlayerEditColumn } from './components/PlayerEditColumn.jsx';
+import { Sidebar, AccordionSection, TeamPitcherPanel, TeamMemberPanel } from './components/GameUIComponents.jsx';
 import { useEscapeToClose } from './components/useEscapeToClose.js';
 
     // ========================================================================
@@ -89,6 +88,10 @@ import { useEscapeToClose } from './components/useEscapeToClose.js';
     //
     // ★ 分割作業は完了しました。今後は通常の開発（機能追加・バグ修正）に集中できます。
     // ========================================================================
+
+    // サイドバーを出さず全画面で開く管理画面のビュー（サイドバーと本文の左の余白の両方がこれを見る）
+    const FULLSCREEN_MANAGEMENT_VIEWS = ['contract', 'tryout', 'offseason', 'camp', 'summer_camp', 'jersey', 'regulations_next', 'sandbox_next_regulations', 'sandbox_setup', 'edit', 'corporate_departure', 'corporate_scout', 'club_recruit', 'budget_settlement'];
+
     const App = () => {
       // チームデータの初期化
       useEffect(() => {
@@ -424,7 +427,7 @@ import { useEscapeToClose } from './components/useEscapeToClose.js';
       };
 
       // 変化球の効果設定（外部ファイルから読み込み）
-      const [ballEffects, setBallEffects] = useState(BALL_EFFECTS);
+      const ballEffects = BALL_EFFECTS;
 
       // 試合状態（先に定義が必要）
       const [isTopInning, setIsTopInning] = useState(true);
@@ -590,15 +593,6 @@ import { useEscapeToClose } from './components/useEscapeToClose.js';
         }
       }, [allTeams]);
       
-      // 互換性のため players を動的に取得
-      const players = isTopInning ? homeTeam.players : awayTeam.players;  // 守備側
-      const setPlayers = isTopInning 
-        ? (fn) => setHomeTeam(prev => ({...prev, players: typeof fn === 'function' ? fn(prev.players) : fn}))
-        : (fn) => setAwayTeam(prev => ({...prev, players: typeof fn === 'function' ? fn(prev.players) : fn}));
-      
-      const [editingPlayer, setEditingPlayer] = useState(null);  // 編集中の選手
-      const [editingTeam, setEditingTeam] = useState('home');  // 編集中のチーム
-      const [showEditScreen, setShowEditScreen] = useState(false);  // エディット画面表示フラグ
       
       // 選手成績更新関数（元の定義を維持）
       // ⚠ **増分を渡すこと**（`{ atBats: 1 }`）。以前は呼び出し側が「描画時点の値 + 1」を
@@ -923,24 +917,6 @@ import { useEscapeToClose } from './components/useEscapeToClose.js';
         return team.players.find(p => p.isStarter && p.position === 'catcher' && !p._isDH) || team.players[7];
       };
 
-      // ※ formatInnings, getAbilityColor, getAbilityTextColor, getBestFitPosition は
-      //    js/utils/physics.js に移動済み（グローバルスコープで利用可能）
-
-      // 能力値バーを表示するコンポーネント（コンパクト版）
-      const AbilityBar = ({ label, value }) => (
-        <div className="flex items-center gap-1">
-          <span className="text-xs text-gray-300 w-3">{label}</span>
-          <div className="flex-1 bg-gray-700 rounded-full h-1 overflow-hidden">
-            <div
-              className={`h-full ${getAbilityColor(value)} transition-all`}
-              style={{ width: `${value}%` }}
-            />
-          </div>
-          <span className="text-xs text-gray-300 w-4 text-right font-mono">{value}</span>
-        </div>
-      );
-
-
       // 監督AI関数（→ aiManager.js に抽出済み、ラッパーのみ）
       const aiManagerCtx = () => ({
         autoManagerMode, gameStarted, isSubstituting,
@@ -970,127 +946,8 @@ import { useEscapeToClose } from './components/useEscapeToClose.js';
         }
       };
       
-      // 選手編集用の関数
-      // チーム対応の選手更新関数
-      const updatePlayer = (playerId, updates) => {
-        if (editingTeam === 'home') {
-          setHomeTeam(prev => ({
-            ...prev,
-            players: prev.players.map(p => p.id === playerId ? { ...p, ...updates } : p)
-          }));
-        } else {
-          setAwayTeam(prev => ({
-            ...prev,
-            players: prev.players.map(p => p.id === playerId ? { ...p, ...updates } : p)
-          }));
-        }
-      };
-      
-      const updatePlayerBatting = (playerId, battingUpdates) => {
-        if (editingTeam === 'home') {
-          setHomeTeam(prev => ({
-            ...prev,
-            players: prev.players.map(p => 
-              p.id === playerId ? { ...p, batting: { ...p.batting, ...battingUpdates } } : p
-            )
-          }));
-        } else {
-          setAwayTeam(prev => ({
-            ...prev,
-            players: prev.players.map(p => 
-              p.id === playerId ? { ...p, batting: { ...p.batting, ...battingUpdates } } : p
-            )
-          }));
-        }
-      };
-      
-      const updatePlayerFielding = (playerId, fieldingUpdates) => {
-        if (editingTeam === 'home') {
-          setHomeTeam(prev => ({
-            ...prev,
-            players: prev.players.map(p => 
-              p.id === playerId ? { ...p, fielding: { ...p.fielding, ...fieldingUpdates } } : p
-            )
-          }));
-        } else {
-          setAwayTeam(prev => ({
-            ...prev,
-            players: prev.players.map(p => 
-              p.id === playerId ? { ...p, fielding: { ...p.fielding, ...fieldingUpdates } } : p
-            )
-          }));
-        }
-      };
-      
-      const updatePlayerPitching = (playerId, pitchingUpdates) => {
-        if (editingTeam === 'home') {
-          setHomeTeam(prev => ({
-            ...prev,
-            players: prev.players.map(p => 
-              p.id === playerId && p.pitching ? { ...p, pitching: { ...p.pitching, ...pitchingUpdates } } : p
-            )
-          }));
-        } else {
-          setAwayTeam(prev => ({
-            ...prev,
-            players: prev.players.map(p => 
-              p.id === playerId && p.pitching ? { ...p, pitching: { ...p.pitching, ...pitchingUpdates } } : p
-            )
-          }));
-        }
-      };
-      
-      // 既存のstate（互換性のために残す）
-
-      const [batter, setBatter] = useState({
-        name: '打者A',
-        meet: 60,
-        power: 60,
-        eye: 60,
-        speed: 60,  // 走力（成功率に影響）
-        steal: 50,  // 盗塁スキル（試行率と成功率に影響）
-        bats: 'right'  // 'right', 'left', or 'switch'
-      });
-
-      const [pitcher, setPitcher] = useState({
-        name: '投手B',
-        velocity: 145,
-        control: 60,
-        stamina: 200,  // スタミナ追加
-        throws: 'right',  // 'right' or 'left' を追加
-        pitches: [  // breakingBalls → pitches に変更
-          { id: 1, type: 'straight', level: 100 },  // ストレートは常に習得済み
-          { id: 2, type: 'slider', level: 50 },
-          { id: 3, type: 'curve', level: 50 },
-          { id: 4, type: 'fork', level: 50 }
-        ]
-      });
-
       // 現在のスタミナを管理
       const [currentStamina, setCurrentStamina] = useState(200);
-
-      const [catcher, setCatcher] = useState({
-        name: 'キャッチャーC',
-        lead: 50,
-        arm: 70,
-        throws: 'right'  // 投げる腕
-      });
-      
-      // 守備パラメータ（ポジション別）
-      const [defense, setDefense] = useState({
-        // バッテリー
-        pitcher: { defense: 60, speed: 60, arm: 60, throws: 'right' },    // 投手
-        catcher: { defense: 60, speed: 60, arm: 60, throws: 'right' },    // 捕手
-        // 内野
-        first: { defense: 60, speed: 60, arm: 60, throws: 'right' },      // 一塁手
-        second: { defense: 60, speed: 60, arm: 60, throws: 'right' },     // 二塁手
-        short: { defense: 60, speed: 60, arm: 60, throws: 'right' },      // 遊撃手
-        third: { defense: 60, speed: 60, arm: 60, throws: 'right' },      // 三塁手
-        // 外野
-        left: { defense: 60, speed: 60, arm: 60, throws: 'right' },       // 左翼手
-        center: { defense: 60, speed: 60, arm: 60, throws: 'right' },     // 中堅手
-        right: { defense: 60, speed: 60, arm: 60, throws: 'right' }       // 右翼手
-      });
 
       const [gameLog, setGameLog] = useState([]);
       const [lastResult, setLastResult] = useState(null);
@@ -1116,41 +973,6 @@ import { useEscapeToClose } from './components/useEscapeToClose.js';
       //    復活させるなら**描く場所を先に決めてから**にすること。
 
       // [SECTION: GAME_HANDLERS] 投球生成・接触判定・走者進塁・守備記録・成績更新
-      const addPitch = () => {
-        const newId = pitcher.pitches.length > 0 
-          ? Math.max(...pitcher.pitches.map(b => b.id)) + 1 
-          : 1;
-        setPitcher({
-          ...pitcher,
-          pitches: [...pitcher.pitches, { id: newId, type: 'slider', level: 50 }]
-        });
-      };
-
-      const removePitch = (id) => {
-        // ストレート（id=1）は削除不可
-        if (id === 1) return;
-        setPitcher({
-          ...pitcher,
-          pitches: pitcher.pitches.filter(b => b.id !== id)
-        });
-      };
-
-      const updatePitch = (id, field, value) => {
-        setPitcher({
-          ...pitcher,
-          pitches: pitcher.pitches.map(b => 
-            b.id === id ? { ...b, [field]: value } : b
-          )
-        });
-      };
-
-      const updateBallEffect = (type, field, value) => {
-        setBallEffects({
-          ...ballEffects,
-          [type]: { ...ballEffects[type], [field]: parseFloat(value) }
-        });
-      };
-
       const getCountAdjustment = (balls, strikes) => {
         if (balls === 3 && strikes <= 1) {
           return { strikeZone: 0.7, swingRate: 0.6 };
@@ -1160,9 +982,6 @@ import { useEscapeToClose } from './components/useEscapeToClose.js';
         }
         return { strikeZone: 1.0, swingRate: 1.0 };
       };
-
-      // ※ getStaminaPenalty, getInfielderEffectiveArm, getHandednessEffect は
-      //    js/utils/physics.js に移動済み（グローバルスコープで利用可能）
 
       /**
        * 物理演算ベースのコンタクト結果判定（新エンジン）
@@ -1619,12 +1438,6 @@ import { useEscapeToClose } from './components/useEscapeToClose.js';
         setCurrentStamina(newStamina);
 
         return result;
-      };
-
-      // 旧determineContactResult（互換性のために残す）
-      const determineContactResult = (selectedBall, predictionCorrect, tempoGroundballBonus = 0, handEffect = {}, actualVelocity = 145, batter = null, pitcher = null, defense = null) => {
-        // 新エンジンに転送
-        return determineContactResultPhysics(selectedBall, predictionCorrect, tempoGroundballBonus, handEffect, actualVelocity, batter, pitcher, defense, null);
       };
 
       // 守備成績（守備機会＝刺殺+補殺 / 失策）を記録する。
@@ -2801,7 +2614,6 @@ if (newOuts === 3) {
       };
       // [SECTION: GAME_CONTROLS] → gameControls.js に抽出済み（ラッパーのみ）
       const resetGame = () => executeResetGame(gameControlsCtx);
-      const multiPitch = (pitchCount) => executeMultiPitch(gameControlsCtx, pitchCount);
       const startSimMode = (mode) => executeStartSimMode(gameControlsCtx, mode);
 
       // 残り投球数がある場合は自動的に投球を続ける
@@ -2839,9 +2651,6 @@ if (newOuts === 3) {
         }, 1);
         return () => clearTimeout(timer);
       });
-
-      // renderBases: GameUIComponentsのRenderBasesを使用
-      const renderBases = () => <RenderBases defense={defense} setDefense={setDefense} bases={bases} />;
 
       // AccordionSection, Sidebar: GameUIComponentsからimport済み
 
@@ -2937,7 +2746,7 @@ if (newOuts === 3) {
               💾 オートセーブしました
             </div>
           )}
-          {screenMode === 'management' && !['contract', 'tryout', 'offseason', 'camp', 'summer_camp', 'jersey', 'regulations_next', 'sandbox_next_regulations', 'sandbox_setup', 'edit', 'corporate_departure', 'corporate_scout', 'club_recruit', 'budget_settlement'].includes(managementView) && <Sidebar
+          {screenMode === 'management' && !FULLSCREEN_MANAGEMENT_VIEWS.includes(managementView) && <Sidebar
             gameMode={gameMode}
             userTeamName={userTeamName}
             seasonData={seasonData}
@@ -2948,7 +2757,7 @@ if (newOuts === 3) {
             setManagementView={setManagementView}
           />}
 
-          <div className={screenMode === 'management' && !['contract', 'tryout', 'offseason', 'camp', 'summer_camp', 'jersey', 'regulations_next', 'sandbox_next_regulations', 'sandbox_setup', 'edit', 'corporate_departure', 'corporate_scout', 'club_recruit', 'budget_settlement'].includes(managementView) ? 'md:ml-56 pt-12 md:pt-0' : ''}>
+          <div className={screenMode === 'management' && !FULLSCREEN_MANAGEMENT_VIEWS.includes(managementView) ? 'md:ml-56 pt-12 md:pt-0' : ''}>
             {screenMode === 'game' ? (
               /* data-fit-height: 縦も1画面に収める対象。自動フィットが高さを見る印
                  （縦に読み進める管理画面には付けないこと）
@@ -4096,242 +3905,6 @@ if (newOuts === 3) {
             />
           </div>
           
-          {/* 選手編集モーダル */}
-          {editingPlayer && (
-            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-              <div className="bg-surface-2 rounded-lg shadow-2xl max-w-md w-full max-h-[90vh] overflow-y-auto border border-gray-700">
-                <div className="p-4">
-                  <div className="flex justify-between items-center mb-4">
-                    <h2 className="text-xl font-bold text-gray-100">{editingPlayer.name} を編集</h2>
-                    <button onClick={() => setEditingPlayer(null)} className="text-gray-300 hover:text-white text-2xl">&times;</button>
-                  </div>
-
-                  {/* 基本情報 */}
-                  <div className="mb-4">
-                    <label className="block text-sm font-medium text-gray-200 mb-1">名前</label>
-                    <input
-                      type="text"
-                      value={editingPlayer.name}
-                      onChange={(e) => setEditingPlayer({...editingPlayer, name: e.target.value})}
-                      className="w-full bg-gray-700 border border-gray-600 text-gray-100 rounded px-3 py-2"
-                    />
-                  </div>
-
-                  {/* 守備位置選択 */}
-                  <div className="mb-4">
-                    <label className="block text-sm font-medium text-gray-200 mb-1">守備位置</label>
-                    <select
-                      value={editingPlayer.position}
-                      onChange={(e) => setEditingPlayer({...editingPlayer, position: e.target.value})}
-                      className="w-full bg-gray-700 border border-gray-600 text-gray-100 rounded px-3 py-2"
-                    >
-                      <option value="pitcher">投手</option>
-                      <option value="catcher">捕手</option>
-                      <option value="first">一塁手</option>
-                      <option value="second">二塁手</option>
-                      <option value="third">三塁手</option>
-                      <option value="short">遊撃手</option>
-                      <option value="left">左翼手</option>
-                      <option value="center">中堅手</option>
-                      <option value="right">右翼手</option>
-                    </select>
-                    {(() => {
-                      const fitness = calculateDefensiveFitness(editingPlayer, editingPlayer.position);
-                      return (
-                        <div className={`mt-1 text-xs ${
-                          fitness.grade === 'S' ? 'text-yellow-400' :
-                          fitness.grade === 'A' ? 'text-green-400' :
-                          fitness.grade === 'B' ? 'text-blue-400' :
-                          fitness.grade === 'D' ? 'text-red-400' :
-                          'text-gray-300'
-                        }`}>
-                          守備適性: [{fitness.grade}] {fitness.comments}
-                        </div>
-                      );
-                    })()}
-                  </div>
-                  
-                  {/* 打撃能力 */}
-                  <div className="mb-4">
-                    <h3 className="font-bold text-sm text-gray-200 mb-2">打撃能力</h3>
-                    <div className="space-y-2">
-                      {[
-                        {key: 'meet', label: 'ミート', color: 'blue'},
-                        {key: 'power', label: 'パワー', color: 'red'},
-                        {key: 'eye', label: '選球眼', color: 'green'},
-                        {key: 'steal', label: '盗塁', color: 'purple'}
-                      ].map(({key, label, color}) => (
-                        <div key={key}>
-                          <label className="block text-xs text-gray-300">{label}: <span className={`font-bold text-${color}-400`}>{editingPlayer.batting[key]}</span></label>
-                          <input type="range" min="0" max="100" value={editingPlayer.batting[key]}
-                            onChange={(e) => setEditingPlayer({...editingPlayer, batting: {...editingPlayer.batting, [key]: parseInt(e.target.value)}})}
-                            className="w-full" />
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                  
-                  {/* 身体能力 */}
-                  <div className="mb-4">
-                    <h3 className="font-bold text-sm text-gray-200 mb-2">身体能力</h3>
-                    <div className="space-y-2">
-                      <div>
-                        <label className="block text-xs text-gray-300">走力: <span className="font-bold text-gray-100">{editingPlayer.physical.speed}</span></label>
-                        <input type="range" min="0" max="100" value={editingPlayer.physical.speed}
-                          onChange={(e) => setEditingPlayer({...editingPlayer, physical: {...editingPlayer.physical, speed: parseInt(e.target.value)}})}
-                          className="w-full" />
-                      </div>
-                      <div>
-                        <label className="block text-xs text-gray-300">肩力: <span className="font-bold text-gray-100">{editingPlayer.physical.arm}</span></label>
-                        <input type="range" min="0" max="100" value={editingPlayer.physical.arm}
-                          onChange={(e) => setEditingPlayer({...editingPlayer, physical: {...editingPlayer.physical, arm: parseInt(e.target.value)}})}
-                          className="w-full" />
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* 守備能力 */}
-                  <div className="mb-4">
-                    <h3 className="font-bold text-sm text-gray-200 mb-2">守備能力</h3>
-                    <div className="space-y-2">
-                      <div>
-                        <label className="block text-xs text-gray-300">守備力: <span className="font-bold text-yellow-400">{editingPlayer.fielding?.defense || 50}</span></label>
-                        <input type="range" min="0" max="100" value={editingPlayer.fielding?.defense || 50}
-                          onChange={(e) => setEditingPlayer({...editingPlayer, fielding: {...(editingPlayer.fielding || {}), defense: parseInt(e.target.value)}})}
-                          className="w-full" />
-                      </div>
-                      <div>
-                        <label className="block text-xs text-gray-300">キャッチャーリード: <span className="font-bold text-orange-400">{editingPlayer.catching?.lead || 50}</span></label>
-                        <input type="range" min="0" max="100" value={editingPlayer.catching?.lead || 50}
-                          onChange={(e) => setEditingPlayer({...editingPlayer, catching: {...(editingPlayer.catching || {}), lead: parseInt(e.target.value)}})}
-                          className="w-full" />
-                      </div>
-                    </div>
-                  </div>
-                  
-                  {/* 投手能力 */}
-                  <div className="mb-4">
-                    <h3 className="font-bold text-sm text-gray-200 mb-2">投手能力</h3>
-                    <div className="space-y-2">
-                      <div>
-                        <label className="block text-xs text-gray-300">球速: <span className="font-bold text-gray-100">{editingPlayer.pitching.velocity}km/h</span></label>
-                        <input type="range" min="100" max="170" value={editingPlayer.pitching.velocity}
-                          onChange={(e) => setEditingPlayer({...editingPlayer, pitching: {...editingPlayer.pitching, velocity: parseInt(e.target.value)}})}
-                          className="w-full" />
-                      </div>
-                      <div>
-                        <label className="block text-xs text-gray-300">制球: <span className="font-bold text-gray-100">{editingPlayer.pitching.control}</span></label>
-                        <input type="range" min="0" max="100" value={editingPlayer.pitching.control}
-                          onChange={(e) => setEditingPlayer({...editingPlayer, pitching: {...editingPlayer.pitching, control: parseInt(e.target.value)}})}
-                          className="w-full" />
-                      </div>
-                      <div>
-                        <label className="block text-xs text-gray-300">スタミナ: <span className="font-bold text-gray-100">{editingPlayer.pitching.stamina}</span></label>
-                        <input type="range" min="50" max="250" value={editingPlayer.pitching.stamina}
-                          onChange={(e) => setEditingPlayer({...editingPlayer, pitching: {...editingPlayer.pitching, stamina: parseInt(e.target.value)}})}
-                          className="w-full" />
-                      </div>
-                    </div>
-
-                    {/* 持ち球 */}
-                    <div className="mt-3">
-                      <label className="block text-xs font-medium text-gray-300 mb-1">持ち球</label>
-                      <div className="space-y-1">
-                        {editingPlayer.pitching.arsenal.map((ball, index) => (
-                          <div key={ball.id} className="flex items-center gap-2 text-sm">
-                            <select
-                              value={ball.type}
-                              onChange={(e) => {
-                                const newArsenal = [...editingPlayer.pitching.arsenal];
-                                newArsenal[index] = {...newArsenal[index], type: e.target.value};
-                                setEditingPlayer({...editingPlayer, pitching: {...editingPlayer.pitching, arsenal: newArsenal}});
-                              }}
-                              className="bg-gray-700 border border-gray-600 text-gray-100 rounded px-2 py-1 text-xs flex-1"
-                            >
-                              {Object.keys(ballEffects).filter(type => 
-                                type === ball.type || !editingPlayer.pitching.arsenal.some((b, i) => i !== index && b.type === type)
-                              ).map(type => (
-                                <option key={type} value={type}>{ballEffects[type].name}</option>
-                              ))}
-                            </select>
-                            <span className="text-xs">Lv.</span>
-                            <input type="number" min="0" max="100" value={ball.level}
-                              onChange={(e) => {
-                                const newArsenal = [...editingPlayer.pitching.arsenal];
-                                newArsenal[index] = {...newArsenal[index], level: parseInt(e.target.value) || 0};
-                                setEditingPlayer({...editingPlayer, pitching: {...editingPlayer.pitching, arsenal: newArsenal}});
-                              }}
-                              className="bg-gray-700 border border-gray-600 text-gray-100 rounded px-2 py-1 w-14 text-xs" />
-                            {index > 0 && (
-                              <button onClick={() => {
-                                const newArsenal = editingPlayer.pitching.arsenal.filter((_, i) => i !== index);
-                                setEditingPlayer({...editingPlayer, pitching: {...editingPlayer.pitching, arsenal: newArsenal}});
-                              }} className="text-red-500 text-xs">削除</button>
-                            )}
-                          </div>
-                        ))}
-                        {editingPlayer.pitching.arsenal.length < 6 && (
-                          <button onClick={() => {
-                            const usedTypes = editingPlayer.pitching.arsenal.map(b => b.type);
-                            const availableTypes = Object.keys(ballEffects).filter(type => !usedTypes.includes(type));
-                            if (availableTypes.length === 0) { alert('すべての球種を習得済みです'); return; }
-                            const newArsenal = [...editingPlayer.pitching.arsenal, {
-                              id: Math.max(...editingPlayer.pitching.arsenal.map(b => b.id)) + 1,
-                              type: availableTypes[0], level: 50
-                            }];
-                            setEditingPlayer({...editingPlayer, pitching: {...editingPlayer.pitching, arsenal: newArsenal}});
-                          }} className="text-blue-500 text-xs">+ 球種追加 </button>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                  
-                  {/* 保存ボタン */}
-                  <div className="flex justify-end gap-2">
-                    <button onClick={() => setEditingPlayer(null)}
-                      className="px-4 py-2 border border-gray-600 text-gray-200 rounded hover:bg-gray-700">キャンセル</button>
-                    <button onClick={() => { updatePlayer(editingPlayer.id, editingPlayer); setEditingPlayer(null); }}
-                      className="btn-primary px-20 py-2 rounded">保存</button>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* エディット画面 */}
-          {showEditScreen && (
-            <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4">
-              <div className="bg-surface-1 rounded-lg w-full max-w-7xl max-h-[90vh] overflow-y-auto border border-gray-700">
-                <div className="p-6">
-                  <div className="flex justify-between items-center mb-6 sticky top-0 bg-surface-1 pb-4 border-b border-gray-700 z-10">
-                    <h2 className="text-2xl font-bold text-gray-100">選手エディット</h2>
-                    <button
-                      onClick={() => setShowEditScreen(false)}
-                      className="text-gray-300 hover:text-white text-3xl"
-                    >
-                      ×
-                    </button>
-                  </div>
-
-                  {/* 2カラムレイアウト */}
-                  <div className="grid grid-cols-2 gap-6">
-                    <PlayerEditColumn team={awayTeam} setTeam={setAwayTeam} icon="✈️" titleColor="text-red-500" />
-                    <PlayerEditColumn team={homeTeam} setTeam={setHomeTeam} icon="🏠" titleColor="text-blue-500" />
-                  </div>
-
-                  {/* 閉じるボタン */}
-                  <div className="flex justify-end sticky bottom-0 bg-surface-1 pt-4 border-t border-gray-700">
-                    <button
-                      onClick={() => setShowEditScreen(false)}
-                      className="btn-primary py-3 px-8 rounded-lg"
-                    >
-                      完了
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
               </div>
             ) : (
               <ManagementScreen

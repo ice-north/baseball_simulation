@@ -21,6 +21,9 @@ import {
 } from '../../../server/storage/snapshotParts.mjs';
 
 const memory = new Map();
+// 定期処理の試行の印（本番は管理行の `attempt_key`・`attempt_count`。`online_attempt`）。
+// ⚠ 保存とは別に持つ。打ち切られた処理（公開まで行かない）でも残ることを検査で見るため
+const attemptMarks = new Map();
 const empty = () => ({ league: null, sessions: {}, receipts: {} });
 
 export class MemoryStore {
@@ -59,6 +62,20 @@ export class MemoryStore {
   // ⚠ 「まず軽い読み、だめなら全体で読み直す」判定は本番と同じ関数（`runWithLightRead`）を使う。
   //    書き写すと、片方だけ直したときに検査が本番の取りこぼしを捕まえられない
   transaction(fn, { full = false } = {}) {
+    // 本番（SupabaseStore.attemptControl）と同じ約束: 重い処理の前に印を付け、これより前に
+    // 終わらなかった同じ鍵の試行の数を返す。公開したら消す。同じ処理の中で同じ鍵は1回だけ数える
+    const marks = new Map();
+    const control = {
+      markAttempt: async (key) => {
+        if (!marks.has(key)) {
+          const last = attemptMarks.get(this.path);
+          const previous = last?.key === key ? last.count : 0;
+          attemptMarks.set(this.path, { key, count: previous + 1 });
+          marks.set(key, previous);
+        }
+        return marks.get(key);
+      },
+    };
     const result = this.queue.then(async () => {
       const whole = process.env.SIM_HARNESS_WHOLE_STORE === '1';
       const debug = process.env.PARTS_DEBUG
@@ -79,7 +96,7 @@ export class MemoryStore {
           return { stored, value: run.bundle, run };
         },
         attempt: async ({ value, run }) => {
-          const outcome = await fn(value);
+          const outcome = await fn(value, control);
           return { outcome, prepared: run && !outcome?.unchanged ? run.inspect(value) : undefined };
         },
       });
@@ -101,6 +118,7 @@ export class MemoryStore {
           ),
         });
       }
+      if (marks.size) attemptMarks.delete(this.path);
       this.lastMode = run ? 'light' : 'full';
       // 何回読んだか（世界に触れて全体でやり直すと2）。全体の印の付け忘れを見る
       this.lastAttempts = attempts;

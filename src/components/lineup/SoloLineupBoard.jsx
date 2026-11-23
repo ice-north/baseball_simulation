@@ -16,7 +16,7 @@ import {
 } from '../../online/lineupEdit.js';
 import { AbilityValue } from '../AbilityValue.jsx';
 import { getFatigueTone } from '../../utils/constants.js';
-import { CONDITION_ICONS } from '../../game/condition.js';
+import { ConditionMark } from '../../online/PlayerPerformance.jsx';
 import '../../online/online.css';
 import { orderFromTeam, writeOrder, candidatesForSlot, orderProblems } from './soloLineupOrder.js';
 
@@ -76,22 +76,11 @@ const POS_NAME = { ...POS_FULL, dh: '指名打者' };
 const BATS = { left: '左', right: '右', switch: '両' };
 const batsOf = (p) => BATS[p.batting?.bats || p.physical?.bats] || '—';
 const throwsOf = (p) => (p.physical?.throws === 'left' ? '左' : '右');
-const CONDITION_TEXT = ['絶不調', '不調', '普通', '好調', '絶好調'];
 const FATIGUE_TONE_TEXT = {
   warn: '疲れています（このまま出し続けると成長が鈍ります）',
   heavy: 'かなり疲れています（成長の鈍り方が最も大きい）',
   '': undefined,
 };
-
-function ConditionMark({ player }) {
-  const level = Number.isInteger(player.condition) && player.condition >= 0 && player.condition <= 4 ? player.condition : null;
-  const text = level === null ? '未記録' : CONDITION_TEXT[level];
-  return (
-    <span className={`online-condition online-condition-${level ?? 'unknown'}`} title={`調子: ${text}`} aria-label={`調子: ${text}`} role="img">
-      {level === null ? '—' : CONDITION_ICONS[level]}
-    </span>
-  );
-}
 
 function Fitness({ value, position }) {
   if (position === 'dh') return <span className="online-muted" title="指名打者は守らない">—</span>;

@@ -4,6 +4,7 @@ import { generateFullSeasonSchedule, fitGamesPerSeason } from './scheduleGenerat
 import { generateExpansionRoster } from './tryoutSystem.js';
 import { getLeagueRankFromTeams, applyIndependentRank } from '../corporate/corporateInit.js';
 import { WORLD_DATA } from '../corporate/worldData.js';
+import { calendarYearOf } from './seasonManager.js';
 
 // ============================================================
 // 翌年のレギュレーション確定（新規参入・解散・日程の作り直し）
@@ -124,7 +125,7 @@ export function applyNextSeasonRegulations({
   setManagementView, nextView, notify = (message) => globalThis.alert?.(message),
 }) {
   const settings = confirmedSettings || seasonData.settings || {};
-  const calendarYear = 2024 + seasonData.year - 1;
+  const calendarYear = calendarYearOf(seasonData.year);
   const configuredTeams = settings.teamNames || [];
   const prevLeagueTeams = currentTeams?.length > 0 && currentTeams.every(name => TEAMS_DATA[name])
     ? currentTeams

@@ -8,8 +8,9 @@ import { TEAMS_DATA, releasedPlayersPool } from '../teams-data.js';
 import { addToReleasedPool, removeFromReleasedPoolById } from '../state/pools.js';
 import { addToRoster, removeFromRosterById } from '../state/roster.js';
 import { checkRetirement } from '../season/yearProgressionSystem.js';
+import { advanceDate, compareDates } from '../season/seasonManager.js';
 import { getTeamStaffBonus, getNegotiationBonus } from './staffData.js';
-import { getReputationScoutBonus, getReputationRecruitBonus } from './corporateInit.js';
+import { getReputationScoutBonus, getReputationRecruitBonus, RANK_INITIAL_REPUTATION } from './corporateInit.js';
 import { universityPool, highSchoolPool, balanceRankByPosition } from '../season/universityPool.js';
 import { getUniversityPipes } from '../university/universityPipeSystem.js';
 import { WORLD_DATA } from './worldData.js';
@@ -661,10 +662,6 @@ export function recruitPlayer(team, player) {
 }
 
 /**
- * AIチームのスカウト入団処理
- * 各AIチームが自チームの候補から選手を獲得
- */
-/**
  * AIチームの残りスカウト入団処理
  * ユーザー交渉フェーズでライバルとして入団済みの分を考慮し、
  * まだ定員に達していないチームのみ追加獲得
@@ -842,7 +839,7 @@ export function dispatchScout(teamData, target, staffId, currentDate) {
     return { success: false, message: `${targetDef.label}には既に派遣中です` };
   }
 
-  const returnDate = addDays(currentDate, targetDef.days);
+  const returnDate = advanceDate(currentDate, targetDef.days);
   cd.scoutMissions.push({
     target,
     staffId,
@@ -867,7 +864,7 @@ export function checkScoutMissionCompletion(teamData, currentDate, gameYear) {
   const completed = [];
   cd.scoutMissions.forEach(mission => {
     if (mission.completed) return;
-    if (!isDatePassed(currentDate, mission.returnDate)) return;
+    if (compareDates(currentDate, mission.returnDate) < 0) return;
 
     mission.completed = true;
 
@@ -960,7 +957,7 @@ export function startInvestigation(teamData, playerId, playerName, staffId, curr
     return { success: false, message: `${staff.name}は現在別の任務中です` };
   }
 
-  const returnDate = addDays(currentDate, INVESTIGATION_DAYS);
+  const returnDate = advanceDate(currentDate, INVESTIGATION_DAYS);
   cd.scoutMissions.push({
     type: 'investigation',
     targetPlayerId: playerId,
@@ -1504,7 +1501,7 @@ function dispatchScoutInternal(teamData, target, staffId, currentDate) {
   if (!staff) return;
   if (!cd.scoutMissions) cd.scoutMissions = [];
 
-  const returnDate = addDays(currentDate, targetDef.days);
+  const returnDate = advanceDate(currentDate, targetDef.days);
   cd.scoutMissions.push({
     target,
     staffId,
@@ -1568,18 +1565,6 @@ function filterInvestigationTargets(allPlayers, pendingInvIds, filter) {
     }
     return true;
   });
-}
-
-function addDays(date, days) {
-  const d = new Date(date.year, date.month - 1, date.day);
-  d.setDate(d.getDate() + days);
-  return { year: d.getFullYear(), month: d.getMonth() + 1, day: d.getDate() };
-}
-
-function isDatePassed(current, target) {
-  const c = current.year * 10000 + current.month * 100 + current.day;
-  const t = target.year * 10000 + target.month * 100 + target.day;
-  return c >= t;
 }
 
 // ============================================================
@@ -1970,8 +1955,6 @@ export function calculateDailyGaugeRate(player, uniRank, reputation) {
 // 他大学も同じ高校生に接近 → 先にゲージ100%にした方が獲得
 // ============================================================
 
-const RANK_REPUTATION_BASE = { S: 85, A: 65, B: 40, C: 20, D: 5 };
-
 function generateRivals(player, userRank) {
   const score = evaluatePlayerScore(player);
   const fame = player.fame || 0;
@@ -2004,7 +1987,7 @@ function generateRivals(player, userRank) {
   const picked = shuffled.slice(0, rivalCount);
 
   return picked.map(t => {
-    const rep = RANK_REPUTATION_BASE[t.rank] || 40;
+    const rep = RANK_INITIAL_REPUTATION[t.rank] || 40;
     // 知名度が高い選手は4月から即座に動き出す
     // fame=30: delay 0-14日(4月) / fame=15: delay 7-22日(4月中〜下) / fame=0: delay 15-30日(4月下〜5月)
     const fameOffset = Math.floor((30 - Math.min(30, fame)) * 0.5);

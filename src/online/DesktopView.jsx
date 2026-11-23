@@ -20,6 +20,8 @@ import {
   LINEUP_ORDER_DRAFT,
 } from './Drafts.jsx';
 import LeagueBoard from './LeagueBoard.jsx';
+import TodayGame from './look/TodayGame.jsx';
+import { ReporterMemo, EventScene } from './look/Story.jsx';
 import TradeScreen from './TradeScreen.jsx';
 import CampPlanner, { CompletedCamp } from './CampPlanner.jsx';
 import TryoutResult from './TryoutResult.jsx';
@@ -59,6 +61,7 @@ import {
 } from './SocialPages.jsx';
 import { rosterGroup } from '../utils/constants.js';
 import { InvitesAdmin } from './Invites.jsx';
+import { TeamMark } from './look/Art.jsx';
 // ============================================================
 // PC版の画面。**どのページも同じ形にする**:
 //
@@ -182,6 +185,7 @@ function NavStatus({ view, busy, run, reload, showTimes, onRename }) {
   const waiting = packWaiting(view);
   return (
     <div className="online-nav-context">
+      <TeamMark team={view.teamName} size={48} className="online-nav-mark" />
       <strong>{teamLabel(view.teamName)}</strong>
       {/* ⚠ 順位と勝敗は**出さない**（ホームの順位表に自球団を黄色で出している）。
           代わりに、この遊び方の骨格——1週間で1シーズン——をここに書く。
@@ -715,6 +719,11 @@ export default function DesktopView(props) {
                   キャンプの画面と手続きの画面には残してある（年が替わった直後に見る場所） */}
               {/* キャンプが終わった直後の結果（閉じるまで。先方指摘「キャンプ直後に」） */}
               <CompletedCamp key={view.lastCamp?.year} view={view} onHome />
+              {/* 新しい見た目（試作）段3: 今日の一戦の札（切のときは出さない） */}
+              <TodayGame view={view} onLineup={() => setTab('lineup')} />
+              {/* 段4: 番記者のメモと、優勝・昇格などが決まったときの場面（どちらも切のときは出さない） */}
+              <ReporterMemo view={view} />
+              <EventScene view={view} />
               <LeagueBoard view={view} />
             </>
           )}

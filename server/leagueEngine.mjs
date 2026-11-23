@@ -32,6 +32,7 @@ import {
   SEASON_PHASES,
   getNPBDraftDay,
   getPlayoffChampion,
+  calendarYearOf,
 } from '../src/season/seasonManager.js';
 import {
   generateFullSeasonSchedule,
@@ -221,6 +222,7 @@ import {
   staffCommand,
   effectiveStaffModes,
   phaseDelegated,
+  waitsFor,
 } from './coachEngine.mjs';
 
 export const ENGINE_VERSION = ONLINE_ENGINE_VERSION;
@@ -2078,7 +2080,7 @@ function resolveTryout(league, plans, now) {
       combined.filter((p) => p.position !== 'pitcher').length >= 8 &&
         combined.some((p) => p.position === 'pitcher') &&
         combined.some((p) => p.position === 'catcher'),
-      `${league.teams?.find((t) => t.name === name)?.displayName || name}の投手・捕手・野手が不足します。希望順位を見直してください`,
+      `${teamLabelIn(league, name)}の投手・捕手・野手が不足します。希望順位を見直してください`,
       409,
       'roster',
     );
@@ -2362,7 +2364,7 @@ function resolvePhase(league, now) {
     for (const name of league.season.settings.teamNames)
       refreshTeamPlan(league, name);
     league.season.currentDate = {
-      year: 2023 + league.season.year,
+      year: calendarYearOf(league.season.year),
       month: 4,
       day: 1,
     };
@@ -2520,26 +2522,8 @@ function resolvePhase(league, now) {
   }
 }
 
-/**
- * 手続きがこの人の決定をまだ待っているか。
- *
- * ⚠ **途中参加でセットを待っている人は待たない**。その人の球団は次のキャンプで
- *    名簿がセットに丸ごと入れ替わり、それまではCPUが動かす（画面もそう書いている）。
- *    以前はこの人も「決定」を待っていたが、画面には初期メンバーの選択しか
- *    出さないので決定する手段が無く、ストーブリーグとキャンプが毎回
- *    締め切りまで止まっていた（ほかの全員が決めても進まない）。
- *    自分で出した案があればそれを使い、無ければ標準案で決める（`resolvePhase`）。
- * ⚠ **手続きを指導者に任せた人も待たない**（トライアウト・契約更改の退団・キャンプ。
- *    `phaseDelegated`）。任せた手続きは提出があっても指導者の案で決めるので、待つ意味が無い。
- *    以前は待っていたので、ほかの全員が決めても締め切りまで進まず、「決定」の無いキャンプは
- *    任せた人がいると必ず締め切り待ちになっていた（総合監査 2026-11-10 の判断7）。
- *    キャンプの残りのクールは締め切りのときと同じく指導者の方針で回る（`resolvePhase`）
- */
-export function waitsFor(league, member) {
-  if (league.phase?.submissions?.[member.userId]?.ready) return false;
-  if (phaseDelegated(league, member)) return false;
-  return !(member.packSeed && league.phase?.kind !== 'pack_select');
-}
+// 手続きがこの人の決定をまだ待っているか（`coachEngine.mjs`。画面の `members[].ready` と同じものを使う）
+export { waitsFor };
 
 /** 手続きがまだ誰かの決定を待っているか（待機中の手続きが無ければ false） */
 function anyoneWaited(league) {
@@ -2923,15 +2907,6 @@ function runProDraft(league, now) {
 }
 
 /**
- * 締め切りを過ぎたフェーズを、未提出の人に既定案を当てて解決する。
- *
- * ⚠ **非同期で遊ぶゲームなので、待ち続けてはいけない**。1人が決めないと
- *    全員の週が止まる。既定案（`defaultPhasePlan`）はAIの選び方そのものなので、
- *    放置しても不利になりすぎない。
- * ⚠ 解決すると次のフェーズが開くことがある（契約更改→トライアウト→オフシーズン）。
- *    そちらの締め切りも過ぎていれば、同じティックで続けて解決する。
- */
-/**
  * 手続きを**いま**締め切る（検証用）。未提出の人には標準案を当てる。
  * ⚠ 締め切り時刻を `now` に書き換えてから通常の自動決定に渡す。
  *    解決の手順を2本に分けると、片方だけ直したときに食い違う。
@@ -2942,6 +2917,15 @@ export function resolvePhaseNow(league, now) {
   return autoResolvePhase(league, now);
 }
 
+/**
+ * 締め切りを過ぎたフェーズを、未提出の人に既定案を当てて解決する。
+ *
+ * ⚠ **非同期で遊ぶゲームなので、待ち続けてはいけない**。1人が決めないと
+ *    全員の週が止まる。既定案（`defaultPhasePlan`）はAIの選び方そのものなので、
+ *    放置しても不利になりすぎない。
+ * ⚠ 解決すると次のフェーズが開くことがある（契約更改→トライアウト→オフシーズン）。
+ *    そちらの締め切りも過ぎていれば、同じティックで続けて解決する。
+ */
 export function autoResolvePhase(league, now) {
   loadLeagueWorld(league);
   const resolved = [];

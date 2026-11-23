@@ -35,7 +35,6 @@ import { Page } from './Page.jsx';
 import { gamesBehind, gapText } from './standingsGap.js';
 import TryoutPlanner from './TryoutPlanner.jsx';
 import AgeOutlook from './AgeOutlook.jsx';
-import TryoutResult from './TryoutResult.jsx';
 import { fillsAutomatically, plannedPicks, signTotal } from './tryoutPlan.js';
 import PackSelect, { TeamIdentity } from './PackSelect.jsx';
 import { packWaiting, phaseStatusLabel } from './notices.js';
@@ -48,6 +47,7 @@ import {
   RELEGATION_FROM_BOTTOM,
   compareLeagueStanding,
 } from './pyramidLeague.js';
+import { TeamMark } from './look/Art.jsx';
 export { PageNav } from './PageNav.jsx';
 
 
@@ -248,6 +248,7 @@ export function Standings({ view, action = null }) {
                       {i + 1}
                     </span>
                     {/* 球団名を押すと、その球団のスタメンと投手陣を開く（先方要望 2026-11） */}
+                    <TeamMark team={s.team} size={20} className="online-standings-mark" />
                     <TeamLineupButton view={view} team={s.team} />
                     {/* ⚠ 人が持っている球団だけ、名前を括弧で添える。
                         CPUに付けると誰かが持っているように見える。
@@ -425,7 +426,10 @@ export function Results({ view, compact = false }) {
                 )}
               </header>
               <div>
-                <span title={teamLabel(g.away)}>{name(g.away)}</span>
+                <span title={teamLabel(g.away)}>
+                  <TeamMark team={g.away} size={22} />
+                  {name(g.away)}
+                </span>
                 {/* ⚠ 日程の対戦は「vs」を小さく薄く出す。以前の大きな白い「×」は、
                     野球の表では負け・中止の印に読めた */}
                 {mode === 'results' ? (
@@ -433,7 +437,10 @@ export function Results({ view, compact = false }) {
                 ) : (
                   <em className="online-score-vs">vs</em>
                 )}
-                <span title={teamLabel(g.home)}>{name(g.home)}</span>
+                <span title={teamLabel(g.home)}>
+                  <TeamMark team={g.home} size={22} />
+                  {name(g.home)}
+                </span>
               </div>
               {decisions && (
                 <small className="online-score-decisions">{decisions}</small>

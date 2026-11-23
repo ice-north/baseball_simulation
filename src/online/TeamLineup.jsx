@@ -7,6 +7,7 @@ import { PlayerStatsButton } from "./PlayerPerformance.jsx";
 import { STARTER_ROLES, RELIEF_ROLES } from "./tactics.js";
 import { RELIEF_ORDER } from "./pitchingEdit.js";
 import { overviewGroup, formatStat } from "./statsView.js";
+import { PlayerFace, TeamMark } from './look/Art.jsx';
 
 // ============================================================
 // 球団のスタメンと投手陣（順位表から球団を押すと開く小窓）。先方要望 2026-11。
@@ -49,6 +50,7 @@ function NameCell({ player, team, own }) {
   if (!player) return <td className="online-muted">（空き）</td>;
   return (
     <td className="is-name">
+      <PlayerFace player={player} team={team} size={22} />
       <PlayerStatsButton
         player={own ? player : { ...player, tradeTeam: team }}
       />
@@ -219,7 +221,10 @@ function TeamLineupDialog({ view, team, close }) {
     >
       <header>
         <div>
-          <h2 id="online-team-title">{teamLabel(team)}</h2>
+          <h2 id="online-team-title">
+            <TeamMark team={team} size={30} />
+            {teamLabel(team)}
+          </h2>
           <small>スタメンと投手陣（今の起用）</small>
         </div>
         <button onClick={dismiss} aria-label="球団の起用を閉じる">

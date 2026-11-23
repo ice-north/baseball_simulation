@@ -1,7 +1,6 @@
 // 配布HTMLと実際のサーバーprojectionを接続する。通信/Authのみfixture。
 import assert from 'node:assert/strict';
-import { readFile } from 'node:fs/promises';
-import { chromium } from 'playwright';
+import { launchBrowser, distHtml } from './lib/browser.mjs';
 import { withDeadline } from './lib/deadline.mjs';
 import { KNOWN_CITIES, regionOfCity } from '../../src/online/hometown.js';
 import {
@@ -20,10 +19,7 @@ import {
   BATTING_KEYS,
   PITCHING_KEYS,
 } from '../../src/online/recordStats.js';
-const html = await readFile(
-  new URL('../../dist/index.html', import.meta.url),
-  'utf8',
-);
+const html = await distHtml();
 const player = (id, overrides = {}) => ({
   id,
   name: `成績選手${id}`,
@@ -297,12 +293,7 @@ assert.equal(
 );
 assert.equal(view.nextStarterId, 9);
 assert.equal(view.roster[0].performance.batting.labels.length, 3);
-const browser = await chromium.launch({
-  ...(process.env.PLAYWRIGHT_CHROME_CHANNEL
-    ? { channel: process.env.PLAYWRIGHT_CHROME_CHANNEL }
-    : {}),
-  headless: true,
-});
+const browser = await launchBrowser();
 const errors = [];
 let activeContext;
 async function scene(width, height = 844, scale = 1, holdDetail = false) {
