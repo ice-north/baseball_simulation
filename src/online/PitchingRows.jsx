@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Fatigue } from './BoardParts.jsx';
 import { POS_FULL } from './api.js';
 import { pitchTypes, totalBreak } from './playerColumns.js';
@@ -104,4 +104,31 @@ export function PitchingCells({ player, starter, name, fatigue, stats }) {
       ))}
     </>
   );
+}
+
+/**
+ * 役割の選び直しの窓を閉じる操作: 窓の外を押す・Esc・スクロール・窓の大きさの変更。
+ * （オンラインPC版 `PitchingBoard.jsx` と一人用 `SoloPitchingBoard.jsx` の `RoleMenu` で共通）
+ * ⚠ 開いた札を押したときは閉じない（札の側で閉じる。ここで閉じると、続く
+ *    クリックで開き直してしまい、同じ札で閉じられない）
+ */
+export function useRoleMenuDismiss(ref, close) {
+  useEffect(() => {
+    const away = (e) => {
+      if (ref.current?.contains(e.target)) return;
+      if (e.target.closest?.('.online-role-chip[aria-expanded="true"]')) return;
+      close();
+    };
+    const onKey = (e) => e.key === 'Escape' && close();
+    window.addEventListener('mousedown', away);
+    window.addEventListener('keydown', onKey);
+    window.addEventListener('scroll', close, true);
+    window.addEventListener('resize', close);
+    return () => {
+      window.removeEventListener('mousedown', away);
+      window.removeEventListener('keydown', onKey);
+      window.removeEventListener('scroll', close, true);
+      window.removeEventListener('resize', close);
+    };
+  }, [ref, close]);
 }

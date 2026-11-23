@@ -67,6 +67,7 @@ const REMOVED_ON_PURPOSE = {
   attemptUniversityRecruit: '大学推薦がゲージ制へ移行して死んだまま残っていた関数。除去（歴史の記録）',
   getScoutAccuracy: '「staffData が使う」という残す理由が事実誤認だった。除去（歴史の記録）',
   getScoutAccuracyGain: '同上。staffData 側の似た名前の関数で、こちらも未使用だった',
+  POSITION_PLAYER_RECOVERY_BASE: '参照されていなかった野手の回復の定数（野手は体力比例の式）。監査13で削除（歴史の記録）',
   battedBallStats: '描画されない打球統計。`lastGameResults` と同じ defect で除去（歴史の記録）',
   battedBallAreaStats: '同上',
   setBatterStats:  '描画されない state（書き込み52・読み出し0）。3度目の同じ defect で除去（歴史の記録）',
@@ -81,7 +82,11 @@ const REMOVED_ON_PURPOSE = {
   seasonProgress:  '日程表からしか呼ばれない日程進行ハンドラー（本物は DateProgressScreen）。同上',
   progressToNextPhase: '次のフェーズの初日へ日付を差し替えて残り試合をまとめて消化する経路。progressToNextGame と同じ型で除去（歴史の記録）',
   calendarUI:      '日程表のカレンダー。同上',
+  HOME_BONUS:      '社会人の補充の地元加点。補充が z の合成（rosterProgression の HOME_Z）に移って死んでいたので除去（歴史の記録）',
+  formatRange:     'scouting.js の使い手のないレンジ表示。監査13で除去（歴史の記録）',
+  MAX_SCOUT_LEVEL: '同上',
   simulateGamesOnDate: '`seasonProgress.js` にあった1日分の試合の消化。いまの本体は daySimulation.js の simulateScheduledGamesOnDate（歴史の記録）',
+  CAMP_PRESETS:    'キャンプの旧プリセット5種。方向性×フェーズの2軸の方針に集約したあとも画面から呼ばれずに残っていたので 2026-11-23 に除去（歴史の記録）',
 };
 
 const r = new Report('■ CLAUDE.md の腐り検査');

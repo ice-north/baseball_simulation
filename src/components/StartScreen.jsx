@@ -181,15 +181,6 @@ const FieldBackdrop = () => (
   </svg>
 );
 
-const PHASE_NAMES = {
-  regular_season: 'レギュラーシーズン',
-  playoff: 'プレーオフ',
-  draft: 'ドラフト',
-  offseason: 'オフシーズン',
-  camp: 'キャンプ',
-  tryout: 'トライアウト',
-};
-
 const StartScreen = ({ onNewGame, onSandbox, onContinue, onEdit, onEditCorporateNames, onManual, onContinueAutosave, hasSaveData, saveSlots = [] }) => {
   const [showSlotSelect, setShowSlotSelect] = useState(false);
   const [showEditSlotSelect, setShowEditSlotSelect] = useState(false);

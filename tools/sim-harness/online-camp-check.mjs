@@ -6,6 +6,7 @@
 // ⚠ もう1つは「**画面が出すメニューを、サーバーが必ず受け取れること**」。
 //    `TRAINING_MENUS` にはオンラインのエンジンが動かさないもの
 //    （新球種習得）があり、実測で画面に出ていた。選べるのに提出で弾かれる。
+import { quiet } from './lib/quiet.mjs';
 import assert from 'node:assert/strict';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { readFileSync } from 'node:fs';
@@ -93,15 +94,6 @@ import {
 }
 
 const NOW = '2026-10-26T15:00:00.000Z';
-const quiet = (fn) => {
-  const log = console.log;
-  console.log = () => {};
-  try {
-    return fn();
-  } finally {
-    console.log = log;
-  }
-};
 
 /** セット選択まで済ませて、キャンプの手続きが開いたリーグを作る */
 function leagueAtCamp(seed = undefined) {
@@ -1335,12 +1327,16 @@ assert.ok(
 // ⚠ オンラインで新球種を覚える道は**サブ練習だけ**（`CAMP_MENUS` に newpitch は無い）。
 //    ここが遅いと一生覚えない。実測（初期セットの投手・器用さ平均53）:
 //    1クール 24.3%→29.9%、4クール続けて1つ以上 66.9%→75.7%
+// ⚠ フォームの適性は**試合の表（`FORM_PITCH_SYNERGY`）が正本**になった（監査 2026-11-23）。
+//    スリークォーターは試合の表で「すべて平均」＝適性球が無い。代わりにキャンプでは
+//    どの球種も +0.08 覚えやすい（いしだ 2026-11-23 案A。無いと 1クール約22%に落ちた）。
+//    見本は適性球のあるオーバースローで測り、スリークォーターは別に範囲を見る
 {
-  const pitcher = () => ({
+  const pitcher = (form = 'overhand') => ({
     position: 'pitcher',
     name: '新球種の見本',
     physical: { muscle: 50, bodyStamina: 50, arm: 50, dexterity: 50, speed: 50, recovery: 50 },
-    pitching: { velocity: 140, control: 50, stamina: 100, spinRate: 50, form: 'threeQuarter', arsenal: [{ id: 1, type: 'straight', level: 100 }] },
+    pitching: { velocity: 140, control: 50, stamina: 100, spinRate: 50, form, arsenal: [{ id: 1, type: 'straight', level: 100 }] },
     batting: { meet: 20, power: 20, eye: 20 },
     fielding: { defense: 50 },
   });
@@ -1364,6 +1360,15 @@ assert.ok(
     if (p.pitching.arsenal.length > 1) four += 1;
   }
   assert.ok(four / 1000 >= 0.65, `4クール続けても覚えない: ${((four / 1000) * 100).toFixed(1)}%`);
+  // スリークォーター（適性球なし・どの球種も +0.08）。(0.22+0.08)×器用さ
+  let tq = 0;
+  for (let i = 0; i < runs; i++) {
+    const p = pitcher('threeQuarter');
+    executeSubTraining(p, 'newpitch', {});
+    if (p.pitching.arsenal.length > 1) tq += 1;
+  }
+  assert.ok(tq / runs >= 0.25 && tq / runs <= 0.33,
+    `スリークォーターの新球種の取得率が範囲外: 1クール ${((tq / runs) * 100).toFixed(1)}%`);
 }
 
 // ⚠ 世界を汚したまま終わらない（ほかの検査と同じプロセスで動くことがある）

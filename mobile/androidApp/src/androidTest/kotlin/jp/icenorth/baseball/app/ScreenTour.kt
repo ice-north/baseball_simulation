@@ -122,7 +122,8 @@ class ScreenTour {
     @Test
     fun tour() {
         model = ViewModelProvider(rule.activity)[AppViewModel::class.java]
-        rule.runOnUiThread { model.logout() }
+        // ⚠ 新しい見た目（試作）は端末に覚えるので、前の場面で入にしたままにならないよう先に切る
+        rule.runOnUiThread { model.logout(); model.changeLookOn(false) }
         pause()
         if (stage == "pack") shot("login")
         rule.runOnUiThread {
@@ -383,6 +384,47 @@ class ScreenTour {
             rule.onAllNodesWithTag("history-chart").onFirst().performClick()
             shot("home-chronicle")
             back()
+        }
+        // 新しい見た目（試作）: 球団マーク・選手と指導者の顔・調子の顔・段位の字・今日の一戦・打席速報。入にして主な画面を撮り、切に戻す
+        if (stage == "running") step("look") {
+            rule.runOnUiThread { model.changeLookOn(true); model.changeHomeStyle("Paper") }
+            tab("Home")
+            toTop()
+            shot("look-home")
+            step("look menu") { rule.onAllNodes(androidx.compose.ui.test.hasContentDescription("メニュー")).onFirst().performClick(); shot("look-home-menu"); back() }
+            tab("Games")
+            step("look games") { toTop(); chip("results"); pause(1500); shot("look-games") }
+            step("look game detail") {
+                rule.onAllNodesWithTag("game-row").onFirst().performScrollTo().performClick()
+                pause(2500)
+                shot("look-game-detail")
+                // 打席速報（版20からの試合だけ）。3打席送って撮る
+                step("look game live") {
+                    click("打席速報")
+                    pause(1500)
+                    repeat(3) { rule.onAllNodesWithText("次の打席 ▶").onFirst().performScrollTo().performClick(); pause(400) }
+                    toTop()
+                    page("look-game-live", scrolls = 1)
+                }
+                back()
+            }
+            step("look standings") { toTop(); click("順位表"); shot("look-standings") }
+            tab("Players")
+            step("look players") { chip("Season"); pause(1500); shot("look-players-batting") }
+            step("look player sheet") {
+                val first = model.raw?.at("roster").list().mapNotNull { it.obj() }.first { it.at("position").str() != "pitcher" }
+                rule.runOnUiThread { model.openPlayer = first }
+                pause(2500)
+                page("look-player-sheet", scrolls = 1, tag = "player-sheet")
+                rule.runOnUiThread { model.openPlayer = null }
+                pause()
+            }
+            tab("Plan")
+            step("look order") { toTop(); page("look-plan-order", scrolls = 1) }
+            step("look pitching") { toTop(); click("投手起用"); shot("look-plan-pitching") }
+            step("look staff") { chip("Staff"); pause(2000); page("look-plan-staff", scrolls = 1) }
+            rule.runOnUiThread { model.changeLookOn(false) }
+            pause()
         }
         Log.i("ScreenTour", "done $stage: $count shots")
     }

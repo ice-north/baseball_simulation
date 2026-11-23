@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { PitchingHeaderRow, PitchingCells, pitchingColumnCount } from '../../online/PitchingRows.jsx';
+import { PitchingHeaderRow, PitchingCells, pitchingColumnCount, useRoleMenuDismiss } from '../../online/PitchingRows.jsx';
 import {
   MAX_STARTERS,
   STARTER_ORDER,
@@ -16,7 +16,7 @@ import {
   staffCandidates,
   STARTER_SKIP_FATIGUE,
 } from '../../online/pitchingEdit.js';
-import { CONDITION_ICONS } from '../../game/condition.js';
+import { ConditionMark } from '../../online/PlayerPerformance.jsx';
 import '../../online/online.css';
 import {
   NO_ROLE,
@@ -52,8 +52,6 @@ import {
 // ⚠ 編集はその場で `team` に書き、`onChange` で親に知らせる（元に戻すは親の履歴）。
 // ============================================================
 
-const CONDITION_TEXT = ['絶不調', '不調', '普通', '好調', '絶好調'];
-
 // 今季成績（投球）。⚠ 一人用の選手は `seasonStats.pitching` に積む（`inningsPitched` はアウト数）
 // 投球回（アウト数 → 「18 2/3」）
 const innings = (outs) => `${Math.floor(outs / 3)}${outs % 3 ? ` ${outs % 3}/3` : ''}`;
@@ -80,16 +78,6 @@ const STATS = [
 ];
 const STAT_HEADS = STATS.map((s) => ({ id: s.id, label: s.label, title: s.title }));
 const COLUMN_COUNT = pitchingColumnCount(STAT_HEADS);
-
-function ConditionMark({ player }) {
-  const level = Number.isInteger(player.condition) && player.condition >= 0 && player.condition <= 4 ? player.condition : null;
-  const text = level === null ? '未記録' : CONDITION_TEXT[level];
-  return (
-    <span className={`online-condition online-condition-${level ?? 'unknown'}`} title={`調子: ${text}`} aria-label={`調子: ${text}`} role="img">
-      {level === null ? '—' : CONDITION_ICONS[level]}
-    </span>
-  );
-}
 
 function HeaderRow() {
   return <PitchingHeaderRow stats={STAT_HEADS} fatigueTitle={`先発は疲労${STARTER_SKIP_FATIGUE}以上でその日の登板を飛ばします`} />;
@@ -128,25 +116,7 @@ function PitcherCells({ player, starter, onOpen }) {
 /** 役割の選び直し。先発の型・救援の役割・役割なしを並べて出す（押した札の下に出る） */
 function RoleMenu({ menu, state, player, close, choose, remove }) {
   const ref = useRef(null);
-  useEffect(() => {
-    // ⚠ 開いた札を押したときは閉じない（札の側で閉じる。ここで閉じると続くクリックで開き直す）
-    const away = (e) => {
-      if (ref.current?.contains(e.target)) return;
-      if (e.target.closest?.('.online-role-chip[aria-expanded="true"]')) return;
-      close();
-    };
-    const onKey = (e) => e.key === 'Escape' && close();
-    window.addEventListener('mousedown', away);
-    window.addEventListener('keydown', onKey);
-    window.addEventListener('scroll', close, true);
-    window.addEventListener('resize', close);
-    return () => {
-      window.removeEventListener('mousedown', away);
-      window.removeEventListener('keydown', onKey);
-      window.removeEventListener('scroll', close, true);
-      window.removeEventListener('resize', close);
-    };
-  }, [close]);
+  useRoleMenuDismiss(ref, close);
   const current = state.roles[menu.id];
   const option = (role) => {
     const blocked = roleBlocked(state, player, role);

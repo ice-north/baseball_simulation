@@ -20,6 +20,8 @@ import {
   LINEUP_ORDER_DRAFT,
 } from './Drafts.jsx';
 import LeagueBoard from './LeagueBoard.jsx';
+import TodayGame from './look/TodayGame.jsx';
+import { ReporterMemo, EventScene } from './look/Story.jsx';
 import TradeScreen from './TradeScreen.jsx';
 import CampPlanner, { CompletedCamp } from './CampPlanner.jsx';
 import TryoutResult from './TryoutResult.jsx';
@@ -27,7 +29,7 @@ import SeasonFlow, { stageLines } from './SeasonFlow.jsx';
 import YearSummary from './YearSummary.jsx';
 import ProDraftResult from './ProDraftResult.jsx';
 import { nextAdvanceText, STATUS } from './api.js';
-import { findShortClash, formatTurn, shortClashMessage, shortNameOf, TURN_MINUTES } from './shared.js';
+import { findShortClash, formatTurn, shortClashMessage, shortNameOf, turnOfDate, TURN_MINUTES } from './shared.js';
 import { SEASON_TURNS } from './pyramidLeague.js';
 import { teamLabel } from './gameText.js';
 import {
@@ -59,6 +61,9 @@ import {
 } from './SocialPages.jsx';
 import { rosterGroup } from '../utils/constants.js';
 import { InvitesAdmin } from './Invites.jsx';
+import { TeamMark } from './look/Art.jsx';
+import { NavIcon } from './look/NavIcon.jsx';
+import { SeasonProgress } from './look/Parts.jsx';
 // ============================================================
 // PC版の画面。**どのページも同じ形にする**:
 //
@@ -182,6 +187,7 @@ function NavStatus({ view, busy, run, reload, showTimes, onRename }) {
   const waiting = packWaiting(view);
   return (
     <div className="online-nav-context">
+      <TeamMark team={view.teamName} size={48} className="online-nav-mark" />
       <strong>{teamLabel(view.teamName)}</strong>
       {/* ⚠ 順位と勝敗は**出さない**（ホームの順位表に自球団を黄色で出している）。
           代わりに、この遊び方の骨格——1週間で1シーズン——をここに書く。
@@ -214,6 +220,10 @@ function NavStatus({ view, busy, run, reload, showTimes, onRename }) {
           </b>
           <span className="online-status">{STATUS[view.status]}</span>
         </p>
+        {/* 新しい見た目（試作）: シーズンの進み具合の棒（試合のある間だけ） */}
+        {(!view.stage || ['season', 'pack_select'].includes(view.stage.key)) && (
+          <SeasonProgress turn={turnOfDate(view.currentDate, view.seasonTurns)} turns={view.seasonTurns} />
+        )}
         <small>
           {view.year}年目 · 次の進行 {nextAdvanceText(view)}
         </small>
@@ -564,6 +574,7 @@ export default function DesktopView(props) {
           aria-current={current === 'today' ? 'page' : undefined}
           onClick={() => setTab('today')}
         >
+          <NavIcon id="today" />
           ホーム
           {counts.today > 0 && (
             <span className="online-count" aria-label="未完了の手続き">
@@ -581,6 +592,7 @@ export default function DesktopView(props) {
                 aria-current={current === id ? 'page' : undefined}
                 onClick={() => setTab(id)}
               >
+                <NavIcon id={id} />
                 {label}
                 {/* ⚠ 印は**数で出す**（LINEの通知のように）。以前は色の●だけで、
                     手続きとトレードの返事待ちが何件あるのか分からなかった */}
@@ -614,6 +626,7 @@ export default function DesktopView(props) {
               aria-current={current === 'admin' ? 'page' : undefined}
               onClick={() => setTab('admin')}
             >
+              <NavIcon id="admin" />
               リーグ管理
             </button>
           </div>
@@ -715,6 +728,11 @@ export default function DesktopView(props) {
                   キャンプの画面と手続きの画面には残してある（年が替わった直後に見る場所） */}
               {/* キャンプが終わった直後の結果（閉じるまで。先方指摘「キャンプ直後に」） */}
               <CompletedCamp key={view.lastCamp?.year} view={view} onHome />
+              {/* 新しい見た目（試作）段3: 今日の一戦の札（切のときは出さない） */}
+              <TodayGame view={view} onLineup={() => setTab('lineup')} />
+              {/* 段4: 番記者のメモと、優勝・昇格などが決まったときの場面（どちらも切のときは出さない） */}
+              <ReporterMemo view={view} />
+              <EventScene view={view} />
               <LeagueBoard view={view} />
             </>
           )}

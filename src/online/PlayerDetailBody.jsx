@@ -6,6 +6,8 @@ import { getZoneProfile, zoneHeatmap } from '../game/batterZone.js';
 import { getAbilityRank, getRankColor } from '../utils/constants.js';
 import { teamLabel } from './gameText.js';
 import { withoutPlaceholderHighSchool } from '../utils/careerHistory.js';
+import { useLook } from './look/LookContext.jsx';
+import { StatWithGrade } from './look/Parts.jsx';
 
 // ============================================================
 // 選手の詳細（1画面）。
@@ -57,17 +59,27 @@ export function CareerLine({ player }) {
   );
 }
 
-/** 成績の1区分（基本＋出場など）を横一列で */
-function StatRow({ player, category, groups }) {
+/**
+ * 成績の1区分（基本＋出場など）を横一列で
+ * @param baseline 部の平均（新しい見た目の成績の札。今季だけ。無ければ数字だけ）
+ */
+function StatRow({ player, category, groups, baseline }) {
   const columns = groups.flatMap((id) => statGroup(category, id).columns);
   return (
     <dl className="online-detail-stats">
-      {columns.map((column) => (
-        <div key={column.id}>
-          <dt>{column.label}</dt>
-          <dd>{formatStat(column, column.get(player), true)}</dd>
-        </div>
-      ))}
+      {columns.map((column) => {
+        const value = column.get(player);
+        return (
+          <div key={column.id}>
+            <dt>{column.label}</dt>
+            <dd>
+              <StatWithGrade column={column} value={value} player={player} baseline={baseline}>
+                {formatStat(column, value, true)}
+              </StatWithGrade>
+            </dd>
+          </div>
+        );
+      })}
     </dl>
   );
 }
@@ -79,6 +91,7 @@ function StatRow({ player, category, groups }) {
  * ⚠ 色だけに頼らない——数字そのものを出しているので、色は補助。
  */
 function AbilityBlock({ title, note, rows, help }) {
+  const look = useLook();
   // 説明を開いている項目（押すと出す。もう一度押すと閉じる）。
   // ⚠ 触れると出る（title）だけにしないこと。スマホのブラウザでは触れても出ない
   const [open, setOpen] = useState(null);
@@ -94,56 +107,51 @@ function AbilityBlock({ title, note, rows, help }) {
         {note && <small>{note}</small>}
       </h4>
       <dl>
-        {shown.map(([label, value], i) => (
-          <div key={`${label}:${i}`}>
-            <dt
-              className={ABILITY_HELP[label] ? 'has-help' : undefined}
-              title={ABILITY_HELP[label] || undefined}
-              role={ABILITY_HELP[label] ? 'button' : undefined}
-              tabIndex={ABILITY_HELP[label] ? 0 : undefined}
-              aria-expanded={ABILITY_HELP[label] ? open === label : undefined}
-              onClick={ABILITY_HELP[label] ? () => toggle(label) : undefined}
-              onKeyDown={
-                ABILITY_HELP[label]
-                  ? (e) => {
-                      if (e.key === 'Enter' || e.key === ' ') {
-                        e.preventDefault();
-                        toggle(label);
+        {shown.map(([label, value], i) => {
+          // 段位（S〜F）。数字の色・バー・札で同じものを使う
+          const rank =
+            typeof value === 'number' ? getAbilityRank(value, label === '球速', label === 'スタミナ') : null;
+          const rankColor = rank ? getRankColor(rank) : '';
+          return (
+            <div key={`${label}:${i}`}>
+              <dt
+                className={ABILITY_HELP[label] ? 'has-help' : undefined}
+                title={ABILITY_HELP[label] || undefined}
+                role={ABILITY_HELP[label] ? 'button' : undefined}
+                tabIndex={ABILITY_HELP[label] ? 0 : undefined}
+                aria-expanded={ABILITY_HELP[label] ? open === label : undefined}
+                onClick={ABILITY_HELP[label] ? () => toggle(label) : undefined}
+                onKeyDown={
+                  ABILITY_HELP[label]
+                    ? (e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          toggle(label);
+                        }
                       }
-                    }
-                  : undefined
-              }
-            >
-              {label}
-            </dt>
-            {/* ⚠ 数字にデータバーを添える（先方指摘 2026-11-16: 数字だけで見づらい）。
-                長さは段位と同じ物差し（球速・スタミナは0〜100に直す。`abilityBarPercent`）、
-                色は数字と同じ段位の色（`currentColor`） */}
-            {typeof value === 'number' && (
-              <span
-                className={`online-ability-bar ${getRankColor(getAbilityRank(value, label === '球速', label === 'スタミナ'))}`}
-                aria-hidden="true"
+                    : undefined
+                }
               >
-                <i style={{ width: `${abilityBarPercent(value, label)}%` }} />
-              </span>
-            )}
-            <dd
-              className={
-                typeof value === 'number'
-                  ? getRankColor(
-                      getAbilityRank(
-                        value,
-                        label === '球速',
-                        label === 'スタミナ',
-                      ),
-                    )
-                  : ''
-              }
-            >
-              {value}
-            </dd>
-          </div>
-        ))}
+                {label}
+              </dt>
+              {/* ⚠ 数字にデータバーを添える（先方指摘 2026-11-16: 数字だけで見づらい）。
+                  長さは段位と同じ物差し（球速・スタミナは0〜100に直す。`abilityBarPercent`）、
+                  色は数字と同じ段位の色（`currentColor`） */}
+              {/* 新しい見た目（試作）: 段位の字を札で添える（数字・バーはそのまま） */}
+              {look.on && typeof value === 'number' && (
+                <b className={`online-rank-chip ${rankColor}`} aria-hidden="true">
+                  <span>{rank}</span>
+                </b>
+              )}
+              {typeof value === 'number' && (
+                <span className={`online-ability-bar ${rankColor}`} aria-hidden="true">
+                  <i style={{ width: `${abilityBarPercent(value, label)}%` }} />
+                </span>
+              )}
+              <dd className={rankColor}>{value}</dd>
+            </div>
+          );
+        })}
       </dl>
       {open && ABILITY_HELP[open] && (
         <p className="online-ability-help" role="note">
@@ -160,6 +168,10 @@ const hasRecord = (player, category) =>
 
 export default function PlayerDetailBody({ player, shown, periodLabel }) {
   const isPitcher = player.position === 'pitcher';
+  // 新しい見た目（試作）: 成績の札（所属の分かる選手の今季だけ。通算・過去の年は平均が違う）
+  const look = useLook();
+  const team = player.tradeTeam || (player.detailAvailable ? look.ownTeam : null);
+  const baseline = look.on && periodLabel === '今季' ? look.baselineOf?.(team) : null;
   const abilities = (group) => abilityRows(player, group);
   // ⚠ **能力は投打の両方をいつも出す**（いしだ指摘: 二刀流が売りなので、投手の打撃・
   //    野手の投球も見たい。誰でも投げる・守る起用ができる）。本職を先に置く。
@@ -185,6 +197,7 @@ export default function PlayerDetailBody({ player, shown, periodLabel }) {
       player={shown}
       category="batting"
       groups={['basic', 'appearances']}
+      baseline={baseline}
     />
   );
   const pitchingStats = showPitching && (
@@ -193,6 +206,7 @@ export default function PlayerDetailBody({ player, shown, periodLabel }) {
       player={shown}
       category="pitching"
       groups={['basic', 'record']}
+      baseline={baseline}
     />
   );
   return (

@@ -61,6 +61,8 @@ import jp.icenorth.baseball.shared.StatFormat
 import jp.icenorth.baseball.shared.formatStat
 import jp.icenorth.baseball.shared.statFormatOf
 import jp.icenorth.baseball.shared.at
+import jp.icenorth.baseball.shared.leagueBaseline
+import jp.icenorth.baseball.shared.statGrade
 import jp.icenorth.baseball.shared.careerRoster
 import jp.icenorth.baseball.shared.bool
 import jp.icenorth.baseball.shared.defaultSortColumn
@@ -249,6 +251,7 @@ private fun TeamPicker(view: LeagueView, raw: JsonObject, team: String, onPick: 
     val ordered = listOfNotNull(view.teamName) + names.filter { it != view.teamName }
     Box {
         TextButton(onClick = { open = true }) {
+            TeamMark(team, size = 22.dp, modifier = Modifier.padding(end = 6.dp))
             Text(view.teamLabel(team), fontWeight = FontWeight.Bold)
             Icon(Icons.Filled.ArrowDropDown, contentDescription = "球団を選ぶ")
         }
@@ -319,6 +322,8 @@ private fun TeamStats(model: AppViewModel, view: LeagueView, raw: JsonObject, te
             lineup?.at("starters").list().mapNotNull { it.num()?.toLong() }
     }
 
+    val lookOn = LocalLook.current.on
+    val baseline = remember(raw) { leagueBaseline(raw) }
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
         Row(Modifier.fillMaxWidth().padding(start = 12.dp), verticalAlignment = Alignment.CenterVertically) {
             ChoiceRow(listOf("bat" to "打撃", "pit" to "投球"), if (batting) "bat" else "pit") { batting = it == "bat" }
@@ -353,6 +358,8 @@ private fun TeamStats(model: AppViewModel, view: LeagueView, raw: JsonObject, te
                     },
                     onPlayer = { model.openPlayer = it },
                     highlight = { (it.at("id").num()?.toLong() ?: -1L) in lineupIds },
+                    // 新しい見た目（試作）: 今季の成績に S〜F の札（リーグ平均比。通算は平均が違うので付けない）
+                    grade = if (lookOn && !career) { c, v, p -> statGrade(c.id, v, p, baseline) } else null,
                     sub = { p ->
                         positionLabel(p.at("position").str()) + (p.at("age").int()?.let { " ${it}歳" } ?: "")
                     },

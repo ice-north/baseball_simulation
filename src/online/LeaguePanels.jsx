@@ -35,19 +35,19 @@ import { Page } from './Page.jsx';
 import { gamesBehind, gapText } from './standingsGap.js';
 import TryoutPlanner from './TryoutPlanner.jsx';
 import AgeOutlook from './AgeOutlook.jsx';
-import TryoutResult from './TryoutResult.jsx';
 import { fillsAutomatically, plannedPicks, signTotal } from './tryoutPlan.js';
 import PackSelect, { TeamIdentity } from './PackSelect.jsx';
 import { packWaiting, phaseStatusLabel } from './notices.js';
 import { ReadContext } from './useRead.js';
 import CampPlanner from './CampPlanner.jsx';
-import ContractPlanner, { COACH_OFFER_ROLES } from './ContractPlanner.jsx';
+import ContractPlanner, { staffMoveLines } from './ContractPlanner.jsx';
 import {
   PYRAMID_LEAGUES,
   PROMOTION_PLACES,
   RELEGATION_FROM_BOTTOM,
   compareLeagueStanding,
 } from './pyramidLeague.js';
+import { TeamMark } from './look/Art.jsx';
 export { PageNav } from './PageNav.jsx';
 
 
@@ -248,6 +248,7 @@ export function Standings({ view, action = null }) {
                       {i + 1}
                     </span>
                     {/* 球団名を押すと、その球団のスタメンと投手陣を開く（先方要望 2026-11） */}
+                    <TeamMark team={s.team} size={20} className="online-standings-mark" />
                     <TeamLineupButton view={view} team={s.team} />
                     {/* ⚠ 人が持っている球団だけ、名前を括弧で添える。
                         CPUに付けると誰かが持っているように見える。
@@ -425,7 +426,10 @@ export function Results({ view, compact = false }) {
                 )}
               </header>
               <div>
-                <span title={teamLabel(g.away)}>{name(g.away)}</span>
+                <span title={teamLabel(g.away)}>
+                  <TeamMark team={g.away} size={22} />
+                  {name(g.away)}
+                </span>
                 {/* ⚠ 日程の対戦は「vs」を小さく薄く出す。以前の大きな白い「×」は、
                     野球の表では負け・中止の印に読めた */}
                 {mode === 'results' ? (
@@ -433,7 +437,10 @@ export function Results({ view, compact = false }) {
                 ) : (
                   <em className="online-score-vs">vs</em>
                 )}
-                <span title={teamLabel(g.home)}>{name(g.home)}</span>
+                <span title={teamLabel(g.home)}>
+                  <TeamMark team={g.home} size={22} />
+                  {name(g.home)}
+                </span>
               </div>
               {decisions && (
                 <small className="online-score-decisions">{decisions}</small>
@@ -766,12 +773,10 @@ function MobilePlanContents({ phase, plan, view }) {
     players = plan.releaseIds.map((id) => byId.get(id)).filter(Boolean);
     head = `退団させる選手 ${plan.releaseIds.length}人`;
     if (!plan.releaseIds.length) note = '全員と来季も契約します。';
-    // コーチ打診（`ContractPlanner` の「投手C」「野手C」）
-    const offered = COACH_OFFER_ROLES.map(([role, label]) => [label, byId.get(plan.coachOffers?.[role])]).filter(([, p]) => p);
-    if (offered.length)
-      note = [note, `コーチ打診: ${offered.map(([label, p]) => `${p.name}（${label}）`).join('・')}。年度更新で就任します。`]
-        .filter(Boolean)
-        .join(' ');
+    // コーチ打診（`ContractPlanner` の「投手C」「野手C」）と指導者の異動。年度更新で動く順の文
+    const staffLines = staffMoveLines(plan, view.staff?.seats, view.roster);
+    if (staffLines.length)
+      note = [note, `年度更新で: ${staffLines.join('。')}。`].filter(Boolean).join(' ');
   } else return <p>シーズンを締めて次年度へ進みます。</p>;
   return (
     <div className="online-phase-contents">
@@ -1042,6 +1047,7 @@ export function PhasePanel({ view, auth, busy, run, command, mobile, setTab }) {
           roster={view.roster}
           plan={plan}
           advice={phase.releaseAdvice || {}}
+          staff={view.staff}
           onChange={(next) => {
             setDirty(true);
             setPlan(next);

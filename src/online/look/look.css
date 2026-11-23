@@ -1,0 +1,646 @@
+/* 新しい見た目（試作）。⚠ 切のときに当たる指定を書かない: 絵の部品は切のとき描かれず、
+   見た目の差しかえは `.online.online-look` の下にだけ書く（`LookContext.jsx`）。 */
+/* 字はどれも `tools/look-fonts.py` で書き出したもの。⚠ 配布 HTML に埋め込まず `public/fonts/` に置く
+   （入にした人だけが読む。日本語は1つ約450KB ある）。ライセンスも同じ場所にある */
+/* 球団マークの字（Graduate・Alfa Slab One・Yellowtail） */
+@font-face {
+  font-family: LookGraduate;
+  src: url('/fonts/look-graduate.woff2') format('woff2');
+  font-display: swap;
+}
+@font-face {
+  font-family: LookAlfaSlab;
+  src: url('/fonts/look-alfaslab.woff2') format('woff2');
+  font-display: swap;
+}
+@font-face {
+  font-family: LookYellowtail;
+  src: url('/fonts/look-yellowtail.woff2') format('woff2');
+  font-display: swap;
+}
+/* 数字と英字（Barlow Semi Condensed。英数記号だけに絞ったもの） */
+@font-face {
+  font-family: LookNum;
+  src: url('/fonts/look-num-regular.woff2') format('woff2');
+  font-weight: 100 500;
+  font-display: swap;
+}
+@font-face {
+  font-family: LookNum;
+  src: url('/fonts/look-num-bold.woff2') format('woff2');
+  font-weight: 600 900;
+  font-display: swap;
+}
+/* 見出し（Dela Gothic One）と本文の日本語（Zen Kaku Gothic New）。JIS 第1水準＋ソースに出てくる字に絞ったもの */
+@font-face {
+  font-family: LookHead;
+  src: url('/fonts/look-head.woff2') format('woff2');
+  font-display: swap;
+}
+@font-face {
+  font-family: LookJP;
+  src: url('/fonts/look-body-regular.woff2') format('woff2');
+  font-weight: 100 500;
+  font-display: swap;
+}
+@font-face {
+  font-family: LookJP;
+  src: url('/fonts/look-body-bold.woff2') format('woff2');
+  font-weight: 600 900;
+  font-display: swap;
+}
+.online-look-art {
+  display: inline-block;
+  vertical-align: middle;
+  flex: none;
+  overflow: visible;
+}
+
+/* ---- 入のときだけ当てる差しかえ ------------------------------------------ */
+/* 字: 見出しを太いゴシックに、本文を数字と英字は細身のスポーツ体・日本語は Zen Kaku Gothic New に
+   （無い字は後ろの今までのフォントで出る）。⚠ 新聞（`.online-paper`）と一人用の画面（`.online-sp`）は変えない */
+.online.online-look {
+  --look-body-font: LookNum, LookJP, -apple-system, BlinkMacSystemFont, 'Hiragino Kaku Gothic ProN', sans-serif;
+  font-family: var(--look-body-font);
+}
+.online.online-look
+  :is(h1, h2, h3, .online-nav-context strong, .online-mobile-overview > strong):not(:where(.online-paper *, .online-sp *)) {
+  font-family: LookHead, var(--look-body-font);
+  /* 太さは見出しのまま（中の注記が受け継ぐ）。見出しのフォントは1つの太さしか無いので、太字を作らせない */
+  font-synthesis: none;
+  letter-spacing: 0.02em;
+}
+/* 見出しの中の注記（「先発は予定…」など）とボタンは本文の字に戻す */
+.online.online-look :is(h1, h2, h3):not(:where(.online-paper *, .online-sp *)) :is(small, button) {
+  font-family: var(--look-body-font);
+  font-synthesis: initial;
+  letter-spacing: 0;
+}
+
+/* 球団マーク・顔と、隣の字との間 */
+.online.online-look .online-team-mark {
+  margin: 0 4px;
+}
+.online.online-look .online-face {
+  margin-right: 6px;
+}
+.online.online-look .online-condition-face {
+  vertical-align: -2px;
+}
+.online.online-look .online-condition {
+  width: 16px;
+}
+
+/* 自球団の色。⚠ 地の色は変えない（`online.css` に色が約680か所あり、入れかえると直しが倍になる）。
+   見出しの下の帯と左メニューの区切りだけを球団の色にする（`--team-c2` は `OnlineApp`） */
+.online.online-look .online-header {
+  box-shadow: inset 0 -3px 0 var(--team-c2, transparent);
+}
+.online.online-look .online-nav-context {
+  border-bottom: 3px solid var(--team-c2, #536b85);
+}
+.online.online-look .online-nav-mark {
+  display: block;
+  margin: 0 0 8px;
+}
+.online.online-look .online-mobile-overview > strong {
+  display: inline-flex;
+  align-items: center;
+}
+
+/* 選手・指導者の詳細: 顔を名前の左に（閉じるは右端のまま） */
+.online.online-look .online-player-dialog header {
+  justify-content: flex-start;
+  align-items: center;
+}
+.online.online-look .online-player-dialog header > button {
+  margin-left: auto;
+}
+.online.online-look .online-detail-face {
+  margin-right: 4px;
+}
+
+/* 能力の段位の字（S〜F）。数字とバーはそのまま、札を足すだけ */
+.online.online-look .online-rank-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 4px;
+  background: currentColor;
+}
+.online.online-look .online-rank-chip > span {
+  color: #0f172a;
+  font: 11px/1 LookGraduate, 'Arial Black', sans-serif;
+}
+
+/* 指導者のカード: 顔を左に、名前などを右に（空席のカードは顔が無いのでそのまま） */
+.online.online-look .online-staff-card:not(.is-empty) header {
+  display: grid;
+  grid-template-columns: 60px 1fr;
+  column-gap: 12px;
+  align-items: start;
+}
+.online.online-look .online-staff-card:not(.is-empty) header > * {
+  grid-column: 2;
+}
+.online.online-look .online-staff-card:not(.is-empty) header > .online-staff-face {
+  grid-column: 1;
+  grid-row: 1 / span 4;
+  margin: 0;
+}
+
+/* スマホの順位表は球団名の欄が狭く、マークを足すと長い名前（鳥取ヴォヤージャーズ）が2行に割れる。
+   スマホの順位表だけはマークを出さない（PC・試合の一覧・スコアボードには出す） */
+.online-mobile.online-look .online-standings-mark {
+  display: none;
+}
+
+/* 試合のカード: 球団名は2行に折れることがあるので、マークは名前の上に置く（ホームは右寄せ） */
+.online.online-look .online-score > div > span > .online-team-mark {
+  display: block;
+  margin: 0 0 3px;
+}
+.online.online-look .online-score > div > span:last-child > .online-team-mark {
+  margin-left: auto;
+}
+
+/* ---- 段3: 今日の一戦の札（PC のホームの頭。`TodayGame.jsx`） ---------------- */
+.online.online-look .online-today-game {
+  position: relative;
+  height: 320px;
+  margin: 0 0 16px;
+  border-radius: 14px;
+  overflow: hidden;
+  color: #f8fafc;
+  box-shadow: 0 10px 30px rgb(0 0 0 / 0.35);
+  isolation: isolate;
+}
+.online.online-look .online-today-game > .online-stadium-art {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+}
+.online.online-look .online-today-game header {
+  position: absolute;
+  inset: 0 0 auto;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 18px 20px;
+  background: linear-gradient(rgb(0 0 0 / 0.7), transparent);
+}
+.online.online-look .online-today-game header strong {
+  font: 18px/1.2 LookHead, var(--look-body-font);
+  letter-spacing: 0.02em;
+}
+.online.online-look .online-today-game header span {
+  font-size: 13px;
+  color: #cbd5e1;
+}
+.online.online-look .online-today-vs {
+  position: absolute;
+  inset: 46px 0 auto;
+  display: grid;
+  grid-template-columns: 1fr 110px 1fr;
+  align-items: center;
+}
+.online.online-look .online-today-side {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  filter: drop-shadow(0 4px 10px rgb(0 0 0 / 0.6));
+}
+.online.online-look .online-today-side .online-team-mark {
+  margin: 0 0 4px;
+}
+.online.online-look .online-today-side strong {
+  font: 20px/1.2 LookHead, var(--look-body-font);
+  letter-spacing: 0.02em;
+  text-shadow: 0 2px 6px #000;
+}
+.online.online-look .online-today-side small {
+  font-size: 12px;
+  color: #e2e8f0;
+  text-shadow: 0 1px 4px #000;
+}
+.online.online-look .online-today-vs > b {
+  font: 46px/1 LookGraduate, 'Arial Black', sans-serif;
+  color: #fde68a;
+  text-align: center;
+  text-shadow: 0 3px 0 #b45309, 0 6px 14px #000;
+}
+.online.online-look .online-today-note {
+  position: absolute;
+  left: 18px;
+  top: 206px;
+  margin: 0;
+  padding: 5px 12px;
+  border-radius: 8px;
+  background: rgb(11 18 32 / 0.78);
+  font-size: 13px;
+}
+.online.online-look .online-today-cta {
+  /* ⚠ 色は変数で渡す（`.online button:hover` のほうが詳細度が高く、じかに書くとホバーで地が灰色になる） */
+  --online-btn-bg: #fde68a;
+  --online-btn-hover: #fcd34d;
+  --online-btn-ink: #422006;
+  position: absolute;
+  right: 18px;
+  top: 200px;
+  height: auto;
+  padding: 7px 16px;
+  border: 0;
+  border-radius: 999px;
+  background: #fde68a;
+  color: #422006;
+  font-weight: 700;
+  box-shadow: 0 4px 0 #b45309;
+  cursor: pointer;
+}
+.online.online-look .online-today-starters {
+  position: absolute;
+  inset: auto 14px 12px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+.online.online-look .online-today-starter {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  padding: 6px 12px;
+  border-left: 5px solid var(--side-c, #94a3b8);
+  border-radius: 10px;
+  background: rgb(11 18 32 / 0.86);
+}
+.online.online-look .online-today-starter.is-right {
+  flex-direction: row-reverse;
+  text-align: right;
+  border-left: 0;
+  border-right: 5px solid var(--side-c, #94a3b8);
+}
+.online.online-look .online-today-starter .online-face {
+  margin: 0;
+}
+.online.online-look .online-today-starter > div {
+  display: grid;
+  min-width: 0;
+}
+.online.online-look .online-today-starter small {
+  font-size: 11px;
+  color: #94a3b8;
+}
+.online.online-look .online-today-starter strong {
+  font-size: 16px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.online.online-look .online-today-starter span {
+  font-size: 12px;
+  color: #cbd5e1;
+}
+
+/* ---- 段3: 打席速報（試合の小窓。`LivePlays.jsx`） ------------------------ */
+.online.online-look .online-live {
+  display: grid;
+  gap: 8px;
+  max-width: 520px;
+  margin: 8px auto 0;
+  padding-bottom: 0;
+  border-radius: 12px;
+  overflow: hidden;
+  background: #0b1220;
+  color: #e2e8f0;
+}
+.online.online-look .online-live-bug {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 12px;
+  background: #131c2f;
+}
+.online.online-look .online-live-score {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-weight: 700;
+}
+.online.online-look .online-live-score .online-team-mark {
+  margin: 0 2px;
+}
+.online.online-look .online-live-score b {
+  min-width: 22px;
+  color: #fde68a;
+  font-size: 22px;
+  text-align: center;
+}
+.online.online-look .online-live-inning {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: #cbd5e1;
+}
+.online.online-look .online-live-outs i {
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  margin-left: 3px;
+  border-radius: 50%;
+  background: #334155;
+}
+.online.online-look .online-live-outs i[data-on] {
+  background: #f87171;
+}
+.online.online-look .online-field-art {
+  display: block;
+  width: min(100%, 400px);
+  height: auto;
+  margin: 0 auto;
+  aspect-ratio: 160 / 136;
+}
+.online.online-look .online-live-telop {
+  display: grid;
+  gap: 2px;
+  margin: 0 10px;
+  padding: 8px 12px;
+  border-left: 6px solid #94a3b8;
+  border-radius: 6px;
+  background: linear-gradient(90deg, rgb(30 58 138 / 0.55), transparent);
+}
+.online.online-look .online-live-telop[data-tone='score'] {
+  border-left-color: #f87171;
+}
+.online.online-look .online-live-telop[data-tone='hit'] {
+  border-left-color: #facc15;
+}
+.online.online-look .online-live-telop strong {
+  font: 16px/1.35 LookHead, var(--look-body-font);
+  letter-spacing: 0.02em;
+}
+.online.online-look .online-live-telop small {
+  font-size: 12px;
+  color: #cbd5e1;
+}
+.online.online-look .online-live-flow {
+  margin: 0;
+  padding: 0 12px;
+  list-style: none;
+  font-size: 13px;
+}
+.online.online-look .online-live-flow li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
+  border-bottom: 1px solid #1e293b;
+  color: #94a3b8;
+}
+.online.online-look .online-live-flow li[data-now] {
+  color: #f8fafc;
+  font-weight: 700;
+}
+.online.online-look .online-live-flow li b {
+  min-width: 24px;
+  border-radius: 4px;
+  background: #94a3b8;
+  color: #0f172a;
+  font-size: 12px;
+  text-align: center;
+}
+.online.online-look .online-live-flow li[data-tone='score'] b {
+  background: #f87171;
+}
+.online.online-look .online-live-flow li[data-tone='hit'] b {
+  background: #facc15;
+}
+.online.online-look .online-live-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  background: #131c2f;
+}
+.online.online-look .online-live-controls button[aria-pressed='true'] {
+  background: #38bdf8;
+  border-color: #38bdf8;
+  color: #0b1220;
+}
+.online.online-look .online-live-controls small {
+  margin-left: auto;
+  color: #94a3b8;
+}
+
+/* ---- 段4: 番記者のメモ（ホーム。`Story.jsx`） ----------------------------- */
+.online.online-look .online-reporter-memo {
+  position: relative;
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  margin: 4px 0 16px;
+  padding: 14px 14px 12px;
+  border: 2px solid #1b1a17;
+  border-radius: 4px;
+  background: #fbf8f0;
+  color: #1b1a17;
+}
+.online.online-look .online-reporter-tag {
+  position: absolute;
+  top: -11px;
+  left: 10px;
+  padding: 1px 8px;
+  background: #c8102e;
+  color: #fff;
+  font: 12px/1.5 LookHead, var(--look-body-font);
+}
+.online.online-look .online-reporter-memo .online-face {
+  flex: none;
+  margin: 0;
+  border-radius: 50%;
+}
+.online.online-look .online-reporter-memo > div {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.online.online-look .online-reporter-memo small {
+  color: #57534e;
+  font-size: 11px;
+}
+.online.online-look .online-reporter-memo p {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+/* ---- 段4: 球団の出来事の場面（`Story.jsx`） ------------------------------ */
+.online.online-look .online-event-scene {
+  /* 画面いっぱいの <dialog>（showModal で最前面。ほかの小窓の上にも出る） */
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  max-height: none;
+  margin: 0;
+  border: 0;
+  padding: 12px;
+  background: transparent;
+  color: inherit;
+}
+.online.online-look .online-event-scene[open] {
+  display: grid;
+  place-items: center;
+}
+.online.online-look .online-event-scene::backdrop {
+  background: rgb(2 6 23 / 0.78);
+}
+.online.online-look .online-event-stage {
+  position: relative;
+  width: min(100%, 440px);
+  height: min(92vh, 760px);
+  overflow: hidden;
+  border-radius: 18px;
+  background: #0b1220;
+  color: #f8fafc;
+  box-shadow: 0 18px 50px rgb(0 0 0 / 0.6);
+  isolation: isolate;
+}
+.online.online-look .online-event-stage > .online-stadium-art {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  filter: blur(1.5px) brightness(0.75);
+}
+.online.online-look .online-event-stage header {
+  position: absolute;
+  inset: 24px 16px auto;
+  display: grid;
+  gap: 2px;
+  padding: 8px 12px;
+  border-left: 5px solid #fde68a;
+  background: rgb(11 18 32 / 0.82);
+}
+.online.online-look .online-event-stage header small {
+  color: #fde68a;
+  font-size: 12px;
+}
+.online.online-look .online-event-stage header strong {
+  font: 20px/1.3 LookHead, var(--look-body-font);
+}
+.online.online-look .online-event-faces {
+  position: absolute;
+  inset: 30% 0 auto;
+  display: flex;
+  justify-content: space-around;
+  align-items: flex-end;
+}
+.online.online-look .online-event-faces figure {
+  display: grid;
+  justify-items: center;
+  gap: 4px;
+  margin: 0;
+  font-size: 13px;
+  filter: drop-shadow(0 6px 10px rgb(0 0 0 / 0.65));
+}
+.online.online-look .online-event-faces .online-face {
+  margin: 0;
+}
+.online.online-look .online-event-talk {
+  position: absolute;
+  inset: auto 12px 78px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: #f8fafc;
+  color: #0f172a;
+  box-shadow: 0 6px 18px rgb(0 0 0 / 0.5);
+}
+.online.online-look .online-event-talk span {
+  display: inline-block;
+  margin-bottom: 6px;
+  padding: 2px 10px;
+  border-radius: 6px;
+  background: #13294b;
+  color: #fff;
+  font: 13px/1.5 LookHead, var(--look-body-font);
+}
+.online.online-look .online-event-talk p {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.65;
+}
+.online.online-look .online-event-close {
+  --online-btn-bg: #fde68a;
+  --online-btn-hover: #fcd34d;
+  --online-btn-ink: #422006;
+  position: absolute;
+  inset: auto 12px 20px;
+  height: 46px;
+  border: 0;
+  border-radius: 10px;
+  background: #fde68a;
+  color: #422006;
+  font: 15px/1 LookHead, var(--look-body-font);
+  box-shadow: 0 3px 0 #b45309;
+  cursor: pointer;
+}
+
+/* ---- 動きで見る（`PlayMotion.jsx`。打席速報の球場の図の代わり） ---------------- */
+.online.online-look .online-motion {
+  position: relative;
+}
+.online.online-look .online-motion-canvas {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 640 / 360;
+  background: #040817;
+}
+.online.online-look .online-motion-tools {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  display: flex;
+  gap: 6px;
+}
+.online.online-look .online-motion-tools button {
+  min-height: 0;
+  padding: 3px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 999px;
+  background: rgba(11, 18, 32, 0.75);
+  color: #e2e8f0;
+  font-size: 12px;
+}
+.online.online-look .online-motion-tools button[aria-pressed='true'] {
+  border-color: #fde68a;
+  color: #fde68a;
+}
+.online.online-look .online-live[data-motion] {
+  max-width: 760px;
+  /* 点の帯と絵をつなげる */
+  gap: 0;
+}
+/* 小窓の `header` には下の余白が付いている（`.online-player-dialog header`） */
+.online.online-look .online-live[data-motion] .online-live-bug {
+  margin-bottom: 0;
+}
+.online.online-look .online-live[data-motion] .online-live-telop,
+.online.online-look .online-live[data-motion] .online-live-flow,
+.online.online-look .online-live[data-motion] .online-live-controls {
+  margin-top: 8px;
+}
+/* 結果の行は動きが終わってから足す。下の「次の打席」が上下に動かないよう、4行ぶんの高さを取っておく */
+.online.online-look .online-live[data-motion] .online-live-flow {
+  min-height: 116px;
+}
+.online.online-look .online-live-telop[data-wait] strong {
+  color: #cbd5e1;
+}

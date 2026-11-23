@@ -1,9 +1,9 @@
 import React, { useMemo, useRef, useState } from 'react';
-import { POS } from './api.js';
+import { POS, posTone, posInk } from './api.js';
 import { AbilityGrade, PlayerStatsButton } from './PlayerPerformance.jsx';
 import { PageNav } from './PageNav.jsx';
 import { teamShort } from './gameText.js';
-import { rosterGroup, rosterCounts } from '../utils/constants.js';
+import { rosterCounts } from '../utils/constants.js';
 import { AbilityValue } from '../components/AbilityValue.jsx';
 import { formatStat } from './statsView.js';
 import { playablePositions } from './lineupEdit.js';
@@ -32,6 +32,9 @@ import {
   weightedScore,
   weightedRanked,
   teamFitRank,
+  ABILITY_FILTERS,
+  ABILITY_FILTER_MAX,
+  activeAbilityFilters,
 } from './tryoutPlan.js';
 
 // ============================================================
@@ -140,7 +143,7 @@ export function ListedBy({ listed }) {
 }
 
 /** 選手1人の1行（名前・年齢・位置・主な能力）。交渉する選手の欄と、スマホの受験者で使う */
-function Line({ player, score, fit }) {
+function Line({ player, score, fit, extra = [] }) {
   if (!player) return null;
   return (
     <>
@@ -170,8 +173,85 @@ function Line({ player, score, fit }) {
           </>
         )}
         {originOf(player) && ` / ${originOf(player)}`}
+        {/* 能力で絞り込んでいるときは、その能力の値も出す（投手のミートなど、ふだんの行に無い能力） */}
+        {extra?.length > 0 && (
+          <span className="online-tryout-extra">
+            {' / '}
+            {extra.map((f) => (
+              <span key={f.key}>
+                {f.label}
+                <AbilityValue value={f.get(player)} isVel={f.isVel} isSta={f.isSta} placeholder="—" />{' '}
+              </span>
+            ))}
+          </span>
+        )}
       </small>
     </>
+  );
+}
+
+/**
+ * 能力で絞り込む（先方要望 2026-11-23）。条件は「能力」と「何以上」の組で、すべてを満たす人だけ出す。
+ * 投手・野手を問わず全員から探す（投手の野手能力・野手の投手能力も）。
+ * ⚠ 条件はこの画面の間だけ持つ（保存しない。サーバーへも送らない）
+ */
+function AbilityFilters({ filters, onChange }) {
+  const set = (i, patch) => onChange(filters.map((f, j) => (j === i ? { ...f, ...patch } : f)));
+  return (
+    <div className="online-tryout-filters" role="group" aria-label="能力で絞り込む">
+      <span className="online-tryout-filters-title">能力で絞り込む</span>
+      {filters.map((f, i) => (
+        <span key={i} className="online-tryout-filter">
+          <select
+            value={f.key}
+            aria-label={`条件${i + 1}の能力`}
+            onChange={(e) => set(i, { key: e.target.value })}
+          >
+            <optgroup label="野手の能力">
+              {ABILITY_FILTERS.filter((d) => d.side === 'fielder').map((d) => (
+                <option key={d.key} value={d.key}>
+                  {d.label}
+                </option>
+              ))}
+            </optgroup>
+            <optgroup label="投手の能力">
+              {ABILITY_FILTERS.filter((d) => d.side === 'pitcher').map((d) => (
+                <option key={d.key} value={d.key}>
+                  {d.label}
+                </option>
+              ))}
+            </optgroup>
+          </select>
+          <input
+            type="number"
+            inputMode="numeric"
+            min="0"
+            value={f.min}
+            aria-label={`条件${i + 1}の下限`}
+            onChange={(e) => set(i, { min: e.target.value })}
+          />
+          {ABILITY_FILTERS.find((d) => d.key === f.key)?.unit || ''}以上
+          <button
+            type="button"
+            aria-label={`条件${i + 1}を外す`}
+            onClick={() => onChange(filters.filter((_, j) => j !== i))}
+          >
+            ×
+          </button>
+        </span>
+      ))}
+      {filters.length < ABILITY_FILTER_MAX && (
+        <button
+          type="button"
+          onClick={() => onChange([...filters, { key: 'meet', min: 50 }])}
+        >
+          ＋ 条件を足す
+        </button>
+      )}
+      {filters.length === 0 && (
+        <small className="online-muted">投手の野手能力（ミートなど）・野手の投手能力（球速など）も、全員から探せます</small>
+      )}
+    </div>
   );
 }
 
@@ -203,6 +283,8 @@ function PoolTable({
   limit,
   onNegotiate,
   onDrop,
+  // 能力で絞り込んでいる能力のうち、この表にふだん無いもの（投手の表のミートなど）。列を足して見せる
+  extra = [],
 }) {
   const k = PLAYER_KINDS[kind];
   const stats = withStats ? k.stats : [];
@@ -238,6 +320,15 @@ function PoolTable({
           {kind === 'pitcher' && (
             <th className="is-sep online-tryout-pitches">変化球</th>
           )}
+          {extra.map((f, i) => (
+            <th
+              key={f.key}
+              className={i === 0 ? 'is-sep online-tryout-extra' : 'online-tryout-extra'}
+              title={`絞り込みの条件にした${f.label}`}
+            >
+              {f.label}
+            </th>
+          ))}
           {stats.map((column, i) => (
             <th
               key={column.id}
@@ -301,14 +392,14 @@ function PoolTable({
                     className="online-lineup-playable"
                     title="本職と、ほかに守れる位置（適性の高い順）"
                   >
-                    <span className="online-lineup-pos is-bench">
+                    <span className={`online-lineup-pos is-bench ${posTone(p.position)}`}>
                       {POS[p.position] || '?'}
                     </span>
                     {playablePositions(p)
                       .filter((e) => e.position !== p.position)
                       .slice(0, 2)
                       .map((e) => (
-                        <span key={e.position}>{POS[e.position]}</span>
+                        <span key={e.position} className={posInk(e.position)}>{POS[e.position]}</span>
                       ))}
                   </span>
                 )}
@@ -337,6 +428,11 @@ function PoolTable({
                   {pitchTypes(p) || '—'}
                 </td>
               )}
+              {extra.map((f, i) => (
+                <td key={f.key} className={i === 0 ? 'is-sep online-tryout-extra' : 'online-tryout-extra'}>
+                  <AbilityValue value={f.get(p)} isVel={f.isVel} isSta={f.isSta} placeholder="—" />
+                </td>
+              ))}
               {stats.map((column, i) => (
                 <td
                   key={column.id}
@@ -389,6 +485,15 @@ export default function TryoutPlanner({
   const scoreOf = (p) => scores.get(p.id) ?? 0;
   const fitOf = (p) => teamFitRank(p, roster, weights);
   const [query, setQuery] = useState('');
+  // 能力で絞り込む条件 [{ key, min }]（`AbilityFilters`）
+  const [abilityFilters, setAbilityFilters] = useState([]);
+  const activeFilters = activeAbilityFilters(abilityFilters);
+  const filterKey = JSON.stringify(activeFilters);
+  // その表にふだん無い能力（投手の表なら野手の能力）だけ列を足す
+  const extraFor = (kind) =>
+    activeFilters
+      .map((f) => ABILITY_FILTERS.find((d) => d.key === f.key))
+      .filter((d, i, all) => d && all.indexOf(d) === i && d.side !== kind);
   const [page, setPage] = useState(0);
   // ⚠ お知らせは**出したときの希望順と組で持つ**。「標準案に戻す」など外から
   //    希望順が変わったら出さない（「作り直しました」が標準案の上に残っていた）
@@ -434,9 +539,9 @@ export default function TryoutPlanner({
   const wantedSet = useMemo(() => new Set(wanted), [wanted.join(',')]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const pool = useMemo(
-    () => filterCandidates(candidates, { group, query, sortKey, scoreOf }),
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- scoreOf は scores から決まる
-    [candidates, group, query, sortKey, scores],
+    () => filterCandidates(candidates, { group, query, sortKey, scoreOf, abilities: activeFilters }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- scoreOf は scores から、activeFilters は filterKey から決まる
+    [candidates, group, query, sortKey, scores, filterKey],
   );
   const size = mobile ? MOBILE_PAGE : PAGE;
   const shown = pool.slice(page * size, page * size + size);
@@ -745,7 +850,7 @@ export default function TryoutPlanner({
             <small>
               {pool.length
                 ? `${page * size + 1}〜${Math.min(pool.length, page * size + size)}人目を出しています。名前を押すと選手の詳細が開きます`
-                : 'この絞り込みに合う受験者がいません'}
+                : '条件に合う受験者がいません（守備位置・名前・能力の条件をゆるめてください）'}
             </small>
           </h3>
           <div className="online-segments" aria-label="守備位置">
@@ -793,6 +898,13 @@ export default function TryoutPlanner({
               />
             </label>
           </div>
+          <AbilityFilters
+            filters={abilityFilters}
+            onChange={(next) => {
+              setAbilityFilters(next);
+              setPage(0);
+            }}
+          />
         </div>
         {mobile ? (
           // ⚠ スマホは表にしない（320px に能力の列が入らない）。カードの行のまま
@@ -804,7 +916,12 @@ export default function TryoutPlanner({
                 data-wanted={wantedSet.has(p.id) || undefined}
               >
                 <span className="online-tryout-person">
-                  <Line player={p} score={scores.get(p.id)} fit={fitOf(p)} />
+                  <Line
+                    player={p}
+                    score={scores.get(p.id)}
+                    fit={fitOf(p)}
+                    extra={extraFor(kindOf(p))}
+                  />
                 </span>
                 {/* ⚠ ボタンは**1つだけ**（いしだ要望）。以前は「最優先へ」と
                     「指名に加える」の2つあり、どちらを押すのか毎回考えることに
@@ -848,6 +965,7 @@ export default function TryoutPlanner({
                 limit={limit}
                 onNegotiate={negotiate}
                 onDrop={drop}
+                extra={extraFor(section.kind)}
               />
             ))}
           </div>

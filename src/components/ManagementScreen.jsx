@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
-import { TEAMS_DATA, initializeAllPitchingRotations, releasedPlayersPool } from '../teams-data.js';
-import { SEASON_PHASES } from '../season/seasonManager.js';
+import React from 'react';
+import { TEAMS_DATA, initializeAllPitchingRotations } from '../teams-data.js';
+import { SEASON_PHASES, calendarYearOf } from '../season/seasonManager.js';
 import { applyNextSeasonRegulations } from '../season/nextSeasonRegulations.js';
 import { withDeparted, rosterIndex, departedSince } from '../season/departedStats.js';
 import { progressDate } from '../season/dateProgression.js';
@@ -306,7 +306,7 @@ const ManagementScreen = ({
       preserveUserLineup: true,
     });
           snapshotAbilityHistory(TEAMS_DATA, next.year);
-          const calYear = 2024 + (next?.year || 1) - 1;
+          const calYear = calendarYearOf(next?.year || 1);
           const rtSeeds = next?.tournamentSeeds || null;
           const rt = generateRegionalTournament({ userTeamName, calendarYear: calYear, seeds: rtSeeds });
           setSeasonData(prev => ({
@@ -356,7 +356,7 @@ const ManagementScreen = ({
     });
       snapshotAbilityHistory(TEAMS_DATA, seasonData.year);
       setSeasonData(prev => {
-        const calYear = 2024 + prev.year - 1;
+        const calYear = calendarYearOf(prev.year);
         return {
           ...prev,
           currentDate: { year: calYear, month: 4, day: 1 },
@@ -401,7 +401,7 @@ const ManagementScreen = ({
     });
       snapshotAbilityHistory(TEAMS_DATA, seasonData.year);
       setSeasonData(prev => {
-        const calYear = 2024 + prev.year - 1;
+        const calYear = calendarYearOf(prev.year);
         return {
           ...prev,
           currentDate: { year: calYear, month: 4, day: 1 },

@@ -55,7 +55,8 @@ fun HomePage(
     onOpenProcedures: () -> Unit,
 ) {
     when (style) {
-        HomeStyle.Paper -> FrontPageCard(page, nextAdvanceAt, menu, onLink, onOpenProcedures)
+        // 新聞は新しい見た目（試作）でも新聞の字のまま（Web も同じ）
+        HomeStyle.Paper -> PlainTypography { FrontPageCard(page, nextAdvanceAt, menu, onLink, onOpenProcedures) }
         HomeStyle.Web -> WebNewsPage(page, nextAdvanceAt, menu, onLink, onOpenProcedures)
         HomeStyle.Plain -> PlainPage(page, nextAdvanceAt, menu, onLink, onOpenProcedures)
     }
@@ -137,7 +138,10 @@ private fun WebNewsPage(page: FrontPage, nextAdvanceAt: String?, menu: @Composab
                 Text(if (page.paper == FrontPage.Paper.Local) " 地元ニュース" else " ニュース", color = Color.White.copy(alpha = 0.85f), fontWeight = FontWeight.Bold, fontSize = 14.sp, modifier = Modifier.weight(1f))
                 androidx.compose.runtime.CompositionLocalProvider(androidx.compose.material3.LocalContentColor provides Color.White) { menu() }
             }
-            Text(listOfNotNull(page.team, page.standing).joinToString("　"), color = Color.White, fontWeight = FontWeight.Bold, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                TeamMark(LocalLook.current.capTeam, size = 22.dp, modifier = Modifier.padding(end = 6.dp))
+                Text(listOfNotNull(page.team, page.standing).joinToString("　"), color = Color.White, fontWeight = FontWeight.Bold, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
             Row {
                 Text(listOfNotNull(page.issue.ifEmpty { null }, page.status).joinToString("・"), color = Color.White.copy(alpha = 0.85f), fontSize = 12.sp, modifier = Modifier.weight(1f).alignByBaseline())
                 val left = secondsUntil(nextAdvanceAt)
@@ -229,6 +233,7 @@ private fun PlainPage(page: FrontPage, nextAdvanceAt: String?, menu: @Composable
         Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)) {
             Column(Modifier.fillMaxWidth().padding(start = 16.dp, end = 4.dp, top = 8.dp, bottom = 14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
+                    TeamMark(LocalLook.current.capTeam, size = 30.dp, modifier = Modifier.padding(end = 8.dp))
                     Text(page.team, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
                     menu()
                 }

@@ -59,7 +59,7 @@ import kotlinx.serialization.json.JsonObject
  *                順位表から選手タブへ飛んだあと、戻るで順位表に戻すため（以前は戻ると「試合結果」から）
  */
 @Composable
-fun GamesScreen(model: AppViewModel, section: String, onSection: (String) -> Unit, onOpenTeam: (String) -> Unit = {}) {
+fun GamesScreen(model: AppViewModel, section: String, onSection: (String) -> Unit, onOpenTeam: (String) -> Unit = {}, onOpenLineup: (() -> Unit)? = null) {
     val view = model.view ?: return
     val raw = model.raw ?: return
     var open by rememberSaveable { mutableStateOf<String?>(null) }
@@ -123,6 +123,8 @@ fun GamesScreen(model: AppViewModel, section: String, onSection: (String) -> Uni
             }
             "news" -> { NewsBoard(view, raw); return@Column }
         }
+        // 新しい見た目（試作）では頭に「今日の一戦」の札（切なら何も出さない）
+        TodayGameCard(view, onOpenLineup)
         ChoiceRow(listOf("own" to "自球団", "league" to "リーグ全体"), scope) { scope = it; pages = 1 }
         if (years.size > 1) ChoiceRow(years.map { "$it" to "${it}年目" }, "$year") { year = it.toInt(); pages = 1 }
         val games = data?.at("games").list().mapNotNull { it.obj() }
@@ -174,7 +176,11 @@ private fun GameRow(view: LeagueView, g: JsonObject, onOpen: () -> Unit) {
         Text(dateText(g), modifier = Modifier.width(44.dp), color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 13.sp)
         Text(result?.first ?: "", color = result?.second ?: MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.Bold, modifier = Modifier.width(20.dp))
         Column(Modifier.weight(1f)) {
-            Text("${view.teamShort(away)}  ${`as` ?: "-"} - ${hs ?: "-"}  ${view.teamShort(home)}", fontWeight = FontWeight.SemiBold)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                TeamMark(away, size = 20.dp, modifier = Modifier.padding(end = 4.dp))
+                Text("${view.teamShort(away)}  ${`as` ?: "-"} - ${hs ?: "-"}  ${view.teamShort(home)}", fontWeight = FontWeight.SemiBold)
+                TeamMark(home, size = 20.dp, modifier = Modifier.padding(start = 4.dp))
+            }
             val d = g.at("decisions")
             Muted(
                 listOfNotNull(
@@ -193,6 +199,8 @@ private fun GameDetail(model: AppViewModel, view: LeagueView, id: String, year: 
     var game by remember(id) { mutableStateOf<JsonObject?>(null) }
     var failure by remember(id) { mutableStateOf<String?>(null) }
     var attempt by remember(id) { mutableStateOf(0) }
+    // 個人成績か打席速報か（打席速報は新しい見た目の試作で、版20からの試合だけ）
+    var pane by rememberSaveable(id) { mutableStateOf("box") }
     LaunchedEffect(id, attempt) {
         try {
             game = model.read("game", mapOf("id" to id, "year" to year))
@@ -213,6 +221,13 @@ private fun GameDetail(model: AppViewModel, view: LeagueView, id: String, year: 
                 val away = g.at("away").str().orEmpty()
                 Section {
                     Muted("${dateText(g)} · ${view.teamLabel(home)}の主催")
+                    // 新しい見た目（試作）では両球団のマークを名前の上に
+                    if (LocalLook.current.on) {
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+                            TeamMark(away, size = 44.dp)
+                            TeamMark(home, size = 44.dp)
+                        }
+                    }
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(view.teamShort(away), style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f), textAlign = TextAlign.End)
                         Text(
@@ -232,6 +247,13 @@ private fun GameDetail(model: AppViewModel, view: LeagueView, id: String, year: 
                             d.at("holdPitchers").list().mapNotNull { it.at("name").str() }.takeIf { it.isNotEmpty() }?.let { "H ${it.joinToString("・")}" },
                         ).joinToString("  "),
                     )
+                }
+                if (livePlaysReady(g)) {
+                    ChoiceRow(listOf("box" to "個人成績", "live" to "打席速報"), pane) { pane = it }
+                    if (pane == "live") {
+                        LivePlays(view, g)
+                        return@Column
+                    }
                 }
                 // 得点経過（何回に誰が何で点を入れたか）。記録の無い古い試合には無い
                 ScoringList(view, scoringOf(g["scoring"]), away, home)

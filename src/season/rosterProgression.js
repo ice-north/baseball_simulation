@@ -11,7 +11,7 @@ import { humanTeamNames } from '../game/teamControl.js';
 // ============================================================
 
 import { highSchoolPool, applyUniversityYear } from './universityPool.js';
-import { generateCatcherLead, RANK_DESC } from '../utils/constants.js';
+import { generateCatcherLead, RANK_DESC, blankSeasonStats, blankCareerStats } from '../utils/constants.js';
 import { generatePositionFitness } from './tryoutSystem.js';
 import { syncPositionToFitness } from '../utils/physics.js';
 import { generateHandedness, generateBats } from '../utils/handedness.js';
@@ -49,7 +49,11 @@ const RATIO_Z_W = 5.0;
 /** そのポジションが不在 / 1人だけ のときの上積み（z） */
 const POS_MISSING_Z = 0.9;
 const POS_THIN_Z = 0.55;
-/** 地元の上積み（z）。⚠ 加点は「他の項の大きさ」ではなく**能力の幅**で決めること */
+/** 地元の上積み（z）。⚠ 加点は「他の項の大きさ」ではなく**能力の幅**で決めること
+ *  （以前の能力スコアへの加点 HOME_BONUS は「30点満点のポジション補正より小さいから安全」と
+ *   見積もって 10 にしたら同じ地区が85.2%になった。高卒の能力スコアは31前後に密集していて
+ *   幅が狭く、+10 は分布そのものより大きい。実測: 1→25.6% / 2→42.9% / 3→54.3% /
+ *   5→68.6% / 10→85.2%（無作為 8.5%）） */
 const HOME_Z = 0.25;
 /** 1人選ぶときに見る窓。能力順に並んだ中の上位N人からポジション需要で選び直す */
 const PICK_WINDOW = 24;
@@ -425,8 +429,8 @@ export function processUniversityTeamGraduation(allTeams, seasonData, currentYea
         if (!p.careerHistory) p.careerHistory = [];
         p.careerHistory = p.careerHistory.filter(h => h.type !== 'university');
         p.careerHistory.push({ type: 'university', year: currentYear + 1, label: teamName });
-        p.seasonStats = { batting: { atBats: 0, hits: 0, doubles: 0, triples: 0, homeruns: 0, walks: 0, strikeouts: 0, rbis: 0, stolenBases: 0, caughtStealing: 0, sacrificeBunts: 0 }, pitching: { inningsPitched: 0, hits: 0, walks: 0, strikeouts: 0, earnedRuns: 0, wins: 0, losses: 0, saves: 0, gamesStarted: 0, gamesRelieved: 0, battersFaced: 0, homeruns: 0 } };
-        if (!p.careerStats) p.careerStats = { batting: { atBats: 0, hits: 0, doubles: 0, triples: 0, homeruns: 0, walks: 0, strikeouts: 0, rbis: 0, stolenBases: 0 }, pitching: { inningsPitched: 0, hits: 0, walks: 0, strikeouts: 0, earnedRuns: 0, wins: 0, losses: 0, saves: 0, gamesStarted: 0, gamesRelieved: 0 } };
+        p.seasonStats = blankSeasonStats();
+        if (!p.careerStats) p.careerStats = blankCareerStats();
         scoutedPlayers.push(p);
       });
       highSchoolPool.players = highSchoolPool.players.filter(p => !reservedSet.has(p));
@@ -527,8 +531,8 @@ function generateUniversityFreshmen(count, rank, teamName, teamData, currentYear
         syncPositionToFitness(p);
         if (!p.careerHistory) p.careerHistory = [];
         p.careerHistory.push({ type: 'university', year: currentYear + 1, label: teamName });
-        p.seasonStats = { batting: { atBats: 0, hits: 0, doubles: 0, triples: 0, homeruns: 0, walks: 0, strikeouts: 0, rbis: 0, stolenBases: 0, caughtStealing: 0, sacrificeBunts: 0 }, pitching: { inningsPitched: 0, hits: 0, walks: 0, strikeouts: 0, earnedRuns: 0, wins: 0, losses: 0, saves: 0, gamesStarted: 0, gamesRelieved: 0, battersFaced: 0, homeruns: 0 } };
-        if (!p.careerStats) p.careerStats = { batting: { atBats: 0, hits: 0, doubles: 0, triples: 0, homeruns: 0, walks: 0, strikeouts: 0, rbis: 0, stolenBases: 0 }, pitching: { inningsPitched: 0, hits: 0, walks: 0, strikeouts: 0, earnedRuns: 0, wins: 0, losses: 0, saves: 0, gamesStarted: 0, gamesRelieved: 0 } };
+        p.seasonStats = blankSeasonStats();
+        if (!p.careerStats) p.careerStats = blankCareerStats();
         newPlayers.push(p);
       }
     }
@@ -622,8 +626,8 @@ function generateFreshmanPlayer(id, teamRank, isRecommended) {
     fame: 0,
     experience: 0,
     fatigue: 0,
-    seasonStats: { batting: { atBats: 0, hits: 0, doubles: 0, triples: 0, homeruns: 0, walks: 0, strikeouts: 0, rbis: 0, stolenBases: 0, caughtStealing: 0, sacrificeBunts: 0 }, pitching: { inningsPitched: 0, hits: 0, walks: 0, strikeouts: 0, earnedRuns: 0, wins: 0, losses: 0, saves: 0, gamesStarted: 0, gamesRelieved: 0, battersFaced: 0, homeruns: 0 } },
-    careerStats: { batting: { atBats: 0, hits: 0, doubles: 0, triples: 0, homeruns: 0, walks: 0, strikeouts: 0, rbis: 0, stolenBases: 0 }, pitching: { inningsPitched: 0, hits: 0, walks: 0, strikeouts: 0, earnedRuns: 0, wins: 0, losses: 0, saves: 0, gamesStarted: 0, gamesRelieved: 0 } },
+    seasonStats: blankSeasonStats(),
+    careerStats: blankCareerStats(),
     careerHistory: [{ type: 'highschool', label: '高校卒' }],
   };
 }

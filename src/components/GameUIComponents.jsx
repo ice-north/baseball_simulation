@@ -52,7 +52,7 @@ export const ScreenHeader = ({ title, sub = null, right = null }) => (
 );
 
 // --- PositionControl コンポーネント ---
-export const PositionControl = ({ position, label, defense, setDefense }) => {
+const PositionControl = ({ position, label, defense, setDefense }) => {
   const [show, setShow] = React.useState(false);
   if (!defense || !defense[position]) return null;
 
@@ -362,28 +362,6 @@ export const Tooltip = ({ text, children, position = 'top' }) => {
   );
 };
 
-// --- StatHeader ツールチップ付き略称ヘッダー ---
-const STAT_TOOLTIPS = {
-  'ミ': 'ミート（打撃精度）', 'パ': 'パワー（長打力）', '走': '走力', '肩': '肩力', '守': '守備力',
-  '眼': '選球眼', '盗': '盗塁技術', '速': '球速（km/h）', '制': '制球力', 'ス': 'スタミナ',
-  '体': '体力（疲労耐性）', '回': '回復力', '伸': '球の伸び', 'バ': 'バント技術',
-  'Cリ': 'キャッチャーリード', '齢': '年齢', '位': 'ポジション', '成長': '自然成長（能力1つあたり/年）',
-  'プ意': 'プロ意識', '精神': '精神力', '野': '野手総合力', '投': '投手総合力',
-  '試': '試合出場数', 'HR': '本塁打', '打点': '打点',
-};
-
-// ツールチップは native title で付ける（Tooltipで<th>をラップすると<tr>直下が
-// <span>になり、テーブルの列がデータ行とズレるため）
-export const StatHeader = ({ label, sortKey, sortActive, sortAsc, onClick, className = '' }) => (
-  <th
-    title={STAT_TOOLTIPS[label]}
-    className={`py-1 px-1 cursor-pointer hover:text-white hover:bg-gray-600/40 transition select-none text-center ${sortActive ? 'text-yellow-400' : ''} ${className}`}
-    onClick={onClick}
-  >
-    {label}{sortActive ? (sortAsc ? '↑' : '↓') : ''}
-  </th>
-);
-
 // --- AbilityLegend 能力値凡例 ---
 export const AbilityLegend = ({ className = '' }) => (
   <div className={`flex items-center gap-1.5 text-xs ${className}`}>
@@ -400,29 +378,6 @@ export const AbilityLegend = ({ className = '' }) => (
       <span key={t.min} className={t.color}>{t.label}</span>
     ))}
   </div>
-);
-
-// --- GameButton 共通ボタンコンポーネント ---
-const BUTTON_VARIANTS = {
-  primary: 'bg-blue-600 hover:bg-blue-500 text-white shadow-sm',
-  secondary: 'btn-secondary',
-  danger: 'bg-red-600 hover:bg-red-500 text-white',
-  success: 'bg-green-600 hover:bg-green-500 text-white',
-  ghost: 'bg-transparent hover:bg-gray-700/60 text-gray-300 hover:text-white',
-};
-const BUTTON_SIZES = {
-  sm: 'px-2.5 py-1 text-xs rounded',
-  md: 'px-4 py-1.5 text-sm rounded-lg',
-  lg: 'px-6 py-2.5 text-base rounded-lg',
-};
-export const GameButton = ({ variant = 'primary', size = 'md', className = '', disabled = false, children, ...props }) => (
-  <button
-    className={`font-bold transition-all ${BUTTON_VARIANTS[variant] || BUTTON_VARIANTS.primary} ${BUTTON_SIZES[size] || BUTTON_SIZES.md} ${disabled ? 'opacity-50 cursor-not-allowed' : ''} ${className}`}
-    disabled={disabled}
-    {...props}
-  >
-    {children}
-  </button>
 );
 
 // --- TabBar 共通タブコンポーネント ---
@@ -485,7 +440,7 @@ const isNavBlocked = (managementView, seasonData) => {
 //    押すと黙って1日進んでいた（`onActiveClick`）。見た目はほかの項目と同じなので押した人は
 //    画面を開き直したつもりで、間の試合も取り消せない。日を進めるのはカレンダーの見出しの
 //    「1日進める」だけにする
-export const SidebarButton = ({ view, icon, label, screenMode, managementView, seasonData, setScreenMode, setManagementView }) => {
+const SidebarButton = ({ view, icon, label, screenMode, managementView, seasonData, setScreenMode, setManagementView }) => {
   const isActive = screenMode === 'management' && managementView === view;
   const isBlocked = screenMode === 'management' && isNavBlocked(managementView, seasonData) && !isActive;
   return (

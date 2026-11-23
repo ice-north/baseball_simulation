@@ -23,11 +23,10 @@ import { projectLineup } from './projection.mjs';
 
 const clone = (value) => (value === undefined ? undefined : structuredClone(value));
 
-/** 画面に出す球団名（参加者が付けた名前。無ければ内部名） */
-export function teamLabelIn(league, name) {
-  const team = (league.teams || []).find((t) => t.name === name);
-  return team?.displayName || name;
-}
+// 画面に出す球団名の引き方は `membership.js`（循環を避けるためそちらに置く）
+import { teamLabelIn } from '../src/online/membership.js';
+
+export { teamLabelIn };
 
 /**
  * その人に「あなたへのお知らせ」を1件足す。新しいものが先頭。

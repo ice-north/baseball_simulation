@@ -99,6 +99,64 @@ const HistoryButtons = ({ canUndo, canRedo, undo, redo }) => (
 // `embedded`: 一人用の大学のロスター管理（RosterScreen）のタブの中に置くとき。外側が枠と見出しを
 //   持つので、ここでは枠（ScreenShell）と見出しを出さず、元に戻す・やり直すだけを右に置く。
 //   ⚠ 以前は外と中に「ロスター管理」の見出しが2つ並び、枠の余白も二重で控えの表の右が切れていた
+/**
+ * スタメンの「自動: 標準/打撃重視/守備重視」と「疲労を見る」の4段。
+ * 一人用の表（`board`）と、オンラインのスマホ版の従来の画面の両方で使う。
+ * ⚠ 【疲れをどれだけ気にするか】いしだ 2026-11-22「もっと敏感に、疲労を感じ取ってほしいです。
+ *    設定方法もスタメン設定でできるように」。選んだ値は球団に残り（`team.restPolicy`）、
+ *    「自動」が次からそれで組む。
+ * ⚠ 疲れた選手の**打撃の目減り**はどの設定でも掛かる（実際に起きることなので好みの問題に
+ *    しない）。ここで変わるのは「誰をスタメンから外すか」だけ。
+ * ⚠ オンラインは `restPolicy` を保存しないので、`restPolicyControl={false}` で段を隠す。
+ */
+const AutoLineupControls = ({ team, teamName, restPolicyControl, onDone }) => {
+  const currentKey = team.restPolicy || DEFAULT_REST_POLICY;
+  return (
+    <>
+      <div className="flex gap-1 mt-2">
+        {[
+          { mode: 'standard', label: '標準' },
+          { mode: 'offense', label: '打撃重視' },
+          { mode: 'defense', label: '守備重視' },
+        ].map(({ mode, label }) => (
+          <button key={mode} type="button" onClick={() => {
+            generateOptimalLineup(teamName, mode, team);
+            onDone();
+          }} className="btn-secondary text-xs px-2 py-1 rounded font-medium transition">
+            自動: {label}
+          </button>
+        ))}
+      </div>
+      {restPolicyControl && (<>
+        <div className="flex items-center gap-1 mt-2 flex-wrap">
+          <span className="text-xs text-gray-400 shrink-0">疲労を見る:</span>
+          {Object.entries(REST_POLICIES).map(([key, { label }]) => (
+            <button
+              key={key}
+              type="button"
+              aria-pressed={currentKey === key}
+              title={REST_POLICY_HINT[key]}
+              onClick={() => {
+                team.restPolicy = key;
+                if (TEAMS_DATA[teamName]) TEAMS_DATA[teamName].restPolicy = key;
+                onDone();
+              }}
+              className={`text-xs px-2 py-1 rounded font-medium transition border ${
+                currentKey === key
+                  ? 'bg-cyan-700 text-white border-cyan-500'
+                  : 'bg-surface-2 text-gray-300 border-gray-600 hover:border-gray-400'
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+        <p className="text-xs text-gray-400 mt-1 leading-snug">{REST_POLICY_HINT[currentKey]}</p>
+      </>)}
+    </>
+  );
+};
+
 export const LineupSettingContent = ({
   teamName,
   onBack,
@@ -109,6 +167,9 @@ export const LineupSettingContent = ({
   initialTab = 'lineup',
   embedded = false,
   board = false,
+  // 「疲労を見る」の段を出すか。⚠ オンライン（OnlineLineup.jsx）は false。オンラインの保存
+  //   （lineupBridge の planFromTeam）は restPolicy を送らないので、押しても球団に残らない
+  restPolicyControl = true,
 }) => {
   const [tab, setTab] = useState(initialTab);
   useEffect(() => setTab(initialTab), [initialTab]);
@@ -205,14 +266,11 @@ export const LineupSettingContent = ({
     || team.players.find(p => p.id === pitcherEntry?.playerId && p.position === 'pitcher' && p.isActive !== false);
   const activeStarterCount = activeFielderCount + (useDH ? 0 : Number(!!pitcherEntry && !!nextStarter));
 
-  const { fielders, pitchers, lineupPlayerIds, benchPlayers } = useMemo(() => {
+  const { pitchers, lineupPlayerIds, benchPlayers } = useMemo(() => {
     // isActive=falseの選手（練習生）はスタメン・控えから除外。未設定は全員有効（大学モード以外）
     const isEligible = (p) => p.isActive !== false;
-    const f = team.players.filter(p => p.position !== 'pitcher' && isEligible(p));
     const p = team.players.filter(p => p.position === 'pitcher' && isEligible(p));
     const lpIds = new Set(lineup.map(e => e.playerId));
-    const maxSlot = useDH ? 9 : 8;
-    const fieldIds = new Set(lineup.filter(e => e.battingOrder >= 1 && e.battingOrder <= maxSlot).map(e => e.playerId));
     const seen = new Set();
     const bench = team.players.filter(pl => {
       if (!isEligible(pl)) return false;
@@ -221,7 +279,7 @@ export const LineupSettingContent = ({
       seen.add(pl.id);
       return true;
     });
-    return { fielders: f, pitchers: p, lineupPlayerIds: lpIds, benchPlayers: bench };
+    return { pitchers: p, lineupPlayerIds: lpIds, benchPlayers: bench };
   }, [team.players, lineup, updateTrigger]);
 
   // 初期化：非DH制では投手枠がなければ9番に投手を自動設定
@@ -501,44 +559,6 @@ export const LineupSettingContent = ({
     const idx = lineup.findIndex(e => e.playerId === playerId);
     if (idx !== -1) {
       lineup.splice(idx, 1);
-    }
-    setUpdateTrigger(prev => prev + 1);
-  };
-
-  const handleAddToRotation = (playerId, role) => {
-    const rotation = team.pitchingRotation;
-    if (role === 'starter') {
-      if (!rotation.starters.includes(playerId)) rotation.starters.push(playerId);
-    } else if (role === 'middle') {
-      if (!rotation.middleRelievers) rotation.middleRelievers = [];
-      if (!rotation.middleRelievers.includes(playerId)) rotation.middleRelievers.push(playerId);
-    } else if (role === 'setup') {
-      if (!rotation.setupMen) rotation.setupMen = [];
-      if (!rotation.setupMen.includes(playerId)) rotation.setupMen.push(playerId);
-    } else if (role === 'closer') {
-      rotation.closer = playerId;
-    }
-    setUpdateTrigger(prev => prev + 1);
-  };
-
-  const handleRemoveFromRotation = (playerId, role) => {
-    const rotation = team.pitchingRotation;
-    if (role === 'starter') {
-      rotation.starters = rotation.starters.filter(id => id !== playerId);
-    } else if (role === 'middle') {
-      rotation.middleRelievers = (rotation.middleRelievers || []).filter(id => id !== playerId);
-    } else if (role === 'setup') {
-      rotation.setupMen = (rotation.setupMen || []).filter(id => id !== playerId);
-    } else if (role === 'closer') {
-      if (rotation.closer === playerId) rotation.closer = null;
-    }
-    setUpdateTrigger(prev => prev + 1);
-  };
-
-  const handleChangePitcher = (newPitcherId) => {
-    const pitcherEntry = lineup.find(e => e.position === 'pitcher');
-    if (pitcherEntry) {
-      pitcherEntry.playerId = newPitcherId;
     }
     setUpdateTrigger(prev => prev + 1);
   };
@@ -1372,6 +1392,17 @@ export const LineupSettingContent = ({
             <b className="text-cyan-200">試合に出た選手ほど伸びます。</b>1年フル出場した若手は、ほとんど出番の無かった選手の<b className="text-cyan-200">2倍以上</b>成長します（実測: 300打席で能力合計 +12.7 に対し、0打席では +5.8）。
             いま勝つために主力を並べるか、数年後のために若手を我慢して使うか——<b className="text-cyan-200">スタメンを決めることは育成方針を決めること</b>でもあります。
           </TutorialHint>
+          {/* ⚠ 一人用の表にも「自動」と「疲労を見る」を置く（いしだ 2026-11-23 の判断カード
+              「スタメン表に自動を出す」）。11-04 に外した自動ボタンを一人用では戻した。
+              表（`.online-embed`）の中に Tailwind の部品は入れられないので、表の上に置く */}
+          <div className="mb-3 rounded-xl border border-gray-700/50 bg-surface-2 px-4 py-3" data-testid="solo-auto-lineup">
+            <AutoLineupControls
+              team={team}
+              teamName={teamName}
+              restPolicyControl={restPolicyControl}
+              onDone={() => setUpdateTrigger(prev => prev + 1)}
+            />
+          </div>
           <SoloLineupBoard
             team={team}
             useDH={useDH}
@@ -1418,57 +1449,17 @@ export const LineupSettingContent = ({
                     <span className="text-blue-400 text-xs basis-full">→ 入替先を選択</span>
                   )}
                 </div>
-                <div className="flex gap-1 mt-2">
-                  {[
-                    { mode: 'standard', label: '標準' },
-                    { mode: 'offense', label: '打撃重視' },
-                    { mode: 'defense', label: '守備重視' },
-                  ].map(({ mode, label }) => (
-                    <button key={mode} onClick={() => {
-                      generateOptimalLineup(teamName, mode, team);
-                      setSwapSource(null);
-                      setSelectedBenchPlayer(null);
-                      setSelectedBattingOrder(null);
-                      setUpdateTrigger(prev => prev + 1);
-                    }} className="btn-secondary text-xs px-2 py-1 rounded font-medium transition">
-                      自動: {label}
-                    </button>
-                  ))}
-                </div>
-                {/* ⚠ 【疲れをどれだけ気にするか】いしだ 2026-11-22「もっと敏感に、疲労を
-                    感じ取ってほしいです。設定方法もスタメン設定でできるように」。
-                    選んだ値は球団に残り（`team.restPolicy`）、上の「自動」が次からそれで組む。
-                    ⚠ 疲れた選手の**打撃の目減り**はどの設定でも掛かる（実際に起きることなので
-                       好みの問題にしない）。ここで変わるのは「誰をスタメンから外すか」だけ */}
-                <div className="flex items-center gap-1 mt-2 flex-wrap">
-                  <span className="text-xs text-gray-400 shrink-0">疲労を見る:</span>
-                  {Object.entries(REST_POLICIES).map(([key, { label }]) => {
-                    const current = (team.restPolicy || DEFAULT_REST_POLICY) === key;
-                    return (
-                      <button
-                        key={key}
-                        type="button"
-                        aria-pressed={current}
-                        title={REST_POLICY_HINT[key]}
-                        onClick={() => {
-                          team.restPolicy = key;
-                          if (TEAMS_DATA[teamName]) TEAMS_DATA[teamName].restPolicy = key;
-                          setUpdateTrigger(prev => prev + 1);
-                        }}
-                        className={`text-xs px-2 py-1 rounded font-medium transition border ${
-                          current
-                            ? 'bg-cyan-700 text-white border-cyan-500'
-                            : 'bg-surface-2 text-gray-300 border-gray-600 hover:border-gray-400'
-                        }`}
-                      >
-                        {label}
-                      </button>
-                    );
-                  })}
-                </div>
-                <p className="text-xs text-gray-400 mt-1 leading-snug">
-                  {REST_POLICY_HINT[team.restPolicy || DEFAULT_REST_POLICY]}
-                </p>
+                <AutoLineupControls
+                  team={team}
+                  teamName={teamName}
+                  restPolicyControl={restPolicyControl}
+                  onDone={() => {
+                    setSwapSource(null);
+                    setSelectedBenchPlayer(null);
+                    setSelectedBattingOrder(null);
+                    setUpdateTrigger(prev => prev + 1);
+                  }}
+                />
                 {!lineup.some(e => e.position === 'catcher') && (
                   <div className="mt-2 flex items-center gap-1.5 text-xs text-red-400 bg-red-950/40 border border-red-700/30 rounded px-2 py-1">
                     <span className="font-bold">!</span>
@@ -1966,11 +1957,6 @@ export const LineupSettingContent = ({
           const unassignedPitchers = allPlayers.filter(p => p.position === 'pitcher' && getPitcherRole(p.id) === 'none');
           const fieldersForConvert = allPlayers.filter(p => p.position !== 'pitcher' && getPitcherRole(p.id) === 'none');
 
-          const StatVal = ({ label, value, isVelocity }) => {
-            const rank = isVelocity ? getVelocityRank(value) : getAbilityRank(value);
-            return <span className={`${getRankColor(rank)}`}>{label}{value}</span>;
-          };
-
           // ロールアイコン
           const ROLE_ICON = {
             ace: '👑', complete: '🏔', short: '⚡', quality: '✓', opener: '🚪', auto_s: '🤖',
@@ -2052,9 +2038,9 @@ export const LineupSettingContent = ({
             const open = roleLegendOpen;
             const setOpen = setRoleLegendOpen;
             const starterLegend = [
-              { icon: '👑', role: 'ゲームメーカー', desc: '7-8回を責任投球。エース格。球数上限110球', color: 'text-red-400' },
+              { icon: '👑', role: 'ゲームメーカー', desc: '7-8回を責任投球。エース格。球数上限はスタミナで決まる（60＋スタミナ×0.35＋8、最大120球）', color: 'text-red-400' },
               { icon: '🏔', role: '完投型', desc: 'スタミナ限界まで投げ抜く。球数上限120球', color: 'text-blue-400' },
-              { icon: '✓', role: '勝ち権利', desc: '5-6回を投げて勝ちパターンへ。球数上限100球', color: 'text-blue-300' },
+              { icon: '✓', role: '勝ち権利', desc: '5-6回を投げて勝ちパターンへ。球数上限はスタミナで決まる（60＋スタミナ×0.35、最大120球）', color: 'text-blue-300' },
               { icon: '⚡', role: 'ショート', desc: '3-4回で中継ぎへ繋ぐ。球数上限65球', color: 'text-blue-200' },
             ];
             const reliefLegend = [
@@ -2444,16 +2430,6 @@ export const LineupSettingContent = ({
           const posFullLabels = {
             pitcher: '投手', catcher: '捕手', first: '一塁', second: '二塁',
             short: '遊撃', third: '三塁', left: '左翼', center: '中堅', right: '右翼'
-          };
-
-          const getRangeColor = (range) => {
-            if (range >= 0.90) return { fill: 'rgba(236,72,153,0.18)', stroke: '#ec4899' };
-            if (range >= 0.82) return { fill: 'rgba(248,113,113,0.16)', stroke: '#f87171' };
-            if (range >= 0.70) return { fill: 'rgba(251,146,60,0.14)', stroke: '#fb923c' };
-            if (range >= 0.55) return { fill: 'rgba(251,191,36,0.14)', stroke: '#fbbf24' };
-            if (range >= 0.42) return { fill: 'rgba(74,222,128,0.12)', stroke: '#4ade80' };
-            if (range >= 0.30) return { fill: 'rgba(96,165,250,0.10)', stroke: '#60a5fa' };
-            return { fill: 'rgba(148,163,184,0.08)', stroke: '#94a3b8' };
           };
 
           const getFitnessColor = (fitness) => {

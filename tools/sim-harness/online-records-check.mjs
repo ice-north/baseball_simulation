@@ -281,7 +281,8 @@ const event = {
   fouls: 0,
   bunt: null,
   completed: true,
-  delta: { atBats: 1, rbis: 1 },
+  // 犠飛は自動試合が打数に入れず sacrificeFlies に数える（2026-11-23 から）
+  delta: { sacrificeFlies: 1, rbis: 1 },
   result: { type: 'out', isOutfieldFly: true },
 };
 o.plateAppearance(event);
@@ -300,7 +301,7 @@ r.finish(
           ...teams.A.players[0],
           battingOrder: 1,
           gameStats: {
-            batting: { atBats: 1, rbis: 1 },
+            batting: { sacrificeFlies: 1, rbis: 1 },
             pitching: {},
             fielding: {},
           },

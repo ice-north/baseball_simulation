@@ -335,9 +335,57 @@ export function weightedRanked(candidates, weights, roster = [], limit = TRYOUT_
  * 候補の絞り込みと並べ替え。
  * ⚠ **並びを決定的にすること**。同点で順番が揺れると、押した行と動く行がずれる。
  */
+/**
+ * 能力で絞り込む条件に使える能力（先方要望 2026-11-23「投手の野手能力や、野手の投手能力を検索するのが
+ * 面倒なので、全選手から希望の能力値を絞って検索できるように」）。
+ * ⚠ 値は**画面に出している数そのまま**（球速は km/h、スタミナは 0〜200）。評価値の 0〜100 に揃えた値
+ *    （`abilityValue`）で絞ると、入れた数と表の数が食い違う
+ * `side`: その能力をふだん見る側（'fielder' 野手 / 'pitcher' 投手）。反対の側の表では列を足して見せる
+ * ⚠ アプリは Tryout.kt の `ABILITY_FILTERS`（同じ能力・同じ値）
+ */
+export const ABILITY_FILTERS = [
+  { key: 'meet', label: 'ミート', side: 'fielder', get: (p) => p.batting?.meet },
+  { key: 'power', label: 'パワー', side: 'fielder', get: (p) => p.batting?.power },
+  { key: 'eye', label: '選球眼', side: 'fielder', get: (p) => p.batting?.eye },
+  { key: 'speed', label: '走力', side: 'fielder', get: (p) => p.physical?.speed },
+  { key: 'arm', label: '肩力', side: 'fielder', get: (p) => p.physical?.arm },
+  { key: 'defense', label: '守備', side: 'fielder', get: (p) => p.fielding?.defense },
+  { key: 'velocity', label: '球速', side: 'pitcher', get: (p) => p.pitching?.velocity, isVel: true, unit: 'km/h' },
+  { key: 'control', label: '制球', side: 'pitcher', get: (p) => p.pitching?.control },
+  { key: 'stamina', label: 'スタミナ', side: 'pitcher', get: (p) => p.pitching?.stamina, isSta: true },
+  { key: 'spin', label: '回転', side: 'pitcher', get: (p) => p.pitching?.spinRate },
+  {
+    key: 'breaking',
+    label: '変化球（最高）',
+    side: 'pitcher',
+    get: (p) => {
+      const levels = (p.pitching?.arsenal || []).filter((a) => a.type !== 'straight').map((a) => a.level || 0);
+      return levels.length ? Math.max(...levels) : 0;
+    },
+  },
+];
+/** 条件の数の上限（画面が縦に伸びすぎないように） */
+export const ABILITY_FILTER_MAX = 4;
+
+/** 条件 [{ key, min }] をすべて満たすか（かつ）。能力の選んでいない・数の入っていない条件は見ない */
+export function passesAbilityFilters(player, filters = []) {
+  return filters.every((f) => {
+    const def = ABILITY_FILTERS.find((d) => d.key === f.key);
+    const min = Number(f.min);
+    if (!def || f.min === '' || f.min == null || !Number.isFinite(min)) return true;
+    return (Number(def.get(player)) || 0) >= min;
+  });
+}
+
+/** 効いている条件（能力と数がそろったもの）だけ */
+export const activeAbilityFilters = (filters = []) =>
+  filters.filter(
+    (f) => ABILITY_FILTERS.some((d) => d.key === f.key) && f.min !== '' && f.min != null && Number.isFinite(Number(f.min)),
+  );
+
 export function filterCandidates(
   candidates,
-  { group = 'all', query = '', sortKey = 'overall', desc = true, scoreOf = null } = {},
+  { group = 'all', query = '', sortKey = 'overall', desc = true, scoreOf = null, abilities = [] } = {},
 ) {
   const positions = POSITION_GROUPS.find((g) => g.key === group)?.positions;
   const needle = query.trim();
@@ -349,6 +397,7 @@ export function filterCandidates(
   return candidates
     .filter((p) => !positions || positions.includes(p.position))
     .filter((p) => !needle || p.name.includes(needle))
+    .filter((p) => passesAbilityFilters(p, abilities))
     .sort((a, b) => {
       const diff = of(b) - of(a);
       if (diff) return desc ? diff : -diff;

@@ -11,6 +11,10 @@ import { inOnlineRoot } from './dialogPortal.js';
 import { ScoringPlays } from './ScoringPlays.jsx';
 import { scoreBoard } from './scoreBoard.js';
 import { hasInningPlays, inningPlays } from './gamePlays.js';
+import { TeamMark } from './look/Art.jsx';
+import { useLook } from './look/LookContext.jsx';
+import { hasLivePlays } from './look/playByPlay.js';
+import LivePlays from './look/LivePlays.jsx';
 const GROUPS = {
   batting: [
     [
@@ -273,6 +277,7 @@ export function BoxScore({ game, ownTeam, knownOnly = false }) {
                 setPage(0);
               }}
             >
+              <TeamMark team={name} size={16} />
               {teamShort(name)}
             </button>
           ))}
@@ -378,7 +383,10 @@ export function BoxScore({ game, ownTeam, knownOnly = false }) {
             <tr key={p.key || p.id}>
               <th title={p.name}>{p.name}</th>
               {group[2].map(([key, , format = 'count']) => (
-                <td key={key}>{formatStat({ format }, p[category]?.[key])}</td>
+                // `data-zero`: 新しい見た目（試作）で 0 を沈ませる（数える項目だけ。防御率 0.00 は沈ませない）
+                <td key={key} data-zero={format === 'count' && p[category]?.[key] === 0 ? '' : undefined}>
+                  {formatStat({ format }, p[category]?.[key])}
+                </td>
               ))}
             </tr>
           ))}
@@ -509,6 +517,7 @@ export function ScoreBoard({ game, ownTeam, compact = false }) {
           {board.rows.map((row) => (
             <tr key={row.team} data-own={row.team === ownTeam || undefined}>
               <th scope="row" className="online-scoreboard-team" title={teamLabel(row.team)}>
+                <TeamMark team={row.team} size={16} />
                 {teamShort(row.team)}
               </th>
               {row.cells.map((cell, i) => {
@@ -563,42 +572,67 @@ export function ScoreBoard({ game, ownTeam, compact = false }) {
 }
 function GameRecord({ id, year, ownTeam, close }) {
   const compact = window.matchMedia('(max-width: 767px)').matches;
-  const [watch, setWatch] = useState(false);
+  // 見せ方: 'stats' 個人成績・'watch' 観戦リプレイ・'live' 打席速報・'motion' 動きで見る（打席速報の動き版）
+  const [mode, setMode] = useState('stats');
+  // 新しい見た目（試作）段3: 打席速報（入のときだけ。塁と打球の記録がある試合だけ）
+  const look = useLook();
   const result = useRead('game', { id, year }),
     game = result.data;
+  const liveReady = look.on && hasLivePlays(game);
+  const watch = mode === 'watch';
+  const showLive = (mode === 'live' || mode === 'motion') && liveReady;
   return (
     <Panel
       title="試合成績"
       close={close}
-      wide={watch && !compact}
+      wide={(watch || (showLive && mode === 'motion')) && !compact}
       mobileReplay={watch && compact && !!game}
     >
       <RequestState result={result} />
       {game && (
         <>
-          {game.replay?.frames?.length > 0 && (
+          {(game.replay?.frames?.length > 0 || liveReady) && (
             <nav className="online-replay-launch" aria-label="試合の表示">
-              <button aria-pressed={!watch} onClick={() => setWatch(false)}>
+              <button aria-pressed={!watch && !showLive} onClick={() => setMode('stats')}>
                 個人成績
               </button>
-              <button aria-pressed={watch} onClick={() => setWatch(true)}>
-                {compact ? '試合経過' : '観戦リプレイ'}
-              </button>
+              {liveReady && (
+                <button aria-pressed={showLive && mode === 'live'} onClick={() => setMode('live')}>
+                  打席速報
+                </button>
+              )}
+              {liveReady && (
+                <button aria-pressed={showLive && mode === 'motion'} onClick={() => setMode('motion')}>
+                  動きで見る
+                </button>
+              )}
+              {game.replay?.frames?.length > 0 && (
+                <button aria-pressed={watch} onClick={() => setMode('watch')}>
+                  {compact ? '試合経過' : '観戦リプレイ'}
+                </button>
+              )}
             </nav>
           )}
+          {showLive && <LivePlays key={mode} game={game} motion={mode === 'motion'} />}
           {/* ⚠ スマホは小窓を縦に収めるため、点数の大きな1行はスコアボードがあれば出さない（同じ点数が2回並ぶ） */}
-          {!watch && !(compact && scoreBoard(game)) && (
+          {!watch && !showLive && !(compact && scoreBoard(game)) && (
             <p className="online-game-summary">
               <small>{turnLabel(game.date)}</small>
               <strong>
-                <span title={teamLabel(game.away)}>{teamShort(game.away)}</span>{' '}
+                <span title={teamLabel(game.away)}>
+                  <TeamMark team={game.away} size={22} />
+                  {teamShort(game.away)}
+                </span>{' '}
                 {game.awayScore} – {game.homeScore}{' '}
-                <span title={teamLabel(game.home)}>{teamShort(game.home)}</span>
+                <span title={teamLabel(game.home)}>
+                  {teamShort(game.home)}
+                  <TeamMark team={game.home} size={22} />
+                </span>
               </strong>
             </p>
           )}
-          {!watch && <ScoreBoard game={game} ownTeam={ownTeam} compact={compact} />}
-          {watch ? (
+          {!watch && !showLive && <ScoreBoard game={game} ownTeam={ownTeam} compact={compact} />}
+          {showLive ? null : watch ? (
             compact ? (
               <MobileReplay game={game} close={close} />
             ) : (
@@ -714,11 +748,17 @@ function History({ view, close }) {
                     {outcome?.mark || ''}
                   </span>
                   <span className="online-game-line">
-                    <span title={teamLabel(g.away)}>{teamShort(g.away)}</span>{' '}
+                    <span title={teamLabel(g.away)}>
+                      <TeamMark team={g.away} size={16} />
+                      {teamShort(g.away)}
+                    </span>{' '}
                     <b>
                       {g.awayScore} – {g.homeScore}
                     </b>{' '}
-                    <span title={teamLabel(g.home)}>{teamShort(g.home)}</span>
+                    <span title={teamLabel(g.home)}>
+                      {teamShort(g.home)}
+                      <TeamMark team={g.home} size={16} />
+                    </span>
                   </span>
                   <GameRecordButton
                     game={g}

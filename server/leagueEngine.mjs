@@ -34,6 +34,7 @@ import {
   SEASON_PHASES,
   getNPBDraftDay,
   getPlayoffChampion,
+  calendarYearOf,
 } from '../src/season/seasonManager.js';
 import {
   generateFullSeasonSchedule,
@@ -217,12 +218,15 @@ import {
   campPlanFor,
   coachSeasonRows,
   coachOffseason,
+  validateStaffMoves,
+  reserveStaffMoves,
   fillVacancies,
   hirePlayerAsCoach,
   setStaffModes,
   staffCommand,
   effectiveStaffModes,
   phaseDelegated,
+  waitsFor,
 } from './coachEngine.mjs';
 
 export const ENGINE_VERSION = ONLINE_ENGINE_VERSION;
@@ -1555,9 +1559,12 @@ function validatePhasePlan(league, teamName, plan) {
         '契約後も最低9人は残してください。既に9人未満の場合は新たな退団はできません',
       );
       const coachOffers = Object.fromEntries(Object.entries(offers).filter(([, id]) => id != null));
+      // 指導者の異動（先方要望 2026-11-23。`validateStaffMoves`）。**無くてもよい**（古い画面・アプリ）
+      const staffMoves = validateStaffMoves(league, teamName, plan.staffMoves);
       return {
         releaseIds: [...plan.releaseIds],
         ...(Object.keys(coachOffers).length ? { coachOffers } : {}),
+        ...(staffMoves ? { staffMoves } : {}),
       };
     }
     case 'camp': {
@@ -2086,7 +2093,7 @@ function resolveTryout(league, plans, now) {
       combined.filter((p) => p.position !== 'pitcher').length >= 8 &&
         combined.some((p) => p.position === 'pitcher') &&
         combined.some((p) => p.position === 'catcher'),
-      `${league.teams?.find((t) => t.name === name)?.displayName || name}の投手・捕手・野手が不足します。希望順位を見直してください`,
+      `${teamLabelIn(league, name)}の投手・捕手・野手が不足します。希望順位を見直してください`,
       409,
       'roster',
     );
@@ -2183,6 +2190,111 @@ function resolveTryout(league, plans, now) {
 }
 
 /**
+ * 投手起用を**自分で**組んでいる人の先発ローテに、引退・退団・トレードで空いた枠があれば
+ * 指導者の案（`generatePitchingRotation` と同じ選び方）で埋め、お知らせで伝える。キャンプの終わり
+ * （開幕の前）に1回だけ呼ぶ。
+ * ⚠ 人の編成は成り立つ限り残す（`refreshTeamPlan`）ので、ローテの投手が引退すると
+ *    その分だけ短いローテのまま翌年を迎えていた。何もいじらない人の球団は数年で
+ *    ローテが1〜2人になり、先頭が年220回を投げていた（10年の長期シミュ）。
+ *    埋めるのは**人が保存したときの人数まで**（`plannedStarters`。4人で回すと決めた人に
+ *    5人目を足さない）。一度も保存していなければ指導者の案と同じ5人まで。
+ *    守護神・セットアッパーに置いた投手は動かさない。
+ * @returns 埋めた `{ team, ids }` の一覧
+ */
+export function refillOwnRotations(league, now) {
+  const filled = [];
+  for (const member of league.members) {
+    const name = member.teamName;
+    const team = TEAMS_DATA[name];
+    const rotation = team?.pitchingRotation;
+    if (!rotation?.starters || hasPendingPack(league, name)) continue;
+    if (effectiveStaffModes(league, member).pitching === 'delegate') continue;
+    const want = rotation.plannedStarters ?? ROTATION_DEFAULT;
+    if (rotation.starters.length >= want) continue;
+    // 指導者の案（名簿の写しで作る。今の編成には触らない）
+    const plan = { players: team.players };
+    generatePitchingRotation(name, plan);
+    const keep = new Set([rotation.closer, ...(rotation.setupMen || []), ...rotation.starters].filter(Boolean));
+    const added = [];
+    for (const id of plan.pitchingRotation?.starters || []) {
+      if (rotation.starters.length >= want) break;
+      if (keep.has(id)) continue;
+      rotation.starters.push(id);
+      added.push(id);
+      if (plan.pitchingRotation.pitcherRoles?.[id])
+        (rotation.pitcherRoles ||= {})[id] = plan.pitchingRotation.pitcherRoles[id];
+    }
+    if (!added.length) continue;
+    const moved = new Set(added);
+    rotation.middleRelievers = (rotation.middleRelievers || []).filter((id) => !moved.has(id));
+    const names = added.map((id) => team.players.find((p) => p.id === id)?.name).filter(Boolean);
+    pushInbox(
+      league,
+      member.userId,
+      {
+        type: 'rotationFilled',
+        text: `先発ローテの空いた枠に、指導者が${names.join('・')}を入れました（投手起用で変えられます）`,
+      },
+      now,
+    );
+    filled.push({ team: name, ids: added });
+  }
+  return filled;
+}
+/** 一度も投手起用を保存していない人のローテの人数（指導者の案 `generatePitchingRotation` の上限） */
+const ROTATION_DEFAULT = 5;
+
+/**
+ * 年度更新の後に**捕手が1人も居ない**対人リーグの球団へ、捕手を1人補う。
+ * ⚠ トライアウトは年度更新（引退）より前にあるので、捕手1人の球団はその人が引退すると
+ *    翌年のトライアウトまで1年ずっと捕手なしになる（10年の長期シミュで起きた。野手がマスクを
+ *    かぶるので試合は壊れないが、リードと捕手の守備がずっと野手の値になる）。
+ *    放出された選手（`releasedPlayersPool`）の捕手から、居なければ対人リーグの外で捕手を
+ *    2人以上持つ球団から、いちばん良い捕手を入れる。入団の履歴に残す。
+ * ⚠ 名簿の上限（28人）に届いている球団には足さない（引退の後なので、まず起きない）
+ * @returns 補った `{ team, player }` の一覧
+ */
+export function fillMissingCatchers(league, now) {
+  const isCatcher = (p) => p.position === 'catcher';
+  const score = (p) =>
+    (p.fielding?.defense || 0) + (p.catching?.lead ?? 30) + (p.batting?.meet || 0) * 0.5;
+  const inLeague = new Set(league.season.settings.teamNames);
+  const added = [];
+  for (const name of league.season.settings.teamNames) {
+    const team = TEAMS_DATA[name];
+    if (!team || team.players.some(isCatcher)) continue;
+    if (team.players.length >= ROSTER_LIMIT) continue;
+    // 候補: 放出された捕手 → 外の球団の、2人目より後ろの捕手
+    const pooled = releasedPlayersPool.filter(isCatcher).map((p) => ({ p, from: null }));
+    const outside = pooled.length
+      ? []
+      : Object.entries(TEAMS_DATA)
+          .filter(([n, t]) => !inLeague.has(n) && (t.players || []).filter(isCatcher).length >= 2)
+          .flatMap(([n, t]) => t.players.filter(isCatcher).map((p) => ({ p, from: n })));
+    const best = [...pooled, ...outside].sort((a, b) => score(b.p) - score(a.p))[0];
+    if (!best) continue;
+    const { p, from } = best;
+    if (from) {
+      cleanupPlayerReferences(TEAMS_DATA[from], p.id);
+      TEAMS_DATA[from].players = TEAMS_DATA[from].players.filter((x) => x.id !== p.id);
+    } else releasedPlayersPool.splice(releasedPlayersPool.indexOf(p), 1);
+    const player = { ...p, isStarter: false, battingOrder: 0 };
+    player.careerHistory = [
+      ...(player.careerHistory || []),
+      { type: 'independent', year: league.season.year, label: name },
+    ];
+    team.players.push(player);
+    recordTransaction(
+      league,
+      { kind: 'signing', teams: [name], moves: [moveOf(player, from || player.previousTeam || null, name)] },
+      now,
+    );
+    added.push({ team: name, player });
+  }
+  return added;
+}
+
+/**
  * 参加者の球団の、選手ごとの能力の写し（年度更新の前後を比べるため）。
  * ⚠ 途中参加でセットを待っている球団は取らない（名簿がキャンプで入れ替わる）
  */
@@ -2273,6 +2385,17 @@ function resolvePhase(league, now) {
         team.players = team.players.filter((p) => p.id !== player.id);
       }
       if (coached.length) refreshTeamPlan(league, name);
+      // 指導者の異動（人の球団だけ）。年度更新で動く（`reserveStaffMoves` → `applyStaffMoves`）。
+      // ⚠ 締め切りまでに席が空いていたら（いまは契約更改の間に席は動かないが念のため）検め直して落とす
+      if (league.coaches && plans[name]?.staffMoves) {
+        let moves = null;
+        try {
+          moves = validateStaffMoves(league, name, plans[name].staffMoves);
+        } catch {
+          moves = null;
+        }
+        reserveStaffMoves(league, name, moves);
+      }
       // 取引の記録（退団）。⚠ 名簿から消す前に名前を控える
       const leaving = [...coached, ...TEAMS_DATA[name].players.filter((p) => ids.includes(p.id))];
       releasePlayers(name, ids, league.season.year);
@@ -2355,11 +2478,16 @@ function resolvePhase(league, now) {
     // ⚠ **キャンプの練習より後に入れ替えること**。先に入れ替えると、
     //    選んだばかりの24人がキャンプで成長してしまい、セットの釣り合いが崩れる
     applyPendingPacks(league);
+    // ⚠ CPU球団はキャンプで守備位置を適性に合わせるので、最後の捕手が一塁手などに移ることがある
+    //    （10年の長期シミュで、年度更新で補った後のキャンプで捕手0人の球団が出た）
+    fillMissingCatchers(league, now);
+    // 自分で組んだ先発ローテの、引退・退団などで空いた枠を埋める（開幕の前に1回）
+    refillOwnRotations(league, now);
     initializeAllPlayersCondition();
     for (const name of league.season.settings.teamNames)
       refreshTeamPlan(league, name);
     league.season.currentDate = {
-      year: 2023 + league.season.year,
+      year: calendarYearOf(league.season.year),
       month: 4,
       day: 1,
     };
@@ -2426,6 +2554,8 @@ function resolvePhase(league, now) {
     for (const key of Object.keys(TEAMS_DATA)) delete TEAMS_DATA[key];
     Object.assign(TEAMS_DATA, result.updatedTeams);
     league.season = result.newSeasonData;
+    // 引退で捕手が居なくなった球団に1人補う（`fillMissingCatchers`）
+    fillMissingCatchers(league, now);
     // 年齢の変化の一覧は一人用のキャンプ画面向け（オンラインは使わない。6MB ある）
     delete league.season.ageReports;
     WORLD_DATA.year = league.season.year;
@@ -2517,26 +2647,8 @@ function resolvePhase(league, now) {
   }
 }
 
-/**
- * 手続きがこの人の決定をまだ待っているか。
- *
- * ⚠ **途中参加でセットを待っている人は待たない**。その人の球団は次のキャンプで
- *    名簿がセットに丸ごと入れ替わり、それまではCPUが動かす（画面もそう書いている）。
- *    以前はこの人も「決定」を待っていたが、画面には初期メンバーの選択しか
- *    出さないので決定する手段が無く、ストーブリーグとキャンプが毎回
- *    締め切りまで止まっていた（ほかの全員が決めても進まない）。
- *    自分で出した案があればそれを使い、無ければ標準案で決める（`resolvePhase`）。
- * ⚠ **手続きを指導者に任せた人も待たない**（トライアウト・契約更改の退団・キャンプ。
- *    `phaseDelegated`）。任せた手続きは提出があっても指導者の案で決めるので、待つ意味が無い。
- *    以前は待っていたので、ほかの全員が決めても締め切りまで進まず、「決定」の無いキャンプは
- *    任せた人がいると必ず締め切り待ちになっていた（総合監査 2026-11-10 の判断7）。
- *    キャンプの残りのクールは締め切りのときと同じく指導者の方針で回る（`resolvePhase`）
- */
-export function waitsFor(league, member) {
-  if (league.phase?.submissions?.[member.userId]?.ready) return false;
-  if (phaseDelegated(league, member)) return false;
-  return !(member.packSeed && league.phase?.kind !== 'pack_select');
-}
+// 手続きがこの人の決定をまだ待っているか（`coachEngine.mjs`。画面の `members[].ready` と同じものを使う）
+export { waitsFor };
 
 /** 手続きがまだ誰かの決定を待っているか（待機中の手続きが無ければ false） */
 function anyoneWaited(league) {
@@ -2719,7 +2831,8 @@ export function advanceLeagueDay(league, operationId, now) {
   league.notices = league.notices.slice(0, 20);
   // 背番号（足りない人・重なった人だけ。トレード・トライアウトで来た人もここで付く）
   numberLeagueTeams(league.season.settings.teamNames, TEAMS_DATA);
-  league.game = captureWorld();
+  // 戻すときも持ち主ごと渡した（`take`）ので、写しも複製せずに作る（`captureWorld` の注）
+  league.game = captureWorld({ take: true });
 }
 
 function advanceOneDay(league, key, now) {
@@ -2920,15 +3033,6 @@ function runProDraft(league, now) {
 }
 
 /**
- * 締め切りを過ぎたフェーズを、未提出の人に既定案を当てて解決する。
- *
- * ⚠ **非同期で遊ぶゲームなので、待ち続けてはいけない**。1人が決めないと
- *    全員の週が止まる。既定案（`defaultPhasePlan`）はAIの選び方そのものなので、
- *    放置しても不利になりすぎない。
- * ⚠ 解決すると次のフェーズが開くことがある（契約更改→トライアウト→オフシーズン）。
- *    そちらの締め切りも過ぎていれば、同じティックで続けて解決する。
- */
-/**
  * 手続きを**いま**締め切る（検証用）。未提出の人には標準案を当てる。
  * ⚠ 締め切り時刻を `now` に書き換えてから通常の自動決定に渡す。
  *    解決の手順を2本に分けると、片方だけ直したときに食い違う。
@@ -2939,6 +3043,15 @@ export function resolvePhaseNow(league, now) {
   return autoResolvePhase(league, now);
 }
 
+/**
+ * 締め切りを過ぎたフェーズを、未提出の人に既定案を当てて解決する。
+ *
+ * ⚠ **非同期で遊ぶゲームなので、待ち続けてはいけない**。1人が決めないと
+ *    全員の週が止まる。既定案（`defaultPhasePlan`）はAIの選び方そのものなので、
+ *    放置しても不利になりすぎない。
+ * ⚠ 解決すると次のフェーズが開くことがある（契約更改→トライアウト→オフシーズン）。
+ *    そちらの締め切りも過ぎていれば、同じティックで続けて解決する。
+ */
 export function autoResolvePhase(league, now) {
   loadLeagueWorld(league);
   const resolved = [];

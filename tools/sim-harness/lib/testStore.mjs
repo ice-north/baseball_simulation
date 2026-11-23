@@ -17,10 +17,14 @@ import {
   splitBundle,
   assembleBundle,
   assembleLight,
+  assembleWorld,
   runWithLightRead,
 } from '../../../server/storage/snapshotParts.mjs';
 
 const memory = new Map();
+// 定期処理の試行の印（本番は管理行の `attempt_key`・`attempt_count`。`online_attempt`）。
+// ⚠ 保存とは別に持つ。打ち切られた処理（公開まで行かない）でも残ることを検査で見るため
+const attemptMarks = new Map();
 const empty = () => ({ league: null, sessions: {}, receipts: {} });
 
 export class MemoryStore {
@@ -59,6 +63,20 @@ export class MemoryStore {
   // ⚠ 「まず軽い読み、だめなら全体で読み直す」判定は本番と同じ関数（`runWithLightRead`）を使う。
   //    書き写すと、片方だけ直したときに検査が本番の取りこぼしを捕まえられない
   transaction(fn, { full = false } = {}) {
+    // 本番（SupabaseStore.attemptControl）と同じ約束: 重い処理の前に印を付け、これより前に
+    // 終わらなかった同じ鍵の試行の数を返す。公開したら消す。同じ処理の中で同じ鍵は1回だけ数える
+    const marks = new Map();
+    const control = {
+      markAttempt: async (key) => {
+        if (!marks.has(key)) {
+          const last = attemptMarks.get(this.path);
+          const previous = last?.key === key ? last.count : 0;
+          attemptMarks.set(this.path, { key, count: previous + 1 });
+          marks.set(key, previous);
+        }
+        return marks.get(key);
+      },
+    };
     const result = this.queue.then(async () => {
       const whole = process.env.SIM_HARNESS_WHOLE_STORE === '1';
       const debug = process.env.PARTS_DEBUG
@@ -68,9 +86,20 @@ export class MemoryStore {
       const { outcome, prepared, loaded, attempts } = await runWithLightRead({
         full: full || whole,
         onEscalate: debug,
-        load: async (light) => {
+        load: async (light, mode) => {
           const stored = memory.get(this.path);
           const split = stored !== undefined && typeof stored !== 'string';
+          // 世界まで読む（本番の `loadSnapshot` の `world`）: 終わった年の試合だけ番人
+          if (!light && mode === 'world' && split && stored.parts.pastGames !== undefined) {
+            const parts = Object.fromEntries(
+              Object.entries(stored.parts)
+                .filter(([name]) => name !== 'pastGames')
+                .map(([name, text]) => [name, JSON.parse(text)]),
+            );
+            const run = assembleWorld(JSON.parse(stored.core), stored.order, parts);
+            this.lastReadMode = 'world';
+            return { stored, value: run.bundle, run, world: true };
+          }
           if (!(light && split)) return { stored, value: await this.read(), run: null };
           const records =
             stored.parts.records === undefined ? {} : { records: JSON.parse(stored.parts.records) };
@@ -79,14 +108,22 @@ export class MemoryStore {
           return { stored, value: run.bundle, run };
         },
         attempt: async ({ value, run }) => {
-          const outcome = await fn(value);
+          const outcome = await fn(value, control);
           return { outcome, prepared: run && !outcome?.unchanged ? run.inspect(value) : undefined };
         },
       });
       if (outcome?.unchanged) return outcome.value;
       const { stored, value, run } = loaded;
       if (whole) memory.set(this.path, JSON.stringify(value));
-      else if (prepared) {
+      else if (loaded.world) {
+        // 本番の `writeSnapshot` と同じ: 分け直し、終わった年の試合は前の部分をそのまま使う
+        const next = splitBundle(prepared.bundle, { keepPastGames: Boolean(prepared.keepPastGames) });
+        const parts = Object.fromEntries(
+          Object.entries(next.parts).map(([name, data]) => [name, JSON.stringify(data)]),
+        );
+        if (prepared.keepPastGames) parts.pastGames = stored.parts.pastGames;
+        memory.set(this.path, { core: JSON.stringify(next.core), order: next.order, parts });
+      } else if (prepared) {
         const parts = { ...stored.parts };
         if (prepared.whole || prepared.records === undefined) delete parts.records;
         else parts.records = JSON.stringify(prepared.records);
@@ -101,7 +138,9 @@ export class MemoryStore {
           ),
         });
       }
-      this.lastMode = run ? 'light' : 'full';
+      if (marks.size) attemptMarks.delete(this.path);
+      // 'world' は世界まで読んだ（終わった年の試合だけ読まない）。'full' は全部読んだ
+      this.lastMode = loaded.world ? 'world' : run ? 'light' : 'full';
       // 何回読んだか（世界に触れて全体でやり直すと2）。全体の印の付け忘れを見る
       this.lastAttempts = attempts;
       return outcome?.value;

@@ -8,6 +8,7 @@ import { WORLD_DATA } from '../corporate/worldData.js';
 import { UNIVERSITY_TEAMS, UNIVERSITY_REGIONS } from './universityTeamsData.js';
 import { TEAMS_DATA } from '../teams-data.js';
 import { RANK_ORDER } from '../utils/constants.js';
+import { compareStandings } from '../season/seasonManager.js';
 import {
   createBracket,
   recordResult,
@@ -32,7 +33,7 @@ export function getLeagueChampions(seasonKey, userSeasonData = null) {
         // ユーザーが1部（または部制なし）: userSeasonData.standings から取得
         const standings = userSeasonData.standings;
         if (standings && standings.length > 0) {
-          const sorted = [...standings].sort((a, b) => b.winRate - a.winRate || b.wins - a.wins);
+          const sorted = [...standings].sort(compareStandings);
           champion = sorted[0].team;
         }
       } else {
@@ -41,7 +42,7 @@ export function getLeagueChampions(seasonKey, userSeasonData = null) {
         const league = WORLD_DATA.universityLeagues?.[region.id];
         const seasonData = league?.[seasonKey];
         if (seasonData?.standings1?.length > 0) {
-          const sorted = [...seasonData.standings1].sort((a, b) => b.winRate - a.winRate || b.wins - a.wins);
+          const sorted = [...seasonData.standings1].sort(compareStandings);
           champion = sorted[0].team;
         }
       }
@@ -56,13 +57,13 @@ export function getLeagueChampions(seasonKey, userSeasonData = null) {
         // 東都: 1部の優勝チーム
         const standings = seasonData.standings1;
         if (standings && standings.length > 0) {
-          const sorted = [...standings].sort((a, b) => b.winRate - a.winRate || b.wins - a.wins);
+          const sorted = [...standings].sort(compareStandings);
           champion = sorted[0].team;
         }
       } else {
         const standings = seasonData.standings;
         if (standings && standings.length > 0) {
-          const sorted = [...standings].sort((a, b) => b.winRate - a.winRate || b.wins - a.wins);
+          const sorted = [...standings].sort(compareStandings);
           champion = sorted[0].team;
         }
       }

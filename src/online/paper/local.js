@@ -389,7 +389,8 @@ function eventHead(e, short) {
     case 'retire':
       return `${team}・${name}${role}が勇退`;
     case 'resign':
-      return `${team}・${name}${role}が辞任`;
+      // 契約更改で人が決めた退任（`applyStaffMoves`）
+      return `${team}・${name}${role}が${e.stepDown ? '退任' : '辞任'}`;
     case 'release':
       return `${team}、${name}${role}と別れ`;
     case 'promote':

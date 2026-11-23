@@ -18,6 +18,8 @@ export function setTeamLabels(map) {
 export const teamLabel = (name) => LABELS[name]?.label || name;
 export const teamShort = (name) =>
   LABELS[name]?.short || ABBREVIATIONS.get(name) || name;
+/** 球団の本拠地の土地の名前（球場の景色を決める。今日の一戦の札と同じく `teamLabels` の `city`） */
+export const teamCity = (name) => LABELS[name]?.city || teamShort(name);
 /**
  * 球団名を「都市」と「愛称」に分ける（折り返す位置を決めるため）。
  * ⚠ 既定の名前は「都市＋愛称」で、略称が都市（`pyramidLeague.js`）。狭い欄で折ると

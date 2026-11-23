@@ -6,6 +6,7 @@
 
 import { UNIVERSITY_REGIONS, UNIVERSITY_TEAMS } from './universityTeamsData.js';
 import { WORLD_DATA } from '../corporate/worldData.js';
+import { compareStandings, standingWinRate } from '../season/seasonManager.js';
 
 const RANK_STRENGTH = { S: 78, A: 65, B: 50, C: 38, D: 25 };
 
@@ -118,9 +119,9 @@ function updateStandings(standings, home, away, homeScore, awayScore) {
   if (homeScore > awayScore) { sh.wins++; sa.losses++; }
   else if (awayScore > homeScore) { sa.wins++; sh.losses++; }
   else { sh.draws = (sh.draws || 0) + 1; sa.draws = (sa.draws || 0) + 1; }
-  sh.winRate = (sh.wins + sh.losses) > 0 ? sh.wins / (sh.wins + sh.losses) : 0;
-  sa.winRate = (sa.wins + sa.losses) > 0 ? sa.wins / (sa.wins + sa.losses) : 0;
-  standings.sort((a, b) => b.winRate - a.winRate || b.wins - a.wins);
+  sh.winRate = standingWinRate(sh);
+  sa.winRate = standingWinRate(sa);
+  standings.sort(compareStandings);
 }
 
 // ============================================================
@@ -358,7 +359,7 @@ function processPromotionRelegation(seasonKey) {
     if (!seasonData?.done) continue;
 
     for (let d = 1; d < numDiv; d++) {
-      const byRank = (s) => [...(s || [])].sort((a, b) => b.winRate - a.winRate || b.wins - a.wins);
+      const byRank = (s) => [...(s || [])].sort(compareStandings);
       const upper = byRank(seasonData[`standings${d}`]);
       const lower = byRank(seasonData[`standings${d + 1}`]);
       const relegated = upper[upper.length - 1]?.team;

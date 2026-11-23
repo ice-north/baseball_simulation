@@ -54,13 +54,6 @@ export const asFlags = (bases) => (bases || []).map(isOn);
 
 export const countRunners = (bases) => (bases || []).filter(isOn).length;
 
-/** 塁に居る走者（識別できるものだけ）と塁番号の組 */
-export function listRunners(bases) {
-  const out = [];
-  (bases || []).forEach((v, i) => { const r = runnerOf(v); if (r) out.push({ base: i, runner: r }); });
-  return out;
-}
-
 /**
  * 押し出し進塁（四球・死球・打撃妨害）。詰まっている走者だけが1つ進む。
  * @param batter 打者（走者オブジェクト。まだ識別しないなら true）

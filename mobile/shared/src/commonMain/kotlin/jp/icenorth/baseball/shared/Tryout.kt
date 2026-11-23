@@ -33,8 +33,7 @@ fun rosterCounts(players: List<JsonObject>): MutableMap<String, Int> {
     return counts
 }
 
-/** 交渉できる人数の上限（1位〜20位）。Web 版 `TRYOUT_WISH_MAX` */
-const val TRYOUT_WISH_MAX = 20
+// 交渉できる人数の上限（1位〜20位。TRYOUT_WISH_MAX）は Tables.kt（Web 版 tryoutPlan.js から書き出す）
 
 /** 交渉できる人数。⚠ 空き枠で切らない（獲得する人数より多く並べ、取られたら繰り上げる）。空きが無ければ0 */
 fun wishLimit(maxCount: Int): Int = if (maxCount > 0) TRYOUT_WISH_MAX else 0
@@ -153,6 +152,38 @@ fun weightedRanked(candidates: List<JsonObject>, weights: Map<String, Int>, rost
         if ((counts[g] ?: 0) < (ONLINE_ROSTER_TARGETS[g] ?: 0)) { counts.merge(g, 1, Int::plus); head += p.pid } else tail += p.pid
     }
     return (head + tail).take(max(0, limit))
+}
+
+/**
+ * 能力で絞り込む条件に使える能力（先方要望 2026-11-23。Web 版 tryoutPlan.js の `ABILITY_FILTERS` の写し）。
+ * ⚠ 値は画面に出している数そのまま（球速は km/h、スタミナは 0〜200）。`side` はその能力をふだん見る側
+ */
+data class AbilityFilterDef(val key: String, val label: String, val side: String, val unit: String = "", val get: (JsonObject) -> Double)
+
+val ABILITY_FILTERS: List<AbilityFilterDef> = listOf(
+    AbilityFilterDef("meet", "ミート", "fielder") { it.at("batting", "meet").num() ?: 0.0 },
+    AbilityFilterDef("power", "パワー", "fielder") { it.at("batting", "power").num() ?: 0.0 },
+    AbilityFilterDef("eye", "選球眼", "fielder") { it.at("batting", "eye").num() ?: 0.0 },
+    AbilityFilterDef("speed", "走力", "fielder") { it.at("physical", "speed").num() ?: 0.0 },
+    AbilityFilterDef("arm", "肩力", "fielder") { it.at("physical", "arm").num() ?: 0.0 },
+    AbilityFilterDef("defense", "守備", "fielder") { it.at("fielding", "defense").num() ?: 0.0 },
+    AbilityFilterDef("velocity", "球速", "pitcher", "km/h") { it.at("pitching", "velocity").num() ?: 0.0 },
+    AbilityFilterDef("control", "制球", "pitcher") { it.at("pitching", "control").num() ?: 0.0 },
+    AbilityFilterDef("stamina", "スタミナ", "pitcher") { it.at("pitching", "stamina").num() ?: 0.0 },
+    AbilityFilterDef("spin", "回転", "pitcher") { it.at("pitching", "spinRate").num() ?: 0.0 },
+    AbilityFilterDef("breaking", "変化球（最高）", "pitcher") { p ->
+        p.at("pitching", "arsenal").list().filter { it.at("type").str() != "straight" }.maxOfOrNull { it.at("level").num() ?: 0.0 } ?: 0.0
+    },
+)
+const val ABILITY_FILTER_MAX = 4
+
+/** 絞り込みの条件（能力と、何以上） */
+data class AbilityFilter(val key: String, val min: Int)
+
+/** 条件をすべて満たすか（かつ）。Web 版 `passesAbilityFilters` と同じ */
+fun passesAbilityFilters(p: JsonObject, filters: List<AbilityFilter>): Boolean = filters.all { f ->
+    val def = ABILITY_FILTERS.firstOrNull { it.key == f.key } ?: return@all true
+    def.get(p) >= f.min
 }
 
 val TRYOUT_GROUPS = listOf(

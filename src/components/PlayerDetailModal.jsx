@@ -99,6 +99,15 @@ const renderArsenal = (arsenal) => {
   ));
 };
 
+// 能力の推移の表で、前の年からの増減（増えたら緑の「+3」、減ったら赤の「-2」、同じか初年は空）
+const abilityDiff = (cur, prev, key) => {
+  if (!prev) return '';
+  const d = cur[key] - prev[key];
+  if (d > 0) return <span className="text-green-400 text-xs ml-0.5">+{d}</span>;
+  if (d < 0) return <span className="text-red-400 text-xs ml-0.5">{d}</span>;
+  return '';
+};
+
 // いま大学に在学中か。⚠ 在学中の選手に「出身: 法政大学」と出ていた（卒業した人の言い方）。
 //   大学のチームの名簿に居る、または学年を持っていて大学の後の経歴（入団・社会人など）が無いなら在学中
 const AFTER_UNIVERSITY = new Set(['corporate', 'independent', 'club', 'club_join', 'draft', 'released']);
@@ -667,24 +676,17 @@ export default function PlayerDetailModal({ player, onClose, scoutAccuracy = 1 }
                     {entriesWithAbilities.map((h, i) => {
                       const a = h.abilities;
                       const prevA = i > 0 ? entriesWithAbilities[i - 1].abilities : null;
-                      const diff = (cur, prev, key) => {
-                        if (!prev) return '';
-                        const d = cur[key] - prev[key];
-                        if (d > 0) return <span className="text-green-400 text-xs ml-0.5">+{d}</span>;
-                        if (d < 0) return <span className="text-red-400 text-xs ml-0.5">{d}</span>;
-                        return '';
-                      };
                       return (
                         <tr key={i} className="border-b border-gray-700 hover:bg-gray-700">
                           <td className="px-2 py-1 text-white font-bold">{i + 1}年目</td>
                           <td className="px-2 py-1 text-center">{a.age}歳</td>
-                          <td className="px-2 py-1 text-center"><AbilityValue value={a.velocity} isVel />{diff(a, prevA, 'velocity')}</td>
-                          <td className="px-2 py-1 text-center"><span className={getAbilityColor(a.control)}>{a.control}</span>{diff(a, prevA, 'control')}</td>
-                          <td className="px-2 py-1 text-center"><AbilityValue value={a.stamina} isSta />{diff(a, prevA, 'stamina')}</td>
-                          <td className="px-2 py-1 text-center"><span className={getAbilityColor(a.meet)}>{a.meet}</span>{diff(a, prevA, 'meet')}</td>
-                          <td className="px-2 py-1 text-center"><span className={getAbilityColor(a.power)}>{a.power}</span>{diff(a, prevA, 'power')}</td>
-                          <td className="px-2 py-1 text-center"><span className={getAbilityColor(a.speed)}>{a.speed}</span>{diff(a, prevA, 'speed')}</td>
-                          <td className="px-2 py-1 text-center"><span className={getAbilityColor(a.defense)}>{a.defense}</span>{diff(a, prevA, 'defense')}</td>
+                          <td className="px-2 py-1 text-center"><AbilityValue value={a.velocity} isVel />{abilityDiff(a, prevA, 'velocity')}</td>
+                          <td className="px-2 py-1 text-center"><span className={getAbilityColor(a.control)}>{a.control}</span>{abilityDiff(a, prevA, 'control')}</td>
+                          <td className="px-2 py-1 text-center"><AbilityValue value={a.stamina} isSta />{abilityDiff(a, prevA, 'stamina')}</td>
+                          <td className="px-2 py-1 text-center"><span className={getAbilityColor(a.meet)}>{a.meet}</span>{abilityDiff(a, prevA, 'meet')}</td>
+                          <td className="px-2 py-1 text-center"><span className={getAbilityColor(a.power)}>{a.power}</span>{abilityDiff(a, prevA, 'power')}</td>
+                          <td className="px-2 py-1 text-center"><span className={getAbilityColor(a.speed)}>{a.speed}</span>{abilityDiff(a, prevA, 'speed')}</td>
+                          <td className="px-2 py-1 text-center"><span className={getAbilityColor(a.defense)}>{a.defense}</span>{abilityDiff(a, prevA, 'defense')}</td>
                           <td className="px-2 py-1 text-left pl-4 text-xs">{renderArsenal(a.arsenal)}</td>
                         </tr>
                       );
@@ -725,25 +727,18 @@ export default function PlayerDetailModal({ player, onClose, scoutAccuracy = 1 }
                     {entriesWithAbilities.map((h, i) => {
                       const a = h.abilities;
                       const prevA = i > 0 ? entriesWithAbilities[i - 1].abilities : null;
-                      const diff = (cur, prev, key) => {
-                        if (!prev) return '';
-                        const d = cur[key] - prev[key];
-                        if (d > 0) return <span className="text-green-400 text-xs ml-0.5">+{d}</span>;
-                        if (d < 0) return <span className="text-red-400 text-xs ml-0.5">{d}</span>;
-                        return '';
-                      };
                       return (
                         <tr key={i} className="border-b border-gray-700 hover:bg-gray-700">
                           <td className="px-2 py-1 text-white font-bold">{i + 1}年目</td>
                           <td className="px-2 py-1 text-center">{a.age}歳</td>
-                          <td className="px-2 py-1 text-center"><span className={getAbilityColor(a.meet)}>{a.meet}</span>{diff(a, prevA, 'meet')}</td>
-                          <td className="px-2 py-1 text-center"><span className={getAbilityColor(a.power)}>{a.power}</span>{diff(a, prevA, 'power')}</td>
-                          <td className="px-2 py-1 text-center"><span className={getAbilityColor(a.speed)}>{a.speed}</span>{diff(a, prevA, 'speed')}</td>
-                          <td className="px-2 py-1 text-center"><span className={getAbilityColor(a.arm)}>{a.arm}</span>{diff(a, prevA, 'arm')}</td>
-                          <td className="px-2 py-1 text-center"><span className={getAbilityColor(a.defense)}>{a.defense}</span>{diff(a, prevA, 'defense')}</td>
-                          <td className="px-2 py-1 text-center"><span className={getAbilityColor(a.eye)}>{a.eye}</span>{diff(a, prevA, 'eye')}</td>
-                          <td className="px-2 py-1 text-center"><span className={getAbilityColor(a.steal)}>{a.steal}</span>{diff(a, prevA, 'steal')}</td>
-                          {a.catcherLead !== undefined && <td className="px-2 py-1 text-center"><span className={getAbilityColor(a.catcherLead)}>{a.catcherLead}</span>{diff(a, prevA, 'catcherLead')}</td>}
+                          <td className="px-2 py-1 text-center"><span className={getAbilityColor(a.meet)}>{a.meet}</span>{abilityDiff(a, prevA, 'meet')}</td>
+                          <td className="px-2 py-1 text-center"><span className={getAbilityColor(a.power)}>{a.power}</span>{abilityDiff(a, prevA, 'power')}</td>
+                          <td className="px-2 py-1 text-center"><span className={getAbilityColor(a.speed)}>{a.speed}</span>{abilityDiff(a, prevA, 'speed')}</td>
+                          <td className="px-2 py-1 text-center"><span className={getAbilityColor(a.arm)}>{a.arm}</span>{abilityDiff(a, prevA, 'arm')}</td>
+                          <td className="px-2 py-1 text-center"><span className={getAbilityColor(a.defense)}>{a.defense}</span>{abilityDiff(a, prevA, 'defense')}</td>
+                          <td className="px-2 py-1 text-center"><span className={getAbilityColor(a.eye)}>{a.eye}</span>{abilityDiff(a, prevA, 'eye')}</td>
+                          <td className="px-2 py-1 text-center"><span className={getAbilityColor(a.steal)}>{a.steal}</span>{abilityDiff(a, prevA, 'steal')}</td>
+                          {a.catcherLead !== undefined && <td className="px-2 py-1 text-center"><span className={getAbilityColor(a.catcherLead)}>{a.catcherLead}</span>{abilityDiff(a, prevA, 'catcherLead')}</td>}
                         </tr>
                       );
                     })}

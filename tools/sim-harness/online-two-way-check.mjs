@@ -11,6 +11,7 @@
 //   - 控えは守れて疲れていない野手から。野手の控えが居なくても日を進められる
 //   - 今の順番の先発が抹消中でも、実際に投げる二刀流の選手を野手の枠から外さない
 //   - 9番の仮置きに控えの野手を「投手」として入れない
+import { quiet } from './lib/quiet.mjs';
 import assert from 'node:assert/strict';
 import './lib/bootstrap.mjs';
 import {
@@ -35,15 +36,6 @@ import { autoSimulateGame } from '../../src/game/autoSimulation.js';
 import { TEAMS_DATA } from '../../src/teams-data.js';
 
 const NOW = '2026-10-26T15:00:00.000Z';
-const quiet = (fn) => {
-  const log = console.log;
-  console.log = () => {};
-  try {
-    return fn();
-  } finally {
-    console.log = log;
-  }
-};
 
 const league = quiet(() =>
   createLeague({ members: [{ userId: 'a' }], now: NOW }),

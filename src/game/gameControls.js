@@ -1,5 +1,5 @@
 // ========================================================================
-// gameControls.js - resetGame, multiPitch, startSimMode
+// gameControls.js - resetGame, startSimMode
 // Extracted from App.jsx GAME_CONTROLS section (L2791-2965)
 // ========================================================================
 
@@ -11,9 +11,9 @@ import { createDefaultPlayers, createAwayPlayers, createHomeBench, createAwayBen
  * ctx に必要なプロパティ:
  *   isSubstituting, setCount, setBases, setOuts, setInning, setScore,
  *   setGameOver, setRemainingPitches, setSimMode, outOccurredRef,
- *   setInningScores, setExtraInningScores, setCurrentInningScore,
- *   setTeamHits, setTeamErrors, setTeamRBIs, setIsTopInning,
- *   setGameLog, setLastResult, setStatistics, setRecentVelocities,
+ *   setInningScores, setExtraInningScores,
+ *   setTeamHits, setTeamErrors, setIsTopInning,
+ *   setGameLog, setLastResult,
  *   setHomeTeam, setAwayTeam, setCurrentStamina
  *
  * ⚠ かつてここに打球統計4種（battedBall*Stats）のリセットが52行あったが、
@@ -27,9 +27,9 @@ export function executeResetGame(ctx) {
     isSubstituting,
     setCount, setBases, setOuts, setInning, setScore,
     setGameOver, setRemainingPitches, setSimMode, outOccurredRef,
-    setInningScores, setExtraInningScores, setCurrentInningScore,
-    setTeamHits, setTeamErrors, setTeamRBIs, setIsTopInning,
-    setGameLog, setLastResult, setStatistics, setRecentVelocities,
+    setInningScores, setExtraInningScores,
+    setTeamHits, setTeamErrors, setIsTopInning,
+    setGameLog, setLastResult,
     setHomeTeam, setAwayTeam, setCurrentStamina
   } = ctx;
 
@@ -50,15 +50,11 @@ export function executeResetGame(ctx) {
     home: [null, null, null, null, null, null, null, null, null]
   });
   setExtraInningScores({ away: [], home: [] });  // 延長スコアリセット
-  setCurrentInningScore({ away: 0, home: 0 });
   setTeamHits({ home: 0, away: 0 });
   setTeamErrors({ home: 0, away: 0 });
-  setTeamRBIs({ home: 0, away: 0 });
   setIsTopInning(true);
   setGameLog([]);
   setLastResult(null);
-  setStatistics(null);
-  setRecentVelocities([]);
   // チームを完全に初期状態に戻す（選手の位置・打順・交代フラグなども全てリセット）
   setHomeTeam({
     name: "ホーム",
@@ -77,18 +73,6 @@ export function executeResetGame(ctx) {
       setCurrentStamina(homePitcher.pitching.stamina);
     }
   }, 100);
-}
-
-/**
- * multiPitch - 指定回数投球を開始
- *
- * ctx に必要なプロパティ:
- *   setRemainingPitches, setIsAutoSimulating
- */
-export function executeMultiPitch(ctx, pitchCount) {
-  const { setRemainingPitches, setIsAutoSimulating } = ctx;
-  setRemainingPitches(pitchCount);
-  setIsAutoSimulating(true);
 }
 
 /**

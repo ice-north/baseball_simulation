@@ -8,6 +8,7 @@ import { teamLabel } from './gameText.js';
 import { COACH_ROLES as ROLE_ORDER, ROLE_LABELS, COACH_ABILITY_ITEMS } from './coaches.js';
 import { useDraftState, STAFF_MODES_DRAFT } from './Drafts.jsx';
 import { delegationSettles } from './notices.js';
+import { CoachFace, TeamMark } from './look/Art.jsx';
 
 // ============================================================
 // 指導者（監督・投手コーチ・野手コーチ）。PC のページとスマホの画面で共用。
@@ -70,6 +71,8 @@ export function CoachCard({ coach, roleLabel, actions = null }) {
   return (
     <article className="online-staff-card">
       <header>
+        {/* 新しい見た目（試作）: 顔（帽子は所属球団。浪人中は無地） */}
+        <CoachFace coach={coach} size={60} className="online-staff-face" />
         <span className="online-eyebrow">{roleLabel || coach.roleLabel}</span>
         <strong>
           <CoachNameButton coach={coach} />
@@ -183,6 +186,7 @@ function CoachDialog({ coach, close }) {
       }}
     >
       <header>
+        <CoachFace coach={coach} size={64} className="online-detail-face" />
         <div>
           <h2 id="online-coach-title">{coach.name}</h2>
           <small>
@@ -643,11 +647,15 @@ function LeagueStaff({ leagueStaff, view }) {
         <tbody>
           {leagueStaff.teams.map((t) => (
             <tr key={t.team}>
-              <th>{teamLabel(t.team)}</th>
+              <th>
+                <TeamMark team={t.team} size={18} className="online-inline-mark" />
+                {teamLabel(t.team)}
+              </th>
               {ROLE_ORDER.map((role) => (
                 <td key={role}>
                   {t[role] ? (
                     <>
+                      <CoachFace coach={t[role]} team={t.team} size={26} className="online-staff-row-face" />
                       {view && t[role].id ? <LeagueCoachButton view={view} team={t.team} coach={t[role]} /> : t[role].name}
                       <small>{t[role].color}</small>
                     </>
@@ -678,7 +686,7 @@ function OwnStaff({ view, busy, run, command }) {
         <p className="online-muted">
           {staff.canEditSeats
             ? 'キャンプの間は、解任・役職の入れ替え・市場から呼ぶことができます。何もしなければ留任です。'
-            : '入れ替えられるのは年度更新のすぐ後のキャンプの間だけです。'}
+            : '入れ替えられるのは年度更新のすぐ後のキャンプの間です（契約更改でも、年度更新に向けて監督の退任・コーチの昇格・退任を決められます）。'}
         </p>
         <div className="online-staff-grid">
           {staff.seats.map((seat) => (
@@ -706,6 +714,17 @@ function OwnStaff({ view, busy, run, command }) {
       <TacticsLines lines={staff.tactics} />
       {staff.canEditSeats && (
         <Market staff={staff} busy={busy} act={act} ask={ask} setAsk={setAsk} />
+      )}
+      {/* 年度更新で動く人事（契約更改で決めた異動・コーチ打診。サーバーの `scheduledStaffLines`） */}
+      {staff.scheduled?.length > 0 && (
+        <section className="online-card">
+          <h2>年度更新で動く人事</h2>
+          <ul className="online-staff-events">
+            {staff.scheduled.map((line) => (
+              <li key={line}>{line}</li>
+            ))}
+          </ul>
+        </section>
       )}
       <Events events={staff.events} title="うちの球団の人事" />
     </>

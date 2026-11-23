@@ -3,6 +3,7 @@
 //   node mobile/tools/expect-chronicle.mjs > mobile/shared/src/jvmTest/resources/chronicle-expected.json
 // 材料は年代記のビュー（`chronicle-fixtures.mjs` が作る resources/chronicle/）。
 // CI は `--check`（Web 版だけ直したときに気づく）。答え合わせは `HonorsTest`。
+import { emitExpected } from './expected.mjs';
 import fs from 'node:fs';
 import { honorRows, proDraftedAfter } from '../../src/online/chronicleText.js';
 import { inFirstWeek, firstWeekKey, FIRST_WEEK_DAYS } from '../../src/online/firstWeek.js';
@@ -53,15 +54,4 @@ const firstWeek = {
 };
 
 const text = JSON.stringify({ honors, proAfter, teamProAfter, proNews, ageOutlook, firstWeek });
-if (process.argv.includes('--check')) {
-  const file = new URL('../shared/src/jvmTest/resources/chronicle-expected.json', import.meta.url);
-  if (fs.readFileSync(file, 'utf8').trim() !== text) {
-    console.error(
-      'chronicle-expected.json が古い。node mobile/tools/expect-chronicle.mjs > mobile/shared/src/jvmTest/resources/chronicle-expected.json で書き出し直し、アプリの Chronicle.kt・AgeOutlook.kt・FirstWeek.kt も揃えること',
-    );
-    process.exit(1);
-  }
-  console.log('chronicle-expected.json は Web 版の答えと一致しています');
-} else {
-  process.stdout.write(text + '\n');
-}
+emitExpected(text, { script: 'expect-chronicle.mjs', file: 'chronicle-expected.json', also: 'アプリの Chronicle.kt・AgeOutlook.kt・FirstWeek.kt も揃えること' });

@@ -2,7 +2,6 @@ import { humanTeamNames } from '../game/teamControl.js';
 // ============================================================
 // 年間進行システム - yearProgressionSystem.js
 // シーズン終了処理、年度更新、引退、解雇
-// 年齢カーブによる成長・衰退システム
 // ============================================================
 
 import { createSeasonData, initializeStandings, qualifiedPA, qualifiedOuts, plateAppearances, compareStandings, getPlayoffChampion } from './seasonManager.js';
@@ -22,13 +21,11 @@ import { WORLD_DATA } from '../corporate/worldData.js';
 import { releasedPlayersPool, TEAMS_DATA } from '../teams-data.js';
 import { addToReleasedPool, replaceReleasedPool, removeFromReleasedPoolByIds } from '../state/pools.js';
 import { addToRoster, replaceRoster } from '../state/roster.js';
-// 成長・衰退の計算は growthSystem.js に抽出。内部利用のため import し、
-// 従来 export されていた3関数は互換性維持のため再エクスポートする。
+// 成長・衰退の計算は growthSystem.js に抽出。
 import { updateGrowthModifiers, applyFreeAgentGrowth, applyCorporatePlayerGrowth, applyAgeCurveChanges, applyPositionShifts } from './growthSystem.js';
 // CPU並行世界のロスター管理（大学卒業/新入生・社会人/独立の戦力外/補充）は rosterProgression.js に抽出
 import { processUniversityTeamGraduation, releaseCPUCorporatePlayers, replenishCorporateRosters, replenishIndependentLeagueRosters, buildRecruitNorms, abilityZ, markFreshRoute, processLowerTierTurnover } from './rosterProgression.js';
-export { updateGrowthModifiers, applyCorporatePlayerGrowth, applyAgeCurveChanges, applyPositionShifts };
-import { updateAllTeamReputations, updateAllRanks, advanceSponsors, applyReputationDecay, applyUniversityReputationDecay, resetIndependentLeagueSchedules } from '../corporate/corporateInit.js';
+import { updateAllTeamReputations, updateAllRanks, updateAllTournamentBudgetBonuses, advanceSponsors, applyReputationDecay, applyUniversityReputationDecay, resetIndependentLeagueSchedules } from '../corporate/corporateInit.js';
 import { extractTournamentSeeds } from '../corporate/toshitaikou.js';
 import { advanceStaffYear } from '../corporate/staffData.js';
 import { generateRandomPlayerName } from '../data/playerNames.js';
@@ -778,10 +775,17 @@ export function finalizePlayerSeason(player, year) {
     highQualityStarts: (cp.highQualityStarts || 0) + (sp.highQualityStarts || 0)
   };
 
+  // ⚠ **出ていない側の成績（0ばかり）は書かない**。年度別の記録は世界の全選手（約16,000人）に
+  //    毎年たまり、10年で世界の保存の半分になって毎日の進行も倍に重くなった（10年の長期シミュ）。
+  //    社会人・独立など対人リーグの外の選手は打撃・投球とも0、野手の投球・投手の打撃もほぼ0。
+  //    読む側（選手詳細の年度別成績・オンラインの「参考」の期間）は `h.batting || {}` で読むので、
+  //    無い年は今までどおり0として出る。能力（abilities）と年は残す（新人王の判定は件数を見る）
+  const playedBatting = sb.games || sb.atBats || sb.walks || sb.hitByPitch;
+  const playedPitching = sp.games || sp.inningsPitched;
   const statsHistoryEntry = {
     year: year || '?',
-    batting: JSON.parse(JSON.stringify(player.seasonStats?.batting || {})),
-    pitching: JSON.parse(JSON.stringify(player.seasonStats?.pitching || {})),
+    ...(playedBatting ? { batting: JSON.parse(JSON.stringify(sb)) } : {}),
+    ...(playedPitching ? { pitching: JSON.parse(JSON.stringify(sp)) } : {}),
     abilities: {
       meet: player.batting?.meet || 0,
       power: player.batting?.power || 0,
@@ -1114,6 +1118,8 @@ export function advanceToNextYear(seasonData, allTeams, { playedTeamNames = [], 
   let rankChanges = [];
   let staffRetirements = [];
   rankChanges = updateAllRanks(seasonData);
+  // 2.7. その年の全国大会の成績 → 翌年の予算の「大会成績ボーナス」（毎年置き換え。足し込まない）
+  updateAllTournamentBudgetBonuses(seasonData, updatedTeams);
   if (seasonData.settings?.corporateMode) {
     const userTeamName = Object.keys(updatedTeams)[0];
     for (const [teamName, teamData] of Object.entries(updatedTeams)) {
@@ -1506,10 +1512,7 @@ export function advanceToNextYear(seasonData, allTeams, { playedTeamNames = [], 
     }
     newSeasonData.tournamentHistory = [...prevHistory, yearRecord];
   } else if (seasonData.settings?.universityMode) {
-    // 大学モード: 新シーズンのスケジュール・順位表を大学リーグから取得
-    const regionId = seasonData.settings.universityRegion;
-    newSeasonData.schedule = [];
-    newSeasonData.standings = [];
+    // 大学モード: 新シーズンのスケジュール・順位表は大学リーグの再初期化の後で取得する（下）
     // 大会結果アーカイブ
     const prevHistory = seasonData.tournamentHistory || [];
     const yearRecord = { year: seasonData.year, calendarYear: seasonData.currentDate?.year };
@@ -1592,7 +1595,7 @@ export function advanceToNextYear(seasonData, allTeams, { playedTeamNames = [], 
               s.gamesPlayed = found.gamesPlayed || 0;
             }
           });
-          uLeague.fall[standingsKey].sort((a, b) => b.winRate - a.winRate || b.wins - a.wins);
+          uLeague.fall[standingsKey].sort(compareStandings);
         }
         uLeague.fall.done = true;
       }
@@ -1693,17 +1696,6 @@ export function advanceToNextYearSandbox(seasonData, allTeams) {
     ageReports: {}
   };
 };
-
-// ============================================================
-// 年齢カーブによる成長・衰退システム
-// 若い: フィジカル成長しやすい、24歳前後: 技術が伸びやすい
-// 28歳前後: 微成長、32歳: 衰え開始、36歳: 顕著な衰え
-// ただし個人差が大きく、例外的な選手も出る
-// ============================================================
-
-
-
-
 
 /**
  * シーズン開始時に全選手の能力値をスナップショットとして記録

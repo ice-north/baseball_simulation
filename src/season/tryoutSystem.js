@@ -18,6 +18,7 @@ import {
   ROSTER_TARGETS,
   rosterGroup,
   rosterCounts as countRoster,
+  createEmptyStats,
 } from '../utils/constants.js';
 import { generateBats } from '../utils/handedness.js';
 import { reservePlayerIds } from '../state/playerIds.js';
@@ -384,14 +385,8 @@ export function createCandidatePlayer(options) {
     fatigue: 0,
     experience: 0,
     careerHistory: [{ type: 'highschool', label: '高校卒' }],
-    seasonStats: {
-      batting: { games: 0, atBats: 0, hits: 0, doubles: 0, triples: 0, homeruns: 0, rbis: 0, walks: 0, strikeouts: 0, stolenBases: 0, sacrificeBunts: 0 },
-      pitching: { games: 0, wins: 0, losses: 0, saves: 0, holds: 0, inningsPitched: 0, runsAllowed: 0, earnedRuns: 0, hits: 0, homeruns: 0, walks: 0, strikeouts: 0, pitches: 0 }
-    },
-    careerStats: {
-      batting: { games: 0, atBats: 0, hits: 0, doubles: 0, triples: 0, homeruns: 0, rbis: 0, walks: 0, strikeouts: 0, stolenBases: 0, sacrificeBunts: 0 },
-      pitching: { games: 0, wins: 0, losses: 0, saves: 0, holds: 0, inningsPitched: 0, runsAllowed: 0, earnedRuns: 0, hits: 0, homeruns: 0, walks: 0, strikeouts: 0, pitches: 0 }
-    }
+    seasonStats: createEmptyStats(),
+    careerStats: createEmptyStats()
   };
 
   // 初回トライアウトの候補は生成物なので、帯から引くことができない。
@@ -1376,14 +1371,18 @@ export function calculatePlayerRank(player) {
 
     totalScore = (velocityScore * 0.3) + (controlScore * 0.25) + (staminaScore * 0.25) + (arsenalScore * 0.2);
   } else {
-    // 野手評価: ミート、パワー、走力、守備、肩
+    // 野手評価: ミート、パワー、選球眼、走力、守備、肩
+    // ⚠ **選球眼も入れる**。入れていなかったので、トライアウトでも戦力外でも選球眼が一度も
+    //    選ばれず、10年でリーグの選球眼だけが横ばい（制球は+20）→四球が半分になっていた
+    //    （10年の長期シミュ 2026-11-23）
     const meetScore = player.batting.meet;
     const powerScore = player.batting.power;
+    const eyeScore = player.batting.eye ?? 40;
     const speedScore = player.physical.speed;
     const defenseScore = player.fielding.defense;
     const armScore = player.physical.arm;
 
-    totalScore = (meetScore * 0.3) + (powerScore * 0.25) + (speedScore * 0.2) + (defenseScore * 0.15) + (armScore * 0.1);
+    totalScore = (meetScore * 0.27) + (powerScore * 0.22) + (eyeScore * 0.1) + (speedScore * 0.18) + (defenseScore * 0.14) + (armScore * 0.09);
   }
 
   // 年齢補正（素材型ボーナス / 即戦力ペナルティ）

@@ -3,6 +3,7 @@
 // 記録の年ごとの内訳（試合・選手）、全体のビュー・球団の情報の大きさを出す。
 //   node tools/sim-harness/online-size-probe.mjs [年数=1]
 // ⚠ 記録（records）は軽い読みでも毎回読むので、年ごとにどれだけ増えるかが保存の速さに効く
+import { quiet } from './lib/quiet.mjs';
 import { createLeague, defaultPhasePlan, submitPhase, advanceLeagueDay } from '../../server/leagueEngine.mjs';
 import { touchPresence } from '../../server/social.mjs';
 import { projectLeague, projectTeamInfo } from '../../server/projection.mjs';
@@ -11,15 +12,6 @@ import { buildArchiveIndex } from '../../server/archiveIndex.mjs';
 import { gzipSync } from 'node:zlib';
 
 const YEARS = Number(process.argv[2] || 1);
-const quiet = (fn) => {
-  const log = console.log;
-  console.log = () => {};
-  try {
-    return fn();
-  } finally {
-    console.log = log;
-  }
-};
 const kb = (v) => `${Math.round(Buffer.byteLength(JSON.stringify(v ?? null)) / 1024)}KB`;
 /** 保存・転送の大きさ（gzip。保存は gzip で置く） */
 const gz = (v) => `${Math.round(gzipSync(JSON.stringify(v ?? null)).length / 1024)}KB`;

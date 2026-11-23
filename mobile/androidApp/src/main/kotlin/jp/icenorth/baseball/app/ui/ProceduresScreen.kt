@@ -490,6 +490,8 @@ private fun PhasePanel(model: AppViewModel, raw: JsonObject, phase: JsonObject, 
                 plan["releaseIds"] != null -> {
                     // 年齢構成と3年後の見込み（誰を残すかの材料。Web 版と同じく退団の選択の上）
                     AgeOutlookCard(ageOutlook, compact = true)
+                    // 指導者の異動（先方要望 2026-11-23。Web 版 ContractPlanner の `StaffMoves`）。表の上
+                    StaffMovesPanel(raw, plan, setPlan, editable = editing != null)
                     ReleasePanel(model, raw, plan, setPlan, editable = editing != null)
                 }
                 kind == "offseason" -> Section { Text("最終順位を保存し、次年度のキャンプへ進みます。決めることはありません（「この内容で決定」を押すと早く進みます）。") }
@@ -701,7 +703,7 @@ private fun ReleasePanel(model: AppViewModel, raw: JsonObject, plan: JsonObject,
                 listOf(
                     "右端の「解雇」を押した選手が退団します（もう一度押すと取り消し）。最低9人を残してください。",
                     "見出しを押すと、その項目で並べ替えます（もう一度押すと逆順）。",
-                    "「投C」「野C」はコーチ打診です。打診した選手は現役を退いて名簿を離れ、年度更新でその役職のコーチに就きます（いまのコーチは市場へ戻ります。各役職1人まで）。監督には、キャンプの間に指導者の画面で入れ替えて上げられます。",
+                    "「投C」「野C」はコーチ打診です。打診した選手は現役を退いて名簿を離れ、年度更新でその役職のコーチに就きます（いまのコーチは市場へ戻ります。各役職1人まで）。監督の退任・コーチの昇格は上の「指導者の異動」で決められます。",
                     "続くトライアウトで最大 ${(rosterLimitOf(raw) - remaining.size).coerceAtLeast(0)}人を獲れます（標準${rosterStandardOf(raw)}人・上限${rosterLimitOf(raw)}人。人数を決めなければ標準まで埋めます）。目標に足りない区分はトライアウトで優先して埋まります。",
                     "標準案は「30歳以上」と「能力の低さ」で点を付けて選び、トライアウトで入れ替えるため毎年少なくとも3人を出します。",
                     "このあとの年度更新で、若い選手は伸び、30歳を過ぎると衰えやすくなります。",
@@ -753,6 +755,70 @@ private fun ReleasePanel(model: AppViewModel, raw: JsonObject, plan: JsonObject,
     }
 }
 
+/**
+ * 指導者の異動の選び方（役職 → [値, 言葉]。値 "keep" は続投＝送らない）。
+ * ⚠ Web 版 ContractPlanner の `STAFF_MOVE_CHOICES` と同じ値。言葉は幅の都合でアプリだけ「投C」「野C」と短い
+ */
+private val STAFF_MOVE_CHOICES = listOf(
+    "manager" to listOf("keep" to "続投", "leave" to "退任", "pitching" to "投Cを昇格", "batting" to "野Cを昇格"),
+    "pitching" to listOf("keep" to "続投", "leave" to "退任"),
+    "batting" to listOf("keep" to "続投", "leave" to "退任"),
+)
+private val STAFF_ROLE_NAMES = mapOf("manager" to "監督", "pitching" to "投手コーチ", "batting" to "野手コーチ")
+
+/** 案の異動とコーチ打診を、年度更新で起きる順の文にする（Web 版 ContractPlanner の `staffMoveLines` と同じ文） */
+internal fun staffMoveLines(raw: JsonObject, plan: JsonObject): List<String> {
+    val seats = raw.at("staff", "seats").list().mapNotNull { it.obj() }
+    fun nameOf(role: String) = seats.firstOrNull { it.at("role").str() == role }?.at("coach", "name").str().orEmpty()
+    val roster = raw.at("roster").list().mapNotNull { it.obj() }
+    val out = mutableListOf<String>()
+    when (val m = plan.at("staffMoves", "manager").str()) {
+        null -> Unit
+        "leave" -> out += "${nameOf("manager")}監督が退任"
+        else -> out += "${nameOf("manager")}監督が退任し、${nameOf(m)}${STAFF_ROLE_NAMES[m]}が監督に昇格"
+    }
+    for (role in listOf("pitching", "batting")) {
+        if (plan.at("staffMoves", role).str() == "leave") out += "${nameOf(role)}${STAFF_ROLE_NAMES[role]}が退任"
+        val offered = plan.at("coachOffers", role).long()?.let { id -> roster.firstOrNull { it.pid == id } }
+        if (offered != null) out += "${offered.at("name").str().orEmpty()}（現役を引退）が${STAFF_ROLE_NAMES[role]}に就任"
+    }
+    return out
+}
+
+/** 契約更改の「指導者の異動」。席ごとに続投・退任・昇格を選ぶ（年度更新で動く） */
+@Composable
+private fun StaffMovesPanel(raw: JsonObject, plan: JsonObject, setPlan: (JsonObject) -> Unit, editable: Boolean) {
+    val seats = raw.at("staff", "seats").list().mapNotNull { it.obj() }
+    // ⚠ 古いサーバー・指導者の無いリーグは出さない
+    if (seats.isEmpty()) return
+    fun coachOf(role: String) = seats.firstOrNull { it.at("role").str() == role }?.at("coach").obj()
+    val managerMove = plan.at("staffMoves", "manager").str()
+    Section("指導者の異動", trailing = {
+        InfoButton("指導者の異動", listOf(
+            "監督の退任・コーチの監督への昇格・コーチの退任を決められます。動くのは年度更新のときです。",
+            "コーチを監督に上げると、そのコーチの席が空きます。同じ契約更改で「投C」「野C」のコーチ打診をすれば、打診した選手がその席に就きます。",
+            "異動で空いた席は、すぐ後のキャンプの間に指導者の画面で市場から呼べます。呼ばなければキャンプの終わりに市場から埋めます。退任は解任に数えません。",
+        ))
+    }) {
+        STAFF_MOVE_CHOICES.forEach { (role, choices) ->
+            val coach = coachOf(role)
+            Text("${STAFF_ROLE_NAMES[role]}  ${coach?.at("name").str() ?: "（空席）"}", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
+            when {
+                managerMove == role -> Muted("監督に昇格")
+                coach == null -> Muted("キャンプの間に呼べます")
+                else -> ChoiceRow(
+                    // 昇格させるコーチが居なければ選ばせない
+                    choices.filter { (to, _) -> role != "manager" || to == "keep" || to == "leave" || coachOf(to) != null },
+                    plan.at("staffMoves", role).str() ?: "keep",
+                    enabled = editable,
+                ) { to -> setPlan(Commands.withStaffMove(plan, role, to.takeUnless { it == "keep" })) }
+            }
+        }
+        val lines = staffMoveLines(raw, plan)
+        if (lines.isNotEmpty()) Text("年度更新で: " + lines.joinToString("。") + "。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.tertiary)
+    }
+}
+
 /** 表の右端の小さな切り替え（解雇・投C・野C）。選んでいると塗り、選んでいないと枠だけ */
 @Composable
 private fun MiniToggle(label: String, on: Boolean, enabled: Boolean, onClick: () -> Unit) {
@@ -779,7 +845,8 @@ private fun releaseSummary(raw: JsonObject, plan: JsonObject): String {
     val offered = COACH_OFFER_ROLES.mapNotNull { (role, _) -> plan.at("coachOffers", role).long() }
     val remaining = roster.filter { it.pid !in releases && it.pid !in offered }
     val counts = rosterCounts(remaining)
-    return "退団${releases.size}人" + (if (offered.isNotEmpty()) " · コーチ打診${offered.size}人" else "") + " · 残り${remaining.size}人 · " + listOf("pitcher" to "投", "catcher" to "捕", "infielder" to "内", "outfielder" to "外")
+    val moves = (plan["staffMoves"] as? JsonObject)?.size ?: 0
+    return "退団${releases.size}人" + (if (offered.isNotEmpty()) " · コーチ打診${offered.size}人" else "") + (if (moves > 0) " · 指導者の異動${moves}" else "") + " · 残り${remaining.size}人 · " + listOf("pitcher" to "投", "catcher" to "捕", "infielder" to "内", "outfielder" to "外")
         .joinToString(" ") { (k, l) -> "$l${counts[k] ?: 0}/${ONLINE_ROSTER_TARGETS[k] ?: 0}" }
 }
 

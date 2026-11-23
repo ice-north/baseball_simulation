@@ -11,6 +11,7 @@
 //    5. 取り下げの見回り（`pruneTrades`）が、CPUからの提案（`from` が null）を「オーナーが替わった」で消さない
 //    6. 人の同じ選手を、どのCPUからでも `CPU_OFFER_MEMO_DAYS` 日は続けて求めない。人の伸びが負の案は出ない
 //       （判断7、いしだ 2026-11-20。覚え `cpuOfferMemo` の前の形 `cpuOfferLog` を読んでも壊れない）
+import { quietAsync } from './lib/quiet.mjs';
 import assert from 'node:assert/strict';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -33,15 +34,6 @@ import {
 import { createTradeJudge } from '../../server/tradeJudge.mjs';
 
 const TURNS = Number(process.env.CPU_TRADE_TURNS || 70);
-const quiet = async (fn) => {
-  const log = console.log;
-  console.log = () => {};
-  try {
-    return await fn();
-  } finally {
-    console.log = log;
-  }
-};
 
 // 期限の日付（暦どおりに月をまたぐ）
 assert.equal(offerExpiry({ year: 1, month: 4, day: 28 }, 7), 10505);
@@ -105,7 +97,7 @@ async function runLeague(dir) {
       payload,
     });
   };
-  await quiet(() => send('create'));
+  await quietAsync(() => send('create'));
   for (let i = 0; i < 4; i += 1) {
     const l = (await store.read()).league;
     if (!l.phase) break;
@@ -113,7 +105,7 @@ async function runLeague(dir) {
   }
   const offers = new Map();
   for (let i = 0; i < TURNS; i += 1) {
-    await quiet(() => send('step'));
+    await quietAsync(() => send('step'));
     now = new Date(Date.parse(now) + 3600000).toISOString();
     const l = (await store.read()).league;
     for (const t of l.trades || []) if (t.from === null && !offers.has(t.id)) offers.set(t.id, { trade: structuredClone(t), league: structuredClone({ teams: Object.fromEntries(Object.entries(l.game.teams).map(([n, team]) => [n, team.players])) }) });
@@ -182,7 +174,7 @@ try {
   //    （4. のやり直しは上で取った `league` と比べるので、ここで進めても変わらない）
   let pending = (league.trades || []).find((t) => t.from === null);
   for (let i = 0; !pending && i < 40; i += 1) {
-    await quiet(() => send('step'));
+    await quietAsync(() => send('step'));
     pending = ((await service.store.read()).league.trades || []).find((t) => t.from === null);
   }
   assert.ok(pending, '返事待ちのCPUからの提案が作れない（日を進めても届かない）');

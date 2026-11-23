@@ -17,10 +17,10 @@
 //  - 待たれている最後の1人が手続きを任せる前に確認を挟み、決まったら知らせを言い分ける
 // 画面の写しは /tmp/baseball-online-staff-*.png
 import assert from 'node:assert/strict';
-import { readFile, mkdtemp } from 'node:fs/promises';
+import { mkdtemp } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { isDeepStrictEqual } from 'node:util';
-import { chromium } from 'playwright';
+import { launchBrowser, distHtml } from './lib/browser.mjs';
 import { routeToService, tryoutService } from './lib/serviceRoute.mjs';
 import { plannedPicks } from '../../src/online/tryoutPlan.js';
 import {
@@ -36,7 +36,7 @@ import { shortLastLines, midWordBreaks } from './lib/textWrap.mjs';
 import { LeagueService } from '../../server/leagueService.mjs';
 import { failureShots } from './lib/failureShots.mjs';
 
-const html = await readFile(new URL('../../dist/index.html', import.meta.url), 'utf8');
+const html = await distHtml();
 const base = 'http://localhost:3000';
 
 /** セットを選んでキャンプに入ったリーグ（参加者は管理者1人） */
@@ -138,10 +138,7 @@ async function scaleProblems(p) {
   });
 }
 
-const browser = await chromium.launch({
-  ...(process.env.PLAYWRIGHT_CHROME_CHANNEL ? { channel: process.env.PLAYWRIGHT_CHROME_CHANNEL } : {}),
-  headless: true,
-});
+const browser = await launchBrowser();
 const errors = [];
 try {
   const fixture = await campService();

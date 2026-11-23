@@ -2,6 +2,7 @@
 // 期待値を書き出す。
 //   node mobile/tools/expect-social.mjs > mobile/shared/src/jvmTest/resources/social-expected.json
 // CI は `--check`（Web 版だけ直したときに気づく）。答え合わせは `SocialTest`。
+import { emitExpected } from './expected.mjs';
 import fs from 'node:fs';
 import { lastSeenLabel, scoringLine, tokyoDay } from '../../src/online/social.js';
 import { awaySummary, divisionRank, sinceLabel } from '../../src/online/awaySummary.js';
@@ -173,15 +174,4 @@ const summaries = Object.fromEntries(
 );
 
 const text = JSON.stringify({ scoring, clock, lastSeen, summaries });
-if (process.argv.includes('--check')) {
-  const file = new URL('../shared/src/jvmTest/resources/social-expected.json', import.meta.url);
-  if (fs.readFileSync(file, 'utf8').trim() !== text) {
-    console.error(
-      'social-expected.json が古い。node mobile/tools/expect-social.mjs > mobile/shared/src/jvmTest/resources/social-expected.json で書き出し直し、アプリの Social.kt・AwaySummary.kt も揃えること',
-    );
-    process.exit(1);
-  }
-  console.log('social-expected.json は Web 版の答えと一致しています');
-} else {
-  process.stdout.write(text + '\n');
-}
+emitExpected(text, { script: 'expect-social.mjs', file: 'social-expected.json', also: 'アプリの Social.kt・AwaySummary.kt も揃えること' });

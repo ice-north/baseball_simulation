@@ -1,7 +1,6 @@
 // 配布HTMLでの読み込み失敗・状態の切替・保存中入力。APIはfixture。
 import assert from 'node:assert/strict';
-import { readFile } from 'node:fs/promises';
-import { chromium } from 'playwright';
+import { launchBrowser, distHtml } from './lib/browser.mjs';
 import { withDeadline } from './lib/deadline.mjs';
 import { TURN_MINUTES } from '../../src/online/shared.js';
 import { shortLastLines } from './lib/textWrap.mjs';
@@ -21,17 +20,9 @@ const menuGroup = (page) =>
 const chooseMenu = (page, value) => menuGroup(page).selectOption(value);
 const pressedMenu = (page) => menuGroup(page).inputValue();
 const STANDARD_MENU = 'control';
-const html = await readFile(
-  new URL('../../dist/index.html', import.meta.url),
-  'utf8',
-);
+const html = await distHtml();
 const base = 'http://localhost:3000';
-const browser = await chromium.launch({
-  ...(process.env.PLAYWRIGHT_CHROME_CHANNEL
-    ? { channel: process.env.PLAYWRIGHT_CHROME_CHANNEL }
-    : {}),
-  headless: true,
-});
+const browser = await launchBrowser();
 const errors = [];
 const initial = () => ({
   revision: 1,

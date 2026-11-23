@@ -8,6 +8,7 @@ import { withSeededRandom, hashSeed } from '../game/rng.js';
 import {
   ONLINE_SCHEMA,
   ONLINE_ENGINE_VERSION,
+  isCurrent,
   requireOnline,
   phaseDeadlineAt,
 } from './shared.js';
@@ -285,6 +286,17 @@ export const MIGRATIONS = [
   {
     from: 19,
     to: 20,
+    note: '試合記録の打席の行に、塁の走者と打球の向き・飛距離・角度を足した（打席速報）',
+    apply() {
+      // ⚠ **足す方向だけの変更**。新しい試合の行は5つ目から打席速報の分を持つ
+      //    （`recordedStats.mjs` の `liveFields`）。前からある試合の行は4つまでのままで、
+      //    画面はその試合だけ打席速報を出さない（`look/playByPlay.js` の `hasLivePlays`）。
+      //    作れるものは無いので、段は版を上げるだけ。
+    },
+  },
+  {
+    from: 20,
+    to: 21,
     note: '打撃フォーム（オープン/スクエア/クローズ）を保存に足した',
     apply() {
       // ⚠ **足す方向だけの変更**（選手の `battingStance`）。無い選手は名前とIDから
@@ -330,10 +342,8 @@ export function migrationChain(options) {
   return { problems, reaches: expected };
 }
 
-/** いまのコードで読めるか */
-export const isCurrent = (league, target = ONLINE_SCHEMA) =>
-  league?.schema === target &&
-  league?.engineVersion === ONLINE_ENGINE_VERSION;
+/** いまのコードで読めるか（照合は `shared.js` の `isCurrent` 1つ） */
+export { isCurrent };
 
 /**
  * 直せるかどうかと、その理由。画面に出す文面もここで決める。

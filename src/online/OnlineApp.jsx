@@ -19,9 +19,16 @@ import {
 import { ActionContext } from './ActionContext.jsx';
 import { useMobile } from './useMobile.js';
 import { setTeamLabels } from './gameText.js';
+import { setTeamLooks, teamLook } from './look/teamLook.js';
+import { LookContext, readLookSetting, saveLookSetting } from './look/LookContext.jsx';
+import { LookToggle } from './look/LookToggle.jsx';
 import { Drafts } from './Drafts.jsx';
 import { staffModesDoneText } from './notices.js';
 import { awaySummary } from './awaySummary.js';
+import { useLookChrome } from './look/chrome.js';
+import { useRowMotion } from './look/motion.js';
+import { useLookTips } from './look/tips.js';
+import { leagueBaseline } from './look/statGrade.js';
 import {
   readAuth,
   sameSession,
@@ -29,11 +36,18 @@ import {
   persistRefresh,
   clearAuth,
 } from './authState.js';
+// 新しい見た目（試作）で自球団の色を CSS へ渡す（`look/look.css` の `--team-c2`。帯と区切りの色）
+const teamColorVars = (teamName) => {
+  const look = teamLook(teamName);
+  return look ? { '--team-c2': look.c2 } : undefined;
+};
 // 別アカウントへ切替後も、旧タブの読取り応答で書込み権限を復活させない。
 const viewForSession = (result, current) => {
   // ⚠ **描画より前に差し替えること**。球団名の表示は
   //    `gameText` のモジュール変数を引くので、ビューを受け取った時点で入れる
   setTeamLabels(result.teamLabels);
+  // 新しい見た目（試作）の球団の色と字も、同じ時点で入れる（`look/teamLook.js`）
+  setTeamLooks(result.teamLabels);
   return {
   ...result,
   // ⚠ `versionMismatch` も書ける扱いにする。ここを外すと「更新を取り込む」が
@@ -165,6 +179,27 @@ export default function OnlineApp() {
   const [busy, setBusy] = useState(false);
   // 表示幅でPC/スマホの部品が切り替わっても、選択中の画面は失わない。
   const [screen, setScreen] = useState('today');
+  // 新しい見た目（試作）。⚠ 端末ごとの入／切で、既定は切（`look/LookContext.jsx`）
+  const [lookOn, setLookOn] = useState(readLookSetting);
+  const look = useMemo(
+    () => ({
+      on: lookOn,
+      ownTeam: view?.teamName || null,
+      setOn: (on) => {
+        saveLookSetting(on);
+        setLookOn(on);
+      },
+      // 成績の札の物差し（その球団と同じ部の平均。選手の小窓など、ビューを受け取らない部品が引く）
+      baselineOf: (team) => (lookOn && view && team ? leagueBaseline(view, team) : null),
+    }),
+    [lookOn, view],
+  );
+  // 新しい見た目（試作）: ブラウザの枠の色・全画面で開く印（`look/chrome.js`）と、表の行が滑って
+  // 並べ替わる動き（`look/motion.js`）。⚠ どちらも入のときだけ
+  const [lookRoot, setLookRoot] = useState(null);
+  useLookChrome(lookOn);
+  useRowMotion(lookOn, lookRoot);
+  useLookTips(lookOn, lookRoot);
   const locked = useRef(false);
   const viewSequence = useRef(0);
   // 手元のビューの世代。読み直しで `since` に送り、変わっていなければ中身を受け取らない
@@ -593,8 +628,11 @@ export default function OnlineApp() {
   //    スマホではここに戻る手段が他に無く、ログアウトできなくなっていた
   const compactMobile = mobile && view && !view.setupRequired && !view.versionMismatch;
   return (
+    <LookContext.Provider value={look}>
     <div
-      className={`online ${mobile ? 'online-mobile' : 'online-desktop'} ${compactMobile ? 'online-compact-shell' : ''}`}
+      ref={setLookRoot}
+      className={`online ${mobile ? 'online-mobile' : 'online-desktop'} ${compactMobile ? 'online-compact-shell' : ''}${lookOn ? ' online-look' : ''}`}
+      style={lookOn ? teamColorVars(view?.teamName) : undefined}
     >
       {!compactMobile && (
         <header className="online-header">
@@ -613,6 +651,7 @@ export default function OnlineApp() {
             {config?.local && !mobile && (
               <small className="online-dev">ローカル検証モード（公開環境では無効）</small>
             )}
+            <LookToggle />
             <a href="/">一人用</a>
             {auth && (
               <button onClick={logout} disabled={busy}>
@@ -836,6 +875,7 @@ export default function OnlineApp() {
         )}
       </main>
     </div>
+    </LookContext.Provider>
   );
 }
 

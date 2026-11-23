@@ -3,9 +3,7 @@
 //    `online-records-check` 側で明示的に記録を有効にして作っている。
 //    ここで `process.env` を立てても **ESM の import が先に走るので間に合わない**。
 import assert from 'node:assert/strict';
-import { readFile } from 'node:fs/promises';
-import { chromium } from 'playwright';
-import { recordedFixture } from './online-records-check.mjs';
+import { buildRecordedFixture } from './lib/recordedFixture.mjs';
 import {
   projectLeague,
   projectGameInfo,
@@ -15,20 +13,15 @@ import {
 } from '../../server/projection.mjs';
 import { saveLineup } from '../../server/lineupCommand.mjs';
 import { TACTIC_DEFAULTS } from '../../src/online/tactics.js';
+import { launchBrowser, distHtml } from './lib/browser.mjs';
 import { shortLastLines } from './lib/textWrap.mjs';
 import { failureShots } from './lib/failureShots.mjs';
 
-const html = await readFile(
-  new URL('../../dist/index.html', import.meta.url),
-  'utf8',
-);
+let fixture = null;
+const recordedFixture = () => (fixture ??= buildRecordedFixture());
+const html = await distHtml();
 const base = 'http://localhost:3000';
-const browser = await chromium.launch({
-  ...(process.env.PLAYWRIGHT_CHROME_CHANNEL
-    ? { channel: process.env.PLAYWRIGHT_CHROME_CHANNEL }
-    : {}),
-  headless: true,
-});
+const browser = await launchBrowser();
 const noScroll = async (locator, message) => {
   const size = await locator.evaluate((node) => ({
     height: [node.scrollHeight, node.clientHeight],
@@ -41,7 +34,7 @@ const noScroll = async (locator, message) => {
 };
 try {
   for (const width of [320, 360, 390, 767]) {
-    const league = structuredClone(recordedFixture);
+    const league = structuredClone(recordedFixture());
     const team = league.game.teams[league.members[0].teamName];
     // PCで設定した値を、スマホから一部変更しても失わない。
     team.onlineTactics = {

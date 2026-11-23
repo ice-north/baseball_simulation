@@ -22,7 +22,7 @@ import { WORLD_DATA } from '../corporate/worldData.js';
 import { INDEPENDENT_LEAGUES } from '../corporate/independentLeagueData.js';
 import { UNIVERSITY_REGIONS } from '../university/universityTeamsData.js';
 import { generateFullSeasonSchedule } from '../season/scheduleGenerator.js';
-import { initializeStandings } from '../season/seasonManager.js';
+import { initializeStandings, calendarYearOf } from '../season/seasonManager.js';
 import { RANK_ORDER } from '../utils/constants.js';
 
 /** チームがどのカテゴリに属するかを判定する */
@@ -217,7 +217,7 @@ export const transferManagerTo = (targetTeamName, ctx) => {
 
   // 翌年の暦年（オフシーズンで移籍 → 翌シーズンから指揮）
   const nextYear = (seasonData?.year || 1) + 1;
-  const calendarYear = 2024 + nextYear - 1;
+  const calendarYear = calendarYearOf(nextYear);
 
   let setup;
   try {

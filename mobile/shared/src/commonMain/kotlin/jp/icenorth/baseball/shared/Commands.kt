@@ -145,6 +145,18 @@ object Commands {
         val releases = (plan["releaseIds"] as? kotlinx.serialization.json.JsonArray)?.mapNotNull { (it as? JsonPrimitive)?.content?.toLongOrNull() }.orEmpty()
         return JsonObject(plan + ("coachOffers" to JsonObject(next)) + ("releaseIds" to ids(releases.filter { it != id })))
     }
+    /**
+     * 契約更改の指導者の異動（`staffMoves`: 役職 → leave / pitching / batting。Web 版 ContractPlanner の `StaffMoves`）。
+     * `to` が null なら続投（その役職を外す）。監督に上げたコーチの退任は外す（サーバーも弾く）。
+     * 1つも無ければ `staffMoves` ごと外す
+     */
+    fun withStaffMove(plan: JsonObject, role: String, to: String?): JsonObject {
+        val now = (plan["staffMoves"] as? JsonObject).orEmpty().toMutableMap()
+        if (to == null) now.remove(role) else now[role] = JsonPrimitive(to)
+        if (role == "manager" && to != null && to != "leave") now.remove(to)
+        val base = plan - "staffMoves"
+        return JsonObject(if (now.isEmpty()) base else base + ("staffMoves" to JsonObject(now)))
+    }
     /** 解雇を切り替える（打診と重なっていれば打診を外す） */
     fun withRelease(plan: JsonObject, id: Long, on: Boolean): JsonObject {
         val releases = (plan["releaseIds"] as? kotlinx.serialization.json.JsonArray)?.mapNotNull { (it as? JsonPrimitive)?.content?.toLongOrNull() }.orEmpty()

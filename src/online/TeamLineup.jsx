@@ -1,5 +1,4 @@
 import React, { useEffect, useRef, useState } from "react";
-import { POS } from "./api.js";
 import { useRead } from "./useRead.js";
 import { inOnlineRoot } from "./dialogPortal.js";
 import { teamLabel } from "./gameText.js";
@@ -7,6 +6,9 @@ import { PlayerStatsButton } from "./PlayerPerformance.jsx";
 import { STARTER_ROLES, RELIEF_ROLES } from "./tactics.js";
 import { RELIEF_ORDER } from "./pitchingEdit.js";
 import { overviewGroup, formatStat } from "./statsView.js";
+import { PlayerFace, TeamMark } from './look/Art.jsx';
+import { PosChip, StatWithGrade } from './look/Parts.jsx';
+import { leagueBaseline } from './look/statGrade.js';
 
 // ============================================================
 // 球団のスタメンと投手陣（順位表から球団を押すと開く小窓）。先方要望 2026-11。
@@ -37,18 +39,29 @@ function columnsOf(category, labels) {
     .filter(Boolean);
 }
 
-function StatCells({ player, columns }) {
-  return columns.map((c) => (
-    <td key={c.id} className="is-num">
-      {player ? formatStat(c, c.get(player)) : "—"}
-    </td>
-  ));
+/** @param baseline 部の平均（新しい見た目の成績の札。無ければ数字だけ） */
+function StatCells({ player, columns, baseline }) {
+  return columns.map((c) => {
+    const value = player ? c.get(player) : null;
+    return (
+      <td key={c.id} className="is-num">
+        {player ? (
+          <StatWithGrade column={c} value={value} player={player} baseline={baseline}>
+            {formatStat(c, value)}
+          </StatWithGrade>
+        ) : (
+          "—"
+        )}
+      </td>
+    );
+  });
 }
 
 function NameCell({ player, team, own }) {
   if (!player) return <td className="online-muted">（空き）</td>;
   return (
     <td className="is-name">
+      <PlayerFace player={player} team={team} size={22} />
       <PlayerStatsButton
         player={own ? player : { ...player, tradeTeam: team }}
       />
@@ -56,9 +69,13 @@ function NameCell({ player, team, own }) {
   );
 }
 
-/** 小窓の中身。`team` は読み込んだ球団（自球団なら view） */
-export function TeamLineupBody({ team, own }) {
+/**
+ * 小窓の中身。`team` は読み込んだ球団（自球団なら view）
+ * @param view 自分のビュー（新しい見た目の成績の札が部の平均を引く。無ければ札は出ない）
+ */
+export function TeamLineupBody({ team, own, view }) {
   const lineup = team.lineup;
+  const baseline = view ? leagueBaseline(view, team.teamName) : null;
   const byId = new Map((team.roster || []).map((p) => [p.id, p]));
   if (!lineup)
     return (
@@ -105,9 +122,11 @@ export function TeamLineupBody({ team, own }) {
               return (
                 <tr key={e.battingOrder}>
                   <td>{e.battingOrder}</td>
-                  <td>{POS[e.position] || e.position}</td>
+                  <td>
+                    <PosChip position={e.position} />
+                  </td>
                   <NameCell player={player} team={team.teamName} own={own} />
-                  <StatCells player={player} columns={batting} />
+                  <StatCells player={player} columns={batting} baseline={baseline} />
                 </tr>
               );
             })}
@@ -149,7 +168,7 @@ export function TeamLineupBody({ team, own }) {
                   team={team.teamName}
                   own={own}
                 />
-                <StatCells player={byId.get(id)} columns={pitching} />
+                <StatCells player={byId.get(id)} columns={pitching} baseline={baseline} />
               </tr>
             ))}
             {relievers.map(({ id, role }) => (
@@ -160,7 +179,7 @@ export function TeamLineupBody({ team, own }) {
                   team={team.teamName}
                   own={own}
                 />
-                <StatCells player={byId.get(id)} columns={pitching} />
+                <StatCells player={byId.get(id)} columns={pitching} baseline={baseline} />
               </tr>
             ))}
             {!startersShown && !relievers.length && (
@@ -219,7 +238,10 @@ function TeamLineupDialog({ view, team, close }) {
     >
       <header>
         <div>
-          <h2 id="online-team-title">{teamLabel(team)}</h2>
+          <h2 id="online-team-title">
+            <TeamMark team={team} size={30} />
+            {teamLabel(team)}
+          </h2>
           <small>スタメンと投手陣（今の起用）</small>
         </div>
         <button onClick={dismiss} aria-label="球団の起用を閉じる">
@@ -227,7 +249,7 @@ function TeamLineupDialog({ view, team, close }) {
         </button>
       </header>
       {shown ? (
-        <TeamLineupBody team={shown} own={own} />
+        <TeamLineupBody team={shown} own={own} view={view} />
       ) : result.error ? (
         <div role="alert">
           {result.error}

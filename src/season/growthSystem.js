@@ -9,7 +9,7 @@
 
 import { PHYSICAL_STATS, TECHNICAL_STATS, getAgeGrowthBase, getRecoveryAgeBase, getStatPath, getStatName, getNestedValue, setNestedValue, MUSCLE_STATS, DEXTERITY_STATS, physiqueMultFor, dexterityMult } from './growthUtils.js';
 import { getVelocityCap, getVelocityCatchupMult } from '../utils/physics.js';
-import { PITCHING_FORM_EFFECTS, FORM_PITCH_SYNERGY } from '../utils/constants.js';
+import { PITCHING_FORM_EFFECTS, FORM_PITCH_SYNERGY, ALL_PITCH_TYPES } from '../utils/constants.js';
 
 // --- 成長率(growthModifier/growthPotential)の年度更新 ---
 /**
@@ -117,8 +117,6 @@ const PHYSIQUE_W = 0.30;
 // 何年経っても同じ投手のままになる。
 // 技術の場所である社会人が最も高く、指導者の居ないクラブは稀。
 const NEW_PITCH_RATE = { corporate: 0.10, independent: 0.05, club: 0.02 };
-const ALL_PITCH_TYPES = ['slider', 'curve', 'fork', 'changeup', 'sinker', 'shoot',
-                         'cutter', 'splitter', 'twoSeam', 'palm', 'knuckle'];
 function tryLearnNewPitch(player, categoryKey, discipline) {
   const arsenal = player.pitching?.arsenal;
   if (!arsenal) return;
@@ -316,7 +314,7 @@ export function applyFreeAgentGrowth(pool) {
 const NATURAL_AT_19 = 1.00;        // 19歳（素質1.0）の1能力あたりの伸び
 const NATURAL_RISE = 0.05;         // 19→23歳の1年あたりの上がり幅
 const NATURAL_RISE_END = 23;
-const NATURAL_PEAK = 1.20;         // 23〜25歳の山
+export const NATURAL_PEAK = 1.20;  // 23〜25歳の山（将来性の札 `potential.js` も割る数に使う）
 const NATURAL_PEAK_END = 25;
 const NATURAL_SLOPE_STEP = 0.05;   // 25歳以降、傾きが毎年これだけ急になる
 const NATURAL_FLOOR = -5.5;        // 際限なく落ちない（実際は `dampDecline` が先に効く）

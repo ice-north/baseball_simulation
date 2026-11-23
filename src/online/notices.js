@@ -19,7 +19,7 @@ import { PHASE_STAFF_AREA } from './coaches.js';
  * ⚠ 初期メンバーを待っている球団には、リーグの手続きを出さない
  *    （その球団の手続きはCPUが決め、サーバーも決定を待たない）。
  * ⚠ 指導者に任せた手続き（`phase.delegated`）も出さない。サーバーはその人の決定を待たず、
- *    指導者の案で決める（`leagueEngine` の `waitsFor`）。
+ *    指導者の案で決める（`coachEngine` の `waitsFor`）。
  */
 export function pendingProcedure(view) {
   if (!view) return null;
@@ -57,7 +57,7 @@ export function pendingProcedure(view) {
 
 /**
  * 手続きの一覧に出す、球団ごとの様子。PC・スマホで同じ言葉（アプリは `ProceduresScreen.kt`）。
- * ⚠ 指導者に任せた球団（`delegated`）は待たないので「検討中」と出さない（`leagueEngine` の `waitsFor`）
+ * ⚠ 指導者に任せた球団（`delegated`）は待たないので「検討中」と出さない（`coachEngine` の `waitsFor`）
  */
 export const phaseStatusLabel = (member) =>
   member.cpu

@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { POS, POS_FULL } from '../../online/api.js';
+import { POS, POS_FULL, posTone, posInk } from '../../online/api.js';
 import { Fatigue } from '../../online/BoardParts.jsx';
 import FieldDiagram from '../../online/FieldDiagram.jsx';
 import {
@@ -16,7 +16,7 @@ import {
 } from '../../online/lineupEdit.js';
 import { AbilityValue } from '../AbilityValue.jsx';
 import { getFatigueTone } from '../../utils/constants.js';
-import { CONDITION_ICONS } from '../../game/condition.js';
+import { ConditionMark } from '../../online/PlayerPerformance.jsx';
 import '../../online/online.css';
 import { orderFromTeam, writeOrder, candidatesForSlot, orderProblems } from './soloLineupOrder.js';
 
@@ -76,22 +76,11 @@ const POS_NAME = { ...POS_FULL, dh: '指名打者' };
 const BATS = { left: '左', right: '右', switch: '両' };
 const batsOf = (p) => BATS[p.batting?.bats || p.physical?.bats] || '—';
 const throwsOf = (p) => (p.physical?.throws === 'left' ? '左' : '右');
-const CONDITION_TEXT = ['絶不調', '不調', '普通', '好調', '絶好調'];
 const FATIGUE_TONE_TEXT = {
   warn: '疲れています（このまま出し続けると成長が鈍ります）',
   heavy: 'かなり疲れています（成長の鈍り方が最も大きい）',
   '': undefined,
 };
-
-function ConditionMark({ player }) {
-  const level = Number.isInteger(player.condition) && player.condition >= 0 && player.condition <= 4 ? player.condition : null;
-  const text = level === null ? '未記録' : CONDITION_TEXT[level];
-  return (
-    <span className={`online-condition online-condition-${level ?? 'unknown'}`} title={`調子: ${text}`} aria-label={`調子: ${text}`} role="img">
-      {level === null ? '—' : CONDITION_ICONS[level]}
-    </span>
-  );
-}
 
 function Fitness({ value, position }) {
   if (position === 'dh') return <span className="online-muted" title="指名打者は守らない">—</span>;
@@ -398,7 +387,7 @@ export default function SoloLineupBoard({ team, useDH, nextStarter, onChange, on
                         <span className="online-lineup-playable">
                           <button
                             type="button"
-                            className={`online-lineup-pos ${selectedPos === index ? 'is-selected' : ''}`}
+                            className={`online-lineup-pos ${posTone(entry.position)} ${selectedPos === index ? 'is-selected' : ''}`}
                             aria-pressed={selectedPos === index}
                             aria-label={`${index + 1}番の守備位置（${POS_SHORT[entry.position]}）を入れ替える`}
                             draggable
@@ -417,7 +406,7 @@ export default function SoloLineupBoard({ team, useDH, nextStarter, onChange, on
                             playablePositions(player)
                               .filter((e) => e.position !== entry.position)
                               .slice(0, 2)
-                              .map((e) => <span key={e.position}>{POS[e.position]}</span>)}
+                              .map((e) => <span key={e.position} className={posInk(e.position)}>{POS[e.position]}</span>)}
                         </span>
                       </td>
                       {player ? (
@@ -440,7 +429,7 @@ export default function SoloLineupBoard({ team, useDH, nextStarter, onChange, on
                       <span>9</span>
                     </td>
                     <td className="online-lineup-poscell">
-                      <span className="online-lineup-pos is-fixed">投</span>
+                      <span className={`online-lineup-pos is-fixed ${posTone('pitcher')}`}>投</span>
                     </td>
                     <td colSpan={COLUMN_COUNT - 2} className="online-lineup-person">
                       {nextStarter ? `${nextStarter.name}（次の先発）` : '次の先発'}
@@ -526,12 +515,12 @@ export default function SoloLineupBoard({ team, useDH, nextStarter, onChange, on
                           </td>
                           <td className="online-lineup-poscell" title={`本職と、ほかに守れる位置（適性${LOW_FITNESS}%以上、高い順）`}>
                             <span className="online-lineup-playable">
-                              <span className="online-lineup-pos is-bench">{POS[player.position] || '?'}</span>
+                              <span className={`online-lineup-pos is-bench ${posTone(player.position)}`}>{POS[player.position] || '?'}</span>
                               {playablePositions(player)
                                 .filter((e) => e.position !== player.position)
                                 .slice(0, 2)
                                 .map((e) => (
-                                  <span key={e.position}>{POS[e.position]}</span>
+                                  <span key={e.position} className={posInk(e.position)}>{POS[e.position]}</span>
                                 ))}
                             </span>
                           </td>

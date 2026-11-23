@@ -14,6 +14,7 @@
 - `npm run check:ui`（約2分）: 一人用の通し検査。ビルドしてブラウザで開幕からドラフト会議まで進める。
 - 一人用の画面確認は、日程画面の開発用の早送り（`npm run dev`、またはビルドに `?dev=1`）と、`npm run scenes` で作る場面（`npm run scene -- <名前>`）を使う。詳細は `tools/sim-harness/README.md`。
 
+- 動きを変えない整理（関数の移動・写しの片付け）は `node tools/sim-harness/replay-hash-check.mjs` で確かめる（約40秒。`check` に入っている）。固定の種で一人用の試合とオンラインの開幕40回を回し、結果のハッシュを `tools/sim-harness/replay-hashes.json` と比べる。年度更新をまたぐ分は `--year`（`check:full`）。**狙って結果を変えたときだけ** `--update` で書き直し、コミットに理由を書く。
 - 取りこぼし検知: `npm run check:unmerged` で、フォークのブランチにあって ice-north の main に無いコミットが一覧になる。**PR を出す前と、総合監査の最初に回す**。直しは別のブランチに置かず、開いている PR のブランチに載せる（別のブランチに置いた直しは、PR に入らないまま忘れられたことがある）。
 - PR: 作業用のフォークから ice-north へは、題と本文だけのコミットを作業ブランチの先頭に載せて `pr/<ブランチ名>` へ push すると作られる。使い方は `.github/workflows/upstream-pr.yml` の先頭。
 
@@ -21,7 +22,7 @@
 
 | 触った場所 | 回す検査 |
 |---|---|
-| `src/game/autoSimulation.js`・`src/simulation-logic.js`・投球判断 | `check:season` |
+| `src/game/autoSimulation.js`・`src/simulation-logic.js`・投球判断 | `check:season`・`replay-hash-check`（動きを変えないつもりの整理のとき） |
 | ドラフト・成長・年次進行（`src/season/`） | `check:draft`・`check:progression`・`check:ui:yearend` |
 | 日程画面・大会・フェーズ（`DateProgressScreen.jsx`・`dateProgression.js`） | `check:bracket`・`check:ui` |
 | セーブ（`src/game/saveSystem.js`・`saveMigration.js`） | `check:quick`・`check:ui` |
@@ -52,5 +53,7 @@
 - 持ち込んだ画面は `.online` の中に置くなら `.online-sp` で包む（PC版。ほかのページと同じ枠に入れるため）。`online.css` は `.online button` のように要素名で当てており、詳細度が Tailwind の単一クラスより強いので、そのまま入れるとボタンが全部同じ高さ・同じ色に潰れる。いま `.online` の中に包んだ一人用の画面は無い（PC版の編成は `LineupBoard.jsx` に置き換えた）ので、`online.css` の要素名の指定の多くは `:not(:where(.online-sp *))` を付けていない。持ち込むときは、その画面に当たる要素名の指定に `:not(:where(.online-sp *))` を付けてから入れる。包まずに出すならポータルで `.online` の**外**へ出す（スマホ版の全画面）。
 - オンラインの保存の形を変えたら `ONLINE_SCHEMA` を上げ、**同じコミットで** `src/online/leagueMigration.js` の `MIGRATIONS` に1段足す。オンラインは保存が1つしかないので、段が無いと全員の成績を消して作り直すしか選べない。移行できるのは項目を足す変更だけなので、形は足す方向で設計する。
 - PC のスポーツ新聞（`src/online/paper/`・`SportsPaper.jsx`）の文はアプリの `FrontPage*.kt` の写し。どちらかの文を変えたら両方を直し、`node mobile/tools/expect-paper.mjs > mobile/shared/src/jvmTest/resources/front/paper-expected.json` で期待値を書き出し直す（答え合わせはアプリの `FrontPageWebTest`）。
+- 新しい見た目（試作。`src/online/look/` の球団の色・字の表、マーク・顔・球場の描く手順、打席速報・今日の一戦・番記者の文）はアプリの `Look.kt`・`LookArt.kt`・`LookScene.kt`・`LookPlay.kt`・`TodayGame.kt`・`LookStory.kt` の写し元。どちらかを変えたら両方を直し、`node mobile/tools/expect-look.mjs > mobile/shared/src/jvmTest/resources/look-expected.json` で期待値を書き出し直す（答え合わせはアプリの `LookTest`）。入／切は端末ごとで既定は切。切のときは今までと同じ画面に保つ。字は `tools/look-fonts.py` で書き出す（日本語と数字は使う字に絞る。Graduate・Alfa Slab One は OFL の予約名があるので絞らない）。Web の字はどれも配布 HTML に埋め込まず `public/fonts/` に置き、入にした人だけが読む（日本語は1つ約450KB）。
+- 「動きで見る」（試作。`src/online/look/playMotion.js` と `motion*.js`・`PlayMotion.jsx`）は Web だけで、アプリにはまだ写していない。保存は足さず、版20の `plays` の行を読むだけ。どこへ・いつは `playMotion.js`、カメラは `motionCamera.js`、姿勢は `motionPose.js`、絵は `motionFigure.js`・`motionStadium.js`・`motionPaint.js` が決め、React を知るのは `PlayMotion.jsx` だけ。動きやカメラを変えたら `online-motion-check`（球が窓から出ない・姿勢が数になる）を回す。
 - 一人用の文字色は、地色（明るい紙）の上かカードの上かを見て `src/index.css` の「文字色の決まり」の表から選ぶ。地色の上は `text-ink` 系の4色だけで、半透明の枠を置かない。
 - 既存の数値調整は `npm run check:season` で集計を確認する。

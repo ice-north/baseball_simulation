@@ -180,3 +180,45 @@ export function sortContractRoster(roster, column, dir = 'desc') {
     })
     .map((e) => e.player);
 }
+
+/**
+ * 指導者の異動の選び方（`server/coachEngine.mjs` の `STAFF_MOVE_OPTIONS`。先方要望 2026-11-23）。
+ * ⚠ アプリは ProceduresScreen.kt の `STAFF_MOVE_CHOICES`（同じ値・同じ言葉）
+ */
+export const STAFF_MOVE_CHOICES = {
+  manager: [
+    [null, '続投'],
+    ['leave', '退任'],
+    ['pitching', '投手コーチを昇格'],
+    ['batting', '野手コーチを昇格'],
+  ],
+  pitching: [
+    [null, '続投'],
+    ['leave', '退任'],
+  ],
+  batting: [
+    [null, '続投'],
+    ['leave', '退任'],
+  ],
+};
+export const STAFF_ROLE_NAMES = { manager: '監督', pitching: '投手コーチ', batting: '野手コーチ' };
+
+/**
+ * 案の異動とコーチ打診を、年度更新で起きる順の文にする（手続きの欄・決定の帯で使う）。
+ * `seats`: ビューの `staff.seats`（[{ role, coach }]）、`roster`: 名簿（打診した選手の名前）
+ */
+export function staffMoveLines(plan, seats = [], roster = []) {
+  const moves = plan?.staffMoves || {};
+  const nameOf = (role) => seats.find((s) => s.role === role)?.coach?.name || '';
+  const byId = new Map(roster.map((p) => [p.id, p]));
+  const out = [];
+  if (moves.manager === 'leave') out.push(`${nameOf('manager')}監督が退任`);
+  else if (moves.manager)
+    out.push(`${nameOf('manager')}監督が退任し、${nameOf(moves.manager)}${STAFF_ROLE_NAMES[moves.manager]}が監督に昇格`);
+  for (const role of ['pitching', 'batting']) {
+    if (moves[role] === 'leave') out.push(`${nameOf(role)}${STAFF_ROLE_NAMES[role]}が退任`);
+    const offered = byId.get(plan?.coachOffers?.[role]);
+    if (offered) out.push(`${offered.name}（現役を引退）が${STAFF_ROLE_NAMES[role]}に就任`);
+  }
+  return out;
+}

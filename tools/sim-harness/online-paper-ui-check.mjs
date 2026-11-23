@@ -10,19 +10,15 @@
 //  - Esc で閉じる
 // PAPER_SHOTS=<dir> を付けると各面の画面写真を書き出す（目で確かめる用）。
 import assert from 'node:assert/strict';
-import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { chromium } from 'playwright';
+import { launchBrowser, distHtml } from './lib/browser.mjs';
 import { seasonService, routeToService } from './lib/serviceRoute.mjs';
 import { failureShots } from './lib/failureShots.mjs';
 
-const html = await readFile(new URL('../../dist/index.html', import.meta.url), 'utf8');
+const html = await distHtml();
 const base = 'http://localhost:3000';
 const shots = process.env.PAPER_SHOTS || null;
-const browser = await chromium.launch({
-  ...(process.env.PLAYWRIGHT_CHROME_CHANNEL ? { channel: process.env.PLAYWRIGHT_CHROME_CHANNEL } : {}),
-  headless: true,
-});
+const browser = await launchBrowser();
 const errors = [];
 try {
   const fixture = await seasonService({ days: 12 });

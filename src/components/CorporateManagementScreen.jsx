@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { TEAMS_DATA } from '../teams-data.js';
 import { ScreenShell, ScreenHeader } from './GameUIComponents.jsx';
 import { STAFF_ABILITIES, STAFF_ROLE_PROFILES, STAFF_GRADES, getStaffSalary, getPlayerSalary, generateStaffMarket, getTeamStaffBonus, STAFF_GRADE_CAP, canHireGrade, MAX_STAFF } from '../corporate/staffData.js';
-import { getReputationScoutBonus, getReputationRecruitBonus, getReputationBudgetBonus, getManagingBudgetBonus, getTournamentBudgetBonus, getSponsorIncome, SPONSOR_TIERS, BUDGET_BY_RANK } from '../corporate/corporateInit.js';
+import { getReputationScoutBonus, getReputationRecruitBonus, budgetBreakdown, SPONSOR_TIERS, BUDGET_BY_RANK } from '../corporate/corporateInit.js';
 import { getAbilityColor, POSITION_NAMES, getPositionSortIndex } from '../utils/constants.js';
 import { dispatchScout, SCOUT_TARGETS, investigatePlayer, startInvestigation, setAutoInvestigationFilter, getAutoInvestigationFilter, toggleFavoritePlayer, getFavoriteBonus, getAllScoutedPlayers, calculateRecruitSuccessRate, getScoutRecommendation, estimateRivalCount, assignScoutTask, cancelScoutTask, getAllScoutTasks, MAX_FAVORITES_PER_SCOUT } from '../corporate/scoutingSystem.js';
 import { getUniversityPipes } from '../university/universityPipeSystem.js';
@@ -51,13 +51,7 @@ const CorporateManagementScreen = ({ seasonData, gameMode }) => {
   const playerSalaryTotal = players.reduce((sum, p) => sum + getPlayerSalary(p), 0);
   const totalSalary = staffSalaryTotal + playerSalaryTotal;
   const reputation = cd.reputation || 0;
-  const baseBudget = cd.budget || 12000;
-  const reputationBonus = cd.yearlyBudgetBonus ?? getReputationBudgetBonus(reputation);
-  const managingValue = Math.max(...staff.map(s => s.abilities?.managing || 0), 0);
-  const managingBonus = getManagingBudgetBonus(managingValue);
-  const tournamentBonus = getTournamentBudgetBonus(cd);
-  const sponsorIncome = getSponsorIncome(cd);
-  const totalBudget = baseBudget + reputationBonus + managingBonus + tournamentBonus + sponsorIncome;
+  const { baseBudget, reputationBonus, managingValue, managingBonus, tournamentBonus, sponsorIncome, total: totalBudget } = budgetBreakdown(cd, staff);
   const budgetBalance = totalBudget - totalSalary;
 
   const gradeColor = (grade) => {
@@ -1102,7 +1096,7 @@ const CorporateManagementScreen = ({ seasonData, gameMode }) => {
             <div className="text-xs text-gray-300 space-y-1">
               <div className="flex justify-between"><span>都市対抗/日本選手権 優勝</span><span className="text-yellow-400 font-bold">+2,000万</span></div>
               <div className="flex justify-between"><span>都市対抗/日本選手権 準優勝</span><span className="text-yellow-400">+1,000万</span></div>
-              <div className="flex justify-between"><span>ベスト4（本戦2勝以上）</span><span className="text-yellow-400">+500万</span></div>
+              <div className="flex justify-between"><span>ベスト4（準決勝で敗退）</span><span className="text-yellow-400">+500万</span></div>
               <div className="flex justify-between"><span>本戦出場（予選突破）</span><span className="text-yellow-400">+300万</span></div>
             </div>
             <p className="text-xs text-gray-400 mt-2">最も良い成績が翌年の予算に反映されます（複数大会の場合は最高額）</p>

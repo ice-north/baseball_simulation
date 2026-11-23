@@ -42,6 +42,7 @@ import {
   conflictOf,
   RIFT_CONFLICT,
   CONFLICT_AREAS,
+  scheduledStaffLines,
 } from './coachEngine.mjs';
 
 const tierOf = (leagueId) =>
@@ -400,6 +401,8 @@ export function coachEventText(event, labelOf) {
     case 'fire':
       return `${team}が${event.name}監督を解任${event.reason ? `（${event.reason}）` : ''}`;
     case 'resign':
+      // 契約更改で人が決めた退任（`applyStaffMoves`）
+      if (event.stepDown) return `${team}の${event.name}${role}が退任`;
       return `${team}の${event.name}${role}が辞任${event.reason ? `（${event.reason}）` : ''}`;
     case 'turn':
       return `${team}の${event.name}が現役を引退し、指導者の道へ`;
@@ -428,6 +431,7 @@ export function coachEventsView(league, labelOf, { limit = 12, team = null } = {
       ...(e.mentor ? { mentor: e.mentor } : {}),
       ...(e.homecoming ? { homecoming: true } : {}),
       ...(e.reason ? { reason: e.reason } : {}),
+      ...(e.stepDown ? { stepDown: true } : {}),
       text: coachEventText(e, labelOf),
     }));
 }
@@ -488,6 +492,8 @@ export function ownStaffView(league, member, team, labelOf) {
     tactics: tacticsLines(league, member.teamName, team),
     front: frontView(league, member.teamName),
     canEditSeats: camp,
+    // 年度更新で動く人事（契約更改の異動・コーチ打診）。⚠ 古いアプリは読まない（足すだけ）
+    scheduled: scheduledStaffLines(league, member.teamName),
     market: camp
       ? Object.values(league.coaches.people)
           .filter((p) => p.status === 'free')
@@ -512,7 +518,7 @@ export function ownStaffView(league, member, team, labelOf) {
  *    埋めず「おすすめ」で練習する（`coaches.js` の `campPlan` の `strictSeats`）。
  *    コーチが2人とも居なければ案は無い（null）
  * ⚠ キャンプは「決定」ではなく1クールずつ実行する。文もそれに合わせる
- * ⚠ 任せた手続きはその人の決定を待たない（`leagueEngine` の `waitsFor`）。「任せる」の文はそれを書く。
+ * ⚠ 任せた手続きはその人の決定を待たない（`coachEngine` の `waitsFor`）。「任せる」の文はそれを書く。
  *    キャンプは人事ができる期間でもあるので、ほかの球団が終えると終わることも書く
  */
 export function phasePlanBy(league, teamName, kind) {
@@ -551,6 +557,8 @@ const brief = (coach, role = 'manager') => ({
   // 名前を押すと人物の小窓（その球団の読み込みから、この id の人を探す）
   id: coach.id,
   name: coach.name,
+  // 年齢（新しい見た目の顔のしわ・白髪。詳細の顔と同じにする）
+  age: coach.age,
   // 紙面の呼び名（「山田監督」）
   shortName: shortName(coach),
   color: roleTypeLabel(coach, role) || coachColor(coach),

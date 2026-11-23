@@ -11,6 +11,7 @@ import { simulateUniversityLeagueDate, getAllUniversityLeagues, processSpringPro
 import { generateUniversityChampionship, generateMeijiJinguTournament, autoPlayUniversityTournament } from '../university/universityTournament.js';
 import { INDEPENDENT_LEAGUES } from './independentLeagueData.js';
 import { recordTeamAchievement } from '../season/achievements.js';
+import { compareStandings, standingWinRate } from '../season/seasonManager.js';
 
 const getScheduleByDateForLeague = (schedule, date) => {
   if (!schedule || !date) return [];
@@ -41,11 +42,11 @@ const updateLeagueStandings = (standings, homeTeam, awayTeam, homeScore, awaySco
     standingAway.draws = (standingAway.draws || 0) + 1;
   }
 
-  // 勝率は引き分けを除く（`seasonManager.standingWinRate` と同じ式。循環読み込みを避けて書き写す）
-  standingHome.winRate = (standingHome.wins + standingHome.losses) > 0 ? standingHome.wins / (standingHome.wins + standingHome.losses) : 0;
-  standingAway.winRate = (standingAway.wins + standingAway.losses) > 0 ? standingAway.wins / (standingAway.wins + standingAway.losses) : 0;
+  // 勝率は引き分けを除く
+  standingHome.winRate = standingWinRate(standingHome);
+  standingAway.winRate = standingWinRate(standingAway);
 
-  standings.sort((a, b) => b.winRate - a.winRate || b.wins - a.wins);
+  standings.sort(compareStandings);
 };
 
 export const simulateParallelWorldDate = (currentDate) => {
@@ -147,13 +148,13 @@ const extractLeagueChampions = (standings, teamOrder, leagueId, leagueDef, fallb
     const l2Set = new Set(teamOrder.slice(half));
     const subNames = leagueDef?.leagueNames || ['第1リーグ', '第2リーグ'];
 
-    const l1 = [...standings].filter(s => l1Set.has(s.team)).sort((a, b) => b.winRate - a.winRate || b.wins - a.wins);
-    const l2 = [...standings].filter(s => l2Set.has(s.team)).sort((a, b) => b.winRate - a.winRate || b.wins - a.wins);
+    const l1 = [...standings].filter(s => l1Set.has(s.team)).sort(compareStandings);
+    const l2 = [...standings].filter(s => l2Set.has(s.team)).sort(compareStandings);
 
     if (l1[0]) results.push({ team: l1[0].team, league: leagueId, leagueName: subNames[0] });
     if (l2[0]) results.push({ team: l2[0].team, league: leagueId, leagueName: subNames[1] });
   } else {
-    const sorted = [...standings].sort((a, b) => b.winRate - a.winRate || b.wins - a.wins);
+    const sorted = [...standings].sort(compareStandings);
     if (sorted[0]) results.push({ team: sorted[0].team, league: leagueId, leagueName: fallbackName || leagueId });
   }
   return results;

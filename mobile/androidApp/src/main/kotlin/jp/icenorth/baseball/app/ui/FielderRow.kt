@@ -25,6 +25,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -33,7 +34,6 @@ import jp.icenorth.baseball.shared.FIELDER_REST_FATIGUE
 import jp.icenorth.baseball.shared.subPositions
 import jp.icenorth.baseball.shared.Player
 import jp.icenorth.baseball.shared.SUBSTITUTE_MIN_FITNESS
-import jp.icenorth.baseball.shared.conditionIcon
 import jp.icenorth.baseball.shared.fatigueTone
 import jp.icenorth.baseball.shared.positionGroup
 import jp.icenorth.baseball.shared.positionLabel
@@ -46,9 +46,10 @@ import jp.icenorth.baseball.shared.shortLabel
  * ⚠ 能力のランク色（数字の文字色）と取り違えないよう、位置の色は**札の枠と字**でだけ使う。
  */
 fun positionColor(pos: String?): Color = when (positionGroup(pos)) {
-    // パワプロと同じ並び（いしだ指定: 投手は赤ピンク、捕手は水色、内野は黄、外野は緑）
-    "pitcher" -> Color(0xFFE11D63) // 赤ピンク
-    "catcher" -> Color(0xFF0EA5E9) // 水色
+    // パワプロと同じ並び（先方指定 2026-11-23: 投手は赤、捕手は青、内野は黄、外野は緑。
+    // 以前のいしだ指定は赤ピンク・水色）。⚠ Web 版は online.css の `.is-pos-*`（api.js の `posTone`）
+    "pitcher" -> Color(0xFFDC2626) // 赤
+    "catcher" -> Color(0xFF2563EB) // 青
     "infield" -> Color(0xFFEAB308) // 黄
     "outfield" -> Color(0xFF16A34A) // 緑
     else -> Color(0xFF475569)
@@ -172,8 +173,13 @@ fun FielderRow(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(3.dp),
             ) {
+                if (player != null) PlayerFace(player, size = 28.dp)
+                // ⚠ 空き枠は今まで通り置き字だけ（調子の絵文字も空白も付けない）
+                val (nameText, nameInline) =
+                    if (player != null) conditionName(player.condition, player.name) else AnnotatedString(placeholder) to emptyMap()
                 Text(
-                    if (player != null) "${conditionIcon(player.condition)} ${player.name}" else placeholder,
+                    nameText,
+                    inlineContent = nameInline,
                     fontWeight = FontWeight.SemiBold,
                     color = if (player != null) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.error,
                     maxLines = 1,

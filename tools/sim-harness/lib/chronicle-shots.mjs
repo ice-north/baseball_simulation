@@ -4,7 +4,7 @@
 import { mkdirSync } from 'node:fs';
 import { resolve, join } from 'node:path';
 import { spawn } from 'node:child_process';
-import { chromium } from 'playwright';
+import { launchBrowser } from './browser.mjs';
 import { FileStore } from '../../../server/storage/fileStore.mjs';
 import { LeagueService } from '../../../server/leagueService.mjs';
 
@@ -34,8 +34,8 @@ console.log('場面できた');
 const server = spawn('node', ['server/dev.mjs'], { env: { ...process.env, ONLINE_DATA_FILE: file, ONLINE_DISABLE_TIMER: '1' }, stdio: 'inherit' });
 const vite = spawn('npx', ['vite', '--port', '3000', '--strictPort'], { stdio: 'ignore' });
 await new Promise((r) => setTimeout(r, 6000));
-// ⚠ ブラウザの場所は決め打ちしない（ほかの画面検査と同じく `PW_CHROMIUM` で指定できる。`lib/singleplayer.mjs`）
-const browser = await chromium.launch(process.env.PW_CHROMIUM ? { executablePath: process.env.PW_CHROMIUM } : {});
+// ⚠ ブラウザの場所は決め打ちしない（ほかの画面検査と同じく `PW_CHROMIUM` で指定できる。`lib/browser.mjs`）
+const browser = await launchBrowser();
 try {
   const page = await browser.newPage({ viewport: { width: 1400, height: 1000 } });
   await page.goto('http://localhost:3000/online');

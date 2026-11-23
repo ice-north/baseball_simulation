@@ -4,15 +4,16 @@
 // ============================================================
 import { cmpStr } from './kt.js';
 
-export const SEASON_TURNS = 160;
-export const SEASON_START_MONTH = 4;
+// ⚠ 数はサーバーと同じ正本から読む（書き写すと片方だけ変わる）。アプリの Tables.kt も同じ値
+import { SEASON_TURNS } from '../pyramidLeague.js';
+import { SEASON_START_MONTH, FIELDER_REST_FATIGUE } from '../shared.js';
+
+export { SEASON_TURNS, SEASON_START_MONTH, FIELDER_REST_FATIGUE };
 export const LEAGUE_NAMES = { A: '1部', B: '2部' };
 export const STATUS_LABELS = { running: '進行中', waiting: '決定待ち', paused: '一時停止', error: '要確認・停止中' };
 export const POSITION_LABELS = {
   pitcher: '投', catcher: '捕', first: '一', second: '二', third: '三', short: '遊', left: '左', center: '中', right: '右',
 };
-/** 野手が休む疲れ（Tables.kt FIELDER_REST_FATIGUE） */
-export const FIELDER_REST_FATIGUE = 80;
 
 const date = (d) => (d && typeof d === 'object' && Number.isFinite(d.year) ? { year: d.year, month: d.month ?? 1, day: d.day ?? 1 } : null);
 const ref = (p) => (p ? { id: p.id ?? null, name: p.name ?? null } : null);

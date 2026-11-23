@@ -15,7 +15,7 @@ import { SEASON_TURNS } from './pyramidLeague.js';
 //    1 = 固定4球団・2人・1日7枠）。
 // ⚠ 上げてもリーグは**作り直せない**（`create` は既存リーグがあると拒む）。
 //    `docs/online/PRODUCTION_SETUP.md` の作り直し手順で制御行を空にすること。
-export const ONLINE_SCHEMA = 20;
+export const ONLINE_SCHEMA = 21;
 export const ONLINE_ENGINE_VERSION = 'online-1';
 
 // ---- ターンの長さ
@@ -103,10 +103,17 @@ export const shortClashMessage = (next, clash) =>
   clash.short === next
     ? `略称「${next}」は${clash.label}と同じです。別の地域名にしてください`
     : `略称「${next}」は${clash.label}の元の略称なので使えません。別の地域名にしてください`;
+/**
+ * いまのコードで読めるか（保存の形 `schema` と計算の版 `engineVersion` の両方）。
+ * ⚠ 版の照合はここ1つ。命令の門番（`assertLeagueVersion`）と移行（`leagueMigration.js`）が使う
+ */
+export const isCurrent = (league, target = ONLINE_SCHEMA) =>
+  league?.schema === target &&
+  league?.engineVersion === ONLINE_ENGINE_VERSION;
+
 export function assertLeagueVersion(league) {
   requireOnline(
-    league?.schema === ONLINE_SCHEMA &&
-      league.engineVersion === ONLINE_ENGINE_VERSION,
+    isCurrent(league),
     'ゲームのバージョンが対応していません。更新を確認してください',
     409,
     'version',

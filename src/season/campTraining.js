@@ -9,7 +9,7 @@
 // ============================================================
 
 import { PHYSICAL_STATS, getAgeGrowthBase, getStatPath, getStatName, getNestedValue, setNestedValue, physiqueMultFor, dexterityMult, dexterityShift } from './growthUtils.js';
-import { PITCHING_FORM_EFFECTS, getPitchTypeName, FORM_SHORT, BATS_SHORT, ABILITY_CAP } from '../utils/constants.js';
+import { PITCHING_FORM_EFFECTS, FORM_PITCH_SYNERGY, getPitchTypeName, FORM_SHORT, BATS_SHORT, ABILITY_CAP, ALL_PITCH_TYPES } from '../utils/constants.js';
 import { syncPositionToFitness, getVelocityCap, getVelocityCatchupMult } from '../utils/physics.js';
 // ⚠ **確率的丸め**。年次成長（`growthSystem`）と同じものを使う（二重に書かない）
 import { stochasticRound } from './growthSystem.js';
@@ -112,7 +112,9 @@ export const AWAKENING_EXPERIENCE_CAP = 1.5;
 export const TALENT_STAT_MULTIPLIERS = {
   arm: 0.3,       // 肩力: 生まれ持った体格に依存
   speed: 0.4,     // 走力: 先天的な筋繊維に依存
-  power: 0.8,     // パワー: 体幹トレーニングで伸びる余地あり
+  // パワー: 体幹トレーニングで伸びる余地あり。⚠ 0.8 → 0.5（2026-11-23）。10年でリーグのパワーが
+  //   36→48、本塁打が1試合 0.39→0.96 本と2.5倍になっていた（10年の長期シミュ）
+  power: 0.5,
   velocity: 0.8,  // 球速: フォーム改善等で伸びる余地あり
 };
 
@@ -151,7 +153,9 @@ export const TRAINING_MENUS = {
     // 実測: 得点+0.75/試合だが失点+0.73。ドラフト評価は最善
     // 能力ごとの成長倍率: パワーは才能依存のため半減、選球眼は副次効果として半減
     // ミートは1.0倍維持（+0〜2）、パワー/選球眼/バントは0.3〜0.5倍（+0〜1）
-    growthMultipliers: { power: 0.7, eye: 0.5, bunt: 0.3 },
+    // ⚠ 選球眼 0.5→1.0（2026-11-23）。投手の制球が毎クール伸びるのに選球眼だけ
+    //    伸びず、10年で四球が半分になっていた（10年の長期シミュ）
+    growthMultipliers: { power: 0.7, eye: 1.0, bunt: 0.3 },
     category: 'batting'
   },
   baserunning: {
@@ -189,7 +193,10 @@ export const TRAINING_MENUS = {
     // ⚠ **ミートと同じ速さになるところまで下げる**。0.7では 制球1.1 対
     //    ミート0.6 でまだ倍近く、投手有利が年々開いていた
     // ⚠ スタミナは据え置き（やれば伸びるもの）
-    growthMultipliers: { control: 0.45, stamina: 0.5 },
+    // ⚠ 0.45 → **0.2**（2026-11-23、いしだ「3件とも直す」）。0.45 でも10年でリーグの制球が
+    //    49→65 と伸び続け、選球眼（横ばい）との差で四球が半分になった。指導者の「長所を伸ばす」の
+    //    制球集中にも同じ係数を掛ける（`executeCampTraining` の `focusStatMult`）
+    growthMultipliers: { control: 0.2, stamina: 0.5 },
     category: 'pitching'
   },
   velocity: {
@@ -330,7 +337,7 @@ export const SUB_TRAINING_MENUS = {
   stretch: {
     name: 'ストレッチ',
     icon: '🧘',
-    description: '野手：ミート/パワー/走力/肩/守備からランダム1能力+1。投手：制球/球速/肩/守備/ミートからランダム1能力+1。回復力30%UP',
+    description: '野手：ミート/パワー/選球眼/走力/肩/守備からランダム1能力+1。投手：制球/球速/スタミナ/肩/守備/ミートからランダム1能力+1。回復力30%UP',
     targets: ['all_minor', 'recovery_sub'],
   },
   defense_sub: {
@@ -439,15 +446,21 @@ function awakeningHighStatDamp(currentValue) {
 }
 
 /**
- * 技術系能力(meet/power/eye/defense等)の高能力値成長減衰を適用
- * 70(プロ級)以上で超過1ごとに5%減衰、下限10%（サブ練習用）
+ * 技術系能力（ミート・パワー・選球眼・制球・バントなど）のサブ練習の高能力値成長減衰。
+ * **メイン練習と同じ天井**（50以上で超過1ごとに3%、下限15%）を、確率的に丸めて掛ける。
+ * ⚠ 2026-11-23 まではサブ練習だけ旧式（70から5%・`Math.round`）のままだった。+1 に 0.7 を
+ *    掛けても丸めて+1 なので、能力70台の前半まで減衰が一度も効かず、サブ練習の制球（40%で+1）が
+ *    毎年ほぼそのまま積み上がっていた。10年の長期シミュでリーグの制球が 49→69 と伸び続け、
+ *    四球が半分になった主な出どころ（キャンプの制球の伸びは、同じ能力のミートの1.6倍）。
+ * ⚠ 守備は努力で上がる能力なので別の物差し（`EFFORT_DAMP.defense`。メイン練習と同じ）
  */
-function applyTechStatDecay(currentValue, growth) {
-  if (growth <= 0 || currentValue < 70) return growth;
-  const overAmount = currentValue - 70;
-  const dampFactor = Math.max(0.10, 1.0 - overAmount * 0.05);
-  return Math.max(0, Math.round(growth * dampFactor));
+function applyTechStatDecay(currentValue, growth, curve = TECH_SUB_DAMP) {
+  if (growth <= 0 || currentValue < curve.from) return growth;
+  const dampFactor = Math.max(curve.floor, 1.0 - (currentValue - curve.from) * curve.rate);
+  return Math.max(0, stochasticRound(growth * dampFactor));
 }
+/** サブ練習の技術系の天井（メイン練習の技術系と同じ値） */
+const TECH_SUB_DAMP = { from: 50, rate: 0.03, floor: 0.15 };
 
 /**
  * サブ練習を実行（メイン練習の半分程度の効果）
@@ -535,17 +548,22 @@ export function executeSubTraining(player, subType, options = {}, staffBonus = n
       break;
     }
     case 'stretch': {
-      // 投手は制球・球速含む5能力、野手はミート・パワー・走力・肩力・守備からランダム1つ+1
+      // 投手は制球・球速・スタミナ含む6能力、野手はミート・パワー・選球眼・走力・肩力・守備からランダム1つ+1
+      // ⚠ 野手に選球眼、投手にスタミナを足した（2026-11-23）。指導者の「満遍なく」のサブ練習はこれで、
+      //    毎クール必ずどれかが+1になる。野手は選球眼が候補に無く、投手は制球・球速に2割ずつ入るので、
+      //    10年でリーグの制球が 49→69・選球眼は横ばいになり、四球が半分になっていた（10年の長期シミュ）
       const isPitcher = player.position === 'pitcher';
       const stats = isPitcher ? [
         { key: 'pitching.control', name: '制球', isTech: true },
         { key: 'pitching.velocity', name: '球速', isTech: false, isVelocity: true },
+        { key: 'pitching.stamina', name: 'スタミナ', isTech: false, isStamina: true },
         { key: 'physical.arm', name: '肩力', isTech: false },
         { key: 'fielding.defense', name: '守備', isTech: true },
         { key: 'batting.meet', name: 'ミート', isTech: true },
       ] : [
         { key: 'batting.meet', name: 'ミート', isTech: true },
         { key: 'batting.power', name: 'パワー', isTech: true },
+        { key: 'batting.eye', name: '選球眼', isTech: true },
         { key: 'physical.speed', name: '走力', isTech: false },
         { key: 'physical.arm', name: '肩力', isTech: false },
         { key: 'fielding.defense', name: '守備', isTech: true },
@@ -562,7 +580,8 @@ export function executeSubTraining(player, subType, options = {}, staffBonus = n
           gain = picked.isTech ? applyTechStatDecay(old, 1) : 1;
         }
         if (gain > 0) {
-          const maxVal = picked.isVelocity ? getVelocityCap(player.physical?.arm || 50) : ABILITY_CAP;
+          // ⚠ スタミナは 1〜200 の物差し（`executeCampTraining` の maxValue と同じ）
+          const maxVal = picked.isVelocity ? getVelocityCap(player.physical?.arm || 50) : picked.isStamina ? 200 : ABILITY_CAP;
           player[obj][prop] = Math.min(maxVal, old + gain);
           growthReport.push({ statName: picked.name, before: old, after: player[obj][prop], growth: gain });
           if (picked.key === 'physical.arm' && !isPitcher) {
@@ -591,7 +610,7 @@ export function executeSubTraining(player, subType, options = {}, staffBonus = n
       const defRaw = growthAmount();
       if (defRaw > 0 && player.fielding) {
         const oldDef = player.fielding.defense || 50;
-        const def = applyTechStatDecay(oldDef, defRaw);
+        const def = applyTechStatDecay(oldDef, defRaw, EFFORT_DAMP.defense);
         if (def > 0) {
           player.fielding.defense = Math.min(ABILITY_CAP, oldDef + def);
           growthReport.push({ statName: '守備', before: oldDef, after: player.fielding.defense, growth: def });
@@ -830,7 +849,8 @@ export function executeSubTraining(player, subType, options = {}, staffBonus = n
           const baseRate = 0.22;
           // ⚠ フォーム適性を足した**後**に器用さを掛ける。先に掛けると
           //    上限 0.32 のクランプで器用さが消える
-          const successRate = (formAff ? Math.min(0.40, baseRate + formAff.affinity) : baseRate)
+          // スリークォーターは適性球が無い代わりに、どの球種も少し覚えやすい（`newPitchLearnBonus`）
+          const successRate = Math.min(0.40, baseRate + newPitchLearnBonus(playerForm, newType))
             * dexterityMult(player, 0.8);
           if (Math.random() < successRate) {
             const level = 20 + Math.floor(Math.random() * 20);
@@ -1094,39 +1114,44 @@ function getBattingOrderGrowthBonus(player, targetStat) {
   return weightedBonus || 1.0;
 }
 
-// 利用可能な全変化球（新球種習得用）
-const ALL_PITCH_TYPES = [
-  'slider', 'curve', 'fork', 'changeup', 'sinker', 'shoot',
-  'cutter', 'splitter', 'twoSeam', 'palm', 'knuckle'
-];
-
 // フォーム別の変化球適性（習得しやすさ・成長ボーナス）
 // affinity: 習得成功率ボーナス(加算), growth: 変化球練習の成長倍率
-const FORM_PITCH_AFFINITY = {
-  overhand: {
-    fork: { affinity: 0.15, growth: 1.5 },
-    curve: { affinity: 0.10, growth: 1.3 },
-    splitter: { affinity: 0.10, growth: 1.3 },
-  },
-  threeQuarter: {
-    slider: { affinity: 0.10, growth: 1.3 },
-    changeup: { affinity: 0.10, growth: 1.3 },
-    cutter: { affinity: 0.10, growth: 1.3 },
-  },
-  sidearm: {
-    sinker: { affinity: 0.15, growth: 1.5 },
-    slider: { affinity: 0.10, growth: 1.3 },
-    shoot: { affinity: 0.10, growth: 1.3 },
-  },
-  submarine: {
-    sinker: { affinity: 0.20, growth: 1.7 },
-    changeup: { affinity: 0.10, growth: 1.3 },
-    twoSeam: { affinity: 0.10, growth: 1.3 },
-  },
+// ⚠ **どの球種が適性かは試合の表（`constants.js` の `FORM_PITCH_SYNERGY`）が正本**。
+//    以前はここに別の一覧があり、アンダースローの適性がキャンプでは changeup・twoSeam、
+//    試合では sinker・curve・palm と食い違っていた（「相性◎」で練習した球が試合では×0.88）。
+//    ここで決めるのは**適性球のボーナスの大きさだけ**。`FORM_PITCH_STRONG` に無い適性球は
+//    標準（+0.10・×1.3）。スリークォーターは試合の表で「すべて平均」なので適性球は無い。
+// ⚠ 大学の新球種（`universityPool` の UNI_FORM_PITCH_AFFINITY）はこの表のキーの順
+//    （＝`FORM_PITCH_SYNERGY` の並び）を使う
+const FORM_PITCH_DEFAULT_AFF = { affinity: 0.10, growth: 1.3 };
+const FORM_PITCH_STRONG = {
+  overhand: { fork: { affinity: 0.15, growth: 1.5 } },
+  sidearm: { sinker: { affinity: 0.15, growth: 1.5 } },
+  submarine: { sinker: { affinity: 0.20, growth: 1.7 } },
 };
+export const FORM_PITCH_AFFINITY = Object.fromEntries(
+  Object.entries(FORM_PITCH_SYNERGY).map(([form, list]) => [form, Object.fromEntries(
+    list.map(t => [t, { ...(FORM_PITCH_STRONG[form]?.[t] || FORM_PITCH_DEFAULT_AFF) }]))]));
 
 function getFormPitchAffinity(form, pitchType) {
   return FORM_PITCH_AFFINITY[form]?.[pitchType] || null;
+}
+
+/**
+ * 新球種の**覚えやすさ**の加算（キャンプだけ。試合の効き目には関わらない）。
+ * 適性球ならその `affinity`。適性球の無い「すべて平均」のフォーム（スリークォーター）は、
+ * どの球種でも `ALL_ROUND_LEARN_BONUS` だけ覚えやすい。
+ * ⚠ いしだ 2026-11-23「おねがいします」（案A）。相性の表を試合の表 1 つにしたら、
+ *    スリークォーターは適性球が無くなり、新球種の取得が 1クール約30%→約22% に落ちた。
+ *    試合の表に適性球を足すと他の球が ×0.88 に弱くなる（標準のフォームなので影響が大きい）ので、
+ *    試合はそのまま「すべて平均」とし、キャンプの覚えやすさだけ戻す。
+ *    +0.08 は、他のフォームの実測（1クール約30〜31%・4クールで約75%）にそろうように選んだ
+ */
+const ALL_ROUND_LEARN_BONUS = { threeQuarter: 0.08 };
+function newPitchLearnBonus(form, pitchType) {
+  const aff = getFormPitchAffinity(form, pitchType);
+  if (aff) return aff.affinity;
+  return FORM_PITCH_SYNERGY[form]?.length === 0 ? (ALL_ROUND_LEARN_BONUS[form] || 0) : 0;
 }
 
 // 速球系変化球・緩急系変化球の分類
@@ -1199,7 +1224,7 @@ export function executeCampTraining(player, trainingType, newPitchType, staffBon
     if (targetType && !existingTypes.includes(targetType)) {
       // フォーム適性ボーナス（適性球種は失敗率が下がる）
       const formAff = getFormPitchAffinity(updatedPlayer.pitching?.form, targetType);
-      const formBonus = formAff ? formAff.affinity : 0;
+      const formBonus = newPitchLearnBonus(updatedPlayer.pitching?.form, targetType);
       // 第2適性（緩急補完）ボーナス
       const hasSecondAffinity = updatedPlayer.pitching?.secondAffinity === targetType;
       const affinityBonus = formBonus + (hasSecondAffinity ? 0.08 : 0);
@@ -1338,7 +1363,12 @@ export function executeCampTraining(player, trainingType, newPitchType, staffBon
       // という反転が**既存の減衰カーブだけで**成立する（新しい係数を作らない）。
       const rawBase = (Math.floor(Math.random() * 3) + 1) * ageMultiplier * expBonus;
       const rawFocus = (Math.floor(Math.random() * 4) + 1) * ageMultiplier * expBonus;
-      rawGrowth = ((rawBase + rawFocus) * 0.14 * INTENSIVE_FOCUS
+      // ⚠ 制球の集中にも、投げ込みと同じ係数（0.2）を掛ける（`TRAINING_MENUS.control` の注と同じ理由）。
+      //    指導者の「長所を伸ばす」は投手の技術を制球と守備の2つでしか比べないので、ほとんどの投手が
+      //    毎年「制球集中」になる。野手の集中はミート・パワー・選球眼・守備・盗塁に散るので、制球だけが
+      //    積み上がり、10年でリーグの制球が 49→69・四球が半分になった（10年の長期シミュ 2026-11-23）
+      const focusStatMult = targetStat === 'control' ? TRAINING_MENUS.control.growthMultipliers.control : 1.0;
+      rawGrowth = ((rawBase + rawFocus) * 0.14 * INTENSIVE_FOCUS * focusStatMult
         * talentMult * aptitudeFactor * physiqueMult * disciplineMult
         * campPotMult * coachingMult * moodMult * (isPhysical ? fitnessMult : 1.0) * stopAgeGate);
       isAwakening = false;
@@ -1452,8 +1482,11 @@ export function executeCampTraining(player, trainingType, newPitchType, staffBon
       // ⚠ スタミナ・体力だけは最低+1を残す（やれば伸びるもの。いしだ方針）
       if ((targetStat === 'stamina' || targetStat === 'bodyStamina') && totalGrowth < 1) totalGrowth = 1;
       // ⚠ 集中練習で代償（減点）が出たクールは、伸びが0のまま減点だけにしない
+      // ⚠ 最低保証にも高能力値の減衰を掛ける（2026-11-23）。そのままの+1だと、代償の出る半分の
+      //    クールで減衰を素通りして必ず+1入り、集中した能力が天井なく伸び続けた（制球が
+      //    能力62でも1年+1.6。10年でリーグの制球 49→69・四球が半分）。期待値で丸める
       if (menu.intensive && penaltyCount > 0 && totalGrowth < INTENSIVE_PENALTY_FLOOR)
-        totalGrowth = INTENSIVE_PENALTY_FLOOR;
+        totalGrowth = Math.max(totalGrowth, stochasticRound(INTENSIVE_PENALTY_FLOOR * dampFactor));
       const armForCap = getNestedValue(updatedPlayer, getStatPath('arm')) || 50;
       // ⚠ 1〜99 の物差しの能力は ABILITY_CAP で止める（100 で止めていて、98 から練習すると100になった。2026-11-20 監査）
       const maxValue = targetStat === 'velocity' ? getVelocityCap(armForCap) : targetStat === 'stamina' ? 200 : ABILITY_CAP;
@@ -1539,7 +1572,7 @@ export function executeCampTraining(player, trainingType, newPitchType, staffBon
 }
 
 // getPitchTypeName は utils/constants.js（BALL_EFFECTS が出典）から取り込んで再輸出する
-export { ALL_PITCH_TYPES, getPitchTypeName, FORM_PITCH_AFFINITY };
+export { ALL_PITCH_TYPES, getPitchTypeName };
 
 /**
  * チーム全体のキャンプ練習を実行

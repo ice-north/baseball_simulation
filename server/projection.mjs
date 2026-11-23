@@ -14,8 +14,13 @@ import { expectedNaturalGrowth, teamRankMult } from '../src/season/growthSystem.
 import {
   PHASE_LABELS,
   ONLINE_SCHEMA,
+  ONLINE_ENGINE_VERSION,
   CAMP_ROUNDS,
   phaseDeadlineAt,
+  requireOnline,
+  seasonStage,
+  ROSTER_LIMIT,
+  ROSTER_STANDARD,
 } from '../src/online/shared.js';
 import { isCurrent, migrationState } from '../src/online/leagueMigration.js';
 import {
@@ -34,7 +39,7 @@ import { ownerRecords } from './ownerRecords.mjs';
 import { seasonReview } from './seasonReview.mjs';
 import { strategyStats } from '../src/online/strategyStats.js';
 import { tiesArticles } from '../src/online/hometown.js';
-import { teamDisplayOf, teamHomeOf } from '../src/online/membership.js';
+import { teamDisplayOf, teamHomeOf, teamLabelIn } from '../src/online/membership.js';
 import {
   currentPlayerStats,
   currentSeasonStats,
@@ -47,16 +52,10 @@ import {
   statisticsContext,
 } from './recordedViews.mjs';
 import { recordForPlayer } from './recordedStats.mjs';
-import {
-  requireOnline,
-  seasonStage,
-  ROSTER_LIMIT,
-  ROSTER_STANDARD,
-} from '../src/online/shared.js';
 import { getAIReleaseCandidates, releaseScore } from '../src/game/contractRules.js';
 import { SEASON_TURNS, PYRAMID_LEAGUES } from '../src/online/pyramidLeague.js';
 import { ownStaffView, leagueStaffView, teamStaffView, phasePlanBy } from './coachView.mjs';
-import { releaseBiasFor, campPlanFor, phaseDelegated, staffOf } from './coachEngine.mjs';
+import { releaseBiasFor, campPlanFor, phaseDelegated, staffOf, waitsFor } from './coachEngine.mjs';
 import { createTradeJudge } from './tradeJudge.mjs';
 import { yearSummaryFor } from './yearSummary.mjs';
 import { CPU_ACCEPT_MARGIN } from '../src/online/trades.js';
@@ -68,7 +67,7 @@ import {
   STARTER_LOCK_TURNS,
   STARTER_PICK_GAMES,
 } from '../src/online/social.js';
-import { canPickStarters, starterContext } from './starterPicks.mjs';
+import { canPickStarters, starterContext, ownGamesByDate } from './starterPicks.mjs';
 import { exhibitionsView } from './exhibition.mjs';
 import { proWatchList } from './proDraft.mjs';
 import { tryoutInterest, tryoutPickOrder } from '../src/online/tryoutPlan.js';
@@ -224,15 +223,7 @@ export function ownUpcomingGames(schedule, ownTeam, size = 6) {
   // ⚠ **その球団の何試合目かを数える**。日付はゲーム内の暦で、1ターン＝1日の
   //    うえ休養日が飛ぶので、「4/18」と言われても何試合目かが読めない。
   //    消化済みも含めて日付順に並べ、その位置を番号にする。
-  const own = schedule
-    .filter(
-      (g) =>
-        g.date &&
-        g.home !== 'TBD' &&
-        g.away !== 'TBD' &&
-        (g.home === ownTeam || g.away === ownTeam),
-    )
-    .sort((a, b) => dateKey(a.date) - dateKey(b.date) || a.id - b.id);
+  const own = ownGamesByDate(schedule, ownTeam);
   const upcoming = [];
   own.forEach((g, i) => {
     if (g.result) return;
@@ -313,15 +304,7 @@ function homerunsOf(league, game, year) {
  *    数え方を変えると、同じ試合が画面の左右で違う番号になる。
  */
 export function ownRecentGames(schedule, ownTeam, size = 5, league = null) {
-  const own = schedule
-    .filter(
-      (g) =>
-        g.date &&
-        g.home !== 'TBD' &&
-        g.away !== 'TBD' &&
-        (g.home === ownTeam || g.away === ownTeam),
-    )
-    .sort((a, b) => dateKey(a.date) - dateKey(b.date) || a.id - b.id);
+  const own = ownGamesByDate(schedule, ownTeam);
   const played = [];
   own.forEach((g, i) => {
     if (!g.result) return;
@@ -488,7 +471,117 @@ const watchMark = (watch, p) => {
   return w ? { proWatch: { npb: w.npb, level: w.level } } : {};
 };
 
-export function projectLeague(bundle, userId, sessionId, adminId) {
+/**
+ * 参加者のビューを何人ぶんも続けて作るときに、リーグ全体で同じ部分を使い回す入れ物。
+ * `projectLeague(…, shared)` に同じものを渡すと、2人目からは順位・リーダー・球団史・12球団の戦力などを
+ * 作り直さない（保存のたびに参加者の人数ぶん＝最大12回作っていた。監査 2026-11-23 の整理の候補2）。
+ * ⚠ **同じリーグの同じ状態の間だけ**使うこと（作ってからリーグを変えたら新しい入れ物にする）。
+ *    保存のときのように「命令が済んでから全員ぶん作る」ところで使う。念のため版（`revision`）が
+ *    変わっていたら作り直すが、版を上げずに書く処理（最後に来た時刻など）もあるので頼りにしない
+ */
+export const createViewShared = () => ({ league: null, revision: null, wide: null, items: null });
+const sharedFor = (shared, l) => shared?.league === l && shared.revision === l.revision;
+
+/**
+ * リーグ全体で同じ部分（参加者によらない）。`shared` があればそこに置いて使い回す。
+ * ⚠ ここに入れるのは**誰が見ても同じもの**だけ。自球団・本人で変わるものを入れると、他の人に漏れる
+ */
+function leagueWideOf(l, shared) {
+  if (sharedFor(shared, l) && shared.wide) return shared.wide;
+  const statistics = statisticsContext(l);
+  // ⚠ **表示名は内部名と別に持つ**。参加した人が付けた球団名を画面に出すため。
+  //    内部名（`teamName` / 順位表 / 日程）は記録の選手キーまで貫いているので
+  //    変えられない。表示のときだけこの表で引く。
+  // ⚠ 略称は**名前を付け替えたときだけ**表示名の頭3文字にする。参加すると表示名は
+  //    既定の名前（内部名と同じ）でも必ず入るので、`displayName` の有無で分けると
+  //    名前を付けずに入った球団まで「新潟ブ」のようになっていた（再監査 F16）
+  // ⚠ **地域名を付けた球団は、略称はその地域名**（いしだ 2026-11-20「地域名とチーム名を
+  //    分けましょう。じゃないと略称名がダサくなってしまう」）。分けずに付け替えた
+  //    古い球団だけ、今までどおり頭3文字にする
+  const teamLabels = Object.fromEntries(
+    // ⚠ 名前ひとそろいの作り方は `membership.js` の `teamDisplayOf`（2か所に書かない）
+    (l.teams || []).map((t) => [t.name, teamDisplayOf(t)]),
+  );
+  const labelOf = (name) => teamLabels[name]?.label || name;
+  // ⚠ 成績の引き当ては**1回だけ**。12球団×24人＝288人を、ベスト5と
+  //    チーム打率・チーム防御率で別々に引くと、同じ計算を2度する
+  const seasonStatsCache = new Map();
+  const seasonStatsOf = (teamName, player) => {
+    if (!seasonStatsCache.has(player.id))
+      seasonStatsCache.set(
+        player.id,
+        currentSeasonStats(l, teamName, player, statistics),
+      );
+    return seasonStatsCache.get(player.id);
+  };
+  // 球団史（リーグ全体の最近のもの）。表彰（`honors`）は「その年のまとめ」でも使い回す
+  const chronicle = chronicleView(l);
+  // ドラフトの気配（リーグ全体。紙面の記事と名簿の札）
+  const proWatch = proWatchFor(l);
+  const wide = {
+    statistics,
+    teamLabels,
+    labelOf,
+    seasonStatsOf,
+    chronicle,
+    proWatch,
+    watchById: new Map(proWatch.map((w) => [w.id, w])),
+  };
+  if (shared) {
+    shared.league = l;
+    shared.revision = l.revision;
+    shared.wide = wide;
+    shared.items = null;
+  }
+  return wide;
+}
+
+/**
+ * ビューのうちリーグ全体で同じ項目（順位・リーダー・マジック・12球団の戦力・通算ランキングなど）。
+ * `leagueWideOf` の入れ物に一緒に置き、2人目からは使い回す。
+ * ⚠ 誰が見ても同じものだけ（自球団・本人で変わるものを入れない）
+ */
+function leagueWideItems(l, wide, shared) {
+  if (sharedFor(shared, l) && shared.items) return shared.items;
+  const { teamLabels, labelOf, seasonStatsOf } = wide;
+  // 球団ごとのレギュラーシーズンの残り試合（ペースとマジックで共用。日程を2回なめない）
+  const left = remainingGames(l.season.schedule);
+  const items = {
+    // 球団ごとの所属リーグ（'A'＝1部、'B'＝2部）。順位表を部ごとに分けるため
+    teamLeagues: Object.fromEntries(
+      (l.teams || []).map((t) => [t.name, t.league]),
+    ),
+    teamStreaks: teamStreaks(l.season.schedule),
+    leaders: withPace(leagueLeaders(l, seasonStatsOf, labelOf), l, left),
+    races: leagueRaces(l, left),
+    seasonReview: seasonReview(l, (name) => teamLabels[name]?.short || name),
+    teamStats: teamSeasonStats(l, seasonStatsOf),
+    teamRatings: Object.fromEntries(
+      (l.season.settings.teamNames || []).map((name) => {
+        const t = l.game.teams[name];
+        return [name, t ? teamRatings(t.players || [], projectLineup(t)) : null];
+      }),
+    ),
+    abilityLeaders: abilityLeaders(l, labelOf),
+    careerLeaders: careerLeaders(l),
+    results: l.season.results.slice(-14).map((g) => ({
+      gameId: g.gameId,
+      date: g.date,
+      home: g.home,
+      away: g.away,
+      homeScore: g.result.homeScore,
+      awayScore: g.result.awayScore,
+      decisions: decisionRefs(g.result.decisions),
+    })),
+  };
+  if (sharedFor(shared, l)) shared.items = items;
+  return items;
+}
+
+/**
+ * @param shared 何人ぶんも続けて作るときの入れ物（`createViewShared`）。無ければ毎回作る
+ */
+export function projectLeague(bundle, userId, sessionId, adminId, shared = null) {
   const l = bundle.league;
   if (!l) return { setupRequired: true, isAdmin: userId === adminId };
   // ⚠ **古い形のまま投影しない**。ビューには最新の版の印を押すので、
@@ -516,43 +609,15 @@ export function projectLeague(bundle, userId, sessionId, adminId) {
       writable: isLiveSession(bundle.sessions, userId, sessionId),
     };
   const team = l.game.teams[member.teamName];
-  const statistics = statisticsContext(l);
-  // ⚠ **表示名は内部名と別に持つ**。参加した人が付けた球団名を画面に出すため。
-  //    内部名（`teamName` / 順位表 / 日程）は記録の選手キーまで貫いているので
-  //    変えられない。表示のときだけこの表で引く。
-  // ⚠ 略称は**名前を付け替えたときだけ**表示名の頭3文字にする。参加すると表示名は
-  //    既定の名前（内部名と同じ）でも必ず入るので、`displayName` の有無で分けると
-  //    名前を付けずに入った球団まで「新潟ブ」のようになっていた（再監査 F16）
-  // ⚠ **地域名を付けた球団は、略称はその地域名**（いしだ 2026-11-20「地域名とチーム名を
-  //    分けましょう。じゃないと略称名がダサくなってしまう」）。分けずに付け替えた
-  //    古い球団だけ、今までどおり頭3文字にする
-  const teamLabels = Object.fromEntries(
-    // ⚠ 名前ひとそろいの作り方は `membership.js` の `teamDisplayOf`（2か所に書かない）
-    (l.teams || []).map((t) => [t.name, teamDisplayOf(t)]),
-  );
-  const labelOf = (name) => teamLabels[name]?.label || name;
-  // ⚠ 成績の引き当ては**1回だけ**。12球団×24人＝288人を、ベスト5と
-  //    チーム打率・チーム防御率で別々に引くと、同じ計算を2度する
-  const seasonStatsCache = new Map();
-  const seasonStatsOf = (teamName, player) => {
-    if (!seasonStatsCache.has(player.id))
-      seasonStatsCache.set(
-        player.id,
-        currentSeasonStats(l, teamName, player, statistics),
-      );
-    return seasonStatsCache.get(player.id);
-  };
+  // リーグ全体で同じ部分（表示名・成績の引き当て・球団史・ドラフトの気配など）。`leagueWideOf`
+  const wide = leagueWideOf(l, shared);
+  const { statistics, teamLabels, labelOf, seasonStatsOf, chronicle, proWatch, watchById } = wide;
   const phase = l.phase;
   // 予告先発の重ね方。自球団の指名は確定前から、ほかの球団の指名は確定してから出す
   // ⚠ 確定したときに控えた先発（`lockStarters`）も重ねる。試合の日はその投手が投げる
   const pickContext = starterContext(l, member.teamName);
-  // 球団ごとのレギュラーシーズンの残り試合（ペースとマジックで共用。日程を2回なめない）
-  const left = remainingGames(l.season.schedule);
-  // 球団史（リーグ全体の最近のもの）。表彰（`honors`）は「その年のまとめ」でも使い回す
-  const chronicle = chronicleView(l);
-  // ドラフトの気配（リーグ全体。紙面の記事と名簿の札）
-  const proWatch = proWatchFor(l);
-  const watchById = new Map(proWatch.map((w) => [w.id, w]));
+  // ⚠ 順位・リーダー・12球団の戦力など、誰が見ても同じ項目（`leagueWideItems`）
+  const items = leagueWideItems(l, wide, shared);
   return {
     // ⚠ **このビューを作ったコードの版**。`LeagueService.view` がここを見て、
     //    古い形のリーグを表示させない。ビューは保存済みのものがそのまま
@@ -560,6 +625,8 @@ export function projectLeague(bundle, userId, sessionId, adminId) {
     //    読まないので `assertLeagueVersion` が一度も走らない。実際、
     //    固定4球団の頃のリーグが2部制のコードで**そのまま表示された**。
     schema: ONLINE_SCHEMA,
+    // ⚠ 計算の版も押す（形が同じで計算だけ上がったときに、保存済みのビューを止めるため）
+    engineVersion: ONLINE_ENGINE_VERSION,
     revision: l.revision,
     status: l.status,
     error: l.error,
@@ -611,9 +678,7 @@ export function projectLeague(bundle, userId, sessionId, adminId) {
     // 球団ごとの所属リーグ（'A'＝1部、'B'＝2部）。順位表を部ごとに分けるため。
     // ⚠ 順位表（`standings`）は全12球団を通した並びなので、そのままだと
     //    1部と2部が混ざって見える。
-    teamLeagues: Object.fromEntries(
-      (l.teams || []).map((t) => [t.name, t.league]),
-    ),
+    teamLeagues: items.teamLeagues,
     // 人が持っている球団 → その人の呼び名。順位表に括弧で添える。
     // ⚠ CPUは載せない（誰かが持っているように見える）。
     // ⚠ 呼び名が球団名と同じときも載せない。参加時の既定が球団名なので、
@@ -629,12 +694,10 @@ export function projectLeague(bundle, userId, sessionId, adminId) {
       teamName: m.teamName,
       // ⚠ 自チーム情報の画面が「いまの球団名」を出すのに使う
       displayName: m.displayName || teamLabels[m.teamName]?.label || m.teamName,
-      ready:
-        !!phase?.submissions[m.userId]?.ready ||
-        pendingPackAuto(phase, m) ||
-        phaseDelegated(l, m),
+      // ⚠ 手続きが待つかどうかと同じ判定（`coachEngine` の `waitsFor`）。2か所に書かない
+      ready: !!phase && !waitsFor(l, m),
       // ⚠ 途中参加でセットを待っている人の球団は、キャンプまでCPUが決める
-      //    （手続きはこの人の決定を待たない。`leagueEngine` の `waitsFor`）
+      //    （手続きはこの人の決定を待たない。`coachEngine` の `waitsFor`）
       ...(pendingPackAuto(phase, m) && !phase?.submissions[m.userId]?.ready
         ? { cpu: true }
         : {}),
@@ -649,39 +712,26 @@ export function projectLeague(bundle, userId, sessionId, adminId) {
     })),
     standings: l.season.standings,
     // 球団ごとの今の連勝・連敗（全国紙の「○○、5連勝」）。引き分けは続きを切る
-    teamStreaks: teamStreaks(l.season.schedule),
+    teamStreaks: items.teamStreaks,
     // ⚠ 各項目の上位10人（Web は5人まで出す）。12球団×24人をなめるので**1回の投影で1度だけ**作る
     // ⚠ 数える項目の上位には「このままなら年間○」（`pace`）を添える
-    leaders: withPace(leagueLeaders(l, seasonStatsOf, labelOf), l, left),
+    leaders: items.leaders,
     // 優勝・昇格・残留のマジックと決定（部ごと）。手続きの時期も決着は残す
-    races: leagueRaces(l, left),
+    races: items.races,
     // 節目の記録・引退・裏の大会（リーグ全体の最近のもの）
     chronicle,
     // 今季総括号（年度更新のあと〜開幕前だけ。文はサーバーが作る。`seasonReview.mjs`）
-    seasonReview: seasonReview(l, (name) => teamLabels[name]?.short || name),
+    seasonReview: items.seasonReview,
     // 記録完備時は出場当時の球団に集計する。旧・部分記録の控えには同じ個人成績を使う。
-    teamStats: teamSeasonStats(l, seasonStatsOf),
+    teamStats: items.teamStats,
     // チーム能力値（チーム分析のレーダー。全球団。見せるだけで強さには効かない。`teamRatings.js`）
-    teamRatings: Object.fromEntries(
-      (l.season.settings.teamNames || []).map((name) => {
-        const t = l.game.teams[name];
-        return [name, t ? teamRatings(t.players || [], projectLineup(t)) : null];
-      }),
-    ),
+    teamRatings: items.teamRatings,
     // ⚠ 能力ランキングは**リーグ全球団**の中で並べる。画面は自球団の名簿しか
     //    持っていないので、並べ替えはここで済ませて渡す
-    abilityLeaders: abilityLeaders(l, labelOf),
+    abilityLeaders: items.abilityLeaders,
     // 通算成績ランキング（リーグ全球団の選手。退団した選手も残す）
-    careerLeaders: careerLeaders(l),
-    results: l.season.results.slice(-14).map((g) => ({
-      gameId: g.gameId,
-      date: g.date,
-      home: g.home,
-      away: g.away,
-      homeScore: g.result.homeScore,
-      awayScore: g.result.awayScore,
-      decisions: decisionRefs(g.result.decisions),
-    })),
+    careerLeaders: items.careerLeaders,
+    results: items.results,
     // ⚠ ホームに出す**自球団の次の6試合**。リーグ全体の一覧（`upcoming`）とは
     //    別物。試合結果の画面はリーグ全体を使うので、そちらを絞らないこと。
     //    ⚠ ここだけ `seasonStatsOf` を渡して、先発予定に投げる手と今季成績を
@@ -807,7 +857,7 @@ export function projectLeague(bundle, userId, sessionId, adminId) {
           // 標準案を出した人（「山田監督の案」）と、任せているか。手続きの画面の見出しに出す
           planBy: phasePlanBy(l, member.teamName, phase.kind),
           // ⚠ この手続きを指導者に任せているか。任せた手続きはこの人の決定を待たない
-          //    （`leagueEngine` の `waitsFor`）ので、「決めてください」の知らせを出さない（`notices.js`）。
+          //    （`coachEngine` の `waitsFor`）ので、「決めてください」の知らせを出さない（`notices.js`）。
           //    `planBy` は案を出す人が居ないと null になるので、これとは別に渡す
           delegated: phaseDelegated(l, member),
           submission: phase.submissions[userId] || null,
@@ -949,8 +999,7 @@ export function projectTeamInfo(bundle, userId, teamName, context = null) {
       .filter((p) => p.onlinePlayerId)
       .map((p) => [p.onlinePlayerId, p.id]),
   );
-  const labelOf = (name) =>
-    (l.teams || []).find((t) => t.name === name)?.displayName || name;
+  const labelOf = (name) => teamLabelIn(l, name);
   // トレードの値段。⚠ **CPUの判断と同じ関数**（`tradeJudge`）で作ること。画面の見込み
   //    メーターはこの値段で境目を引くので、別の式だと「受けるはず」と出したのに断られる。
   // ⚠ CPU球団の名簿は**その球団の事情こみ**（抜けると穴が空く主力ほど高く、代わりが

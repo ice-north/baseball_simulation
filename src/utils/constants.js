@@ -186,6 +186,15 @@ export const FORM_OPTIONS = Object.keys(PITCHING_FORM_EFFECTS).map(k => ({ key: 
 /**
  * 投球フォームと相性の良い変化球（ボーナス適用）
  */
+// 利用可能な全変化球（新球種習得の候補。⚠ 順を変えない——候補の選び方が順に依る）
+export const ALL_PITCH_TYPES = [
+  'slider', 'curve', 'fork', 'changeup', 'sinker', 'shoot',
+  'cutter', 'splitter', 'twoSeam', 'palm', 'knuckle'
+];
+
+// ⚠ **フォームと球種の相性の正本**。試合（`formPitchBonus`）・自然成長（`tryLearnNewPitch`）・
+//    キャンプ（`campTraining` の `FORM_PITCH_AFFINITY` はここから作る）・画面の「★フォーム適性」・
+//    大学の新球選びがみなこの一覧を読む。別の表を作らないこと
 export const FORM_PITCH_SYNERGY = {
   overhand: ['curve', 'fork', 'splitter', 'knuckle'],      // 縦変化
   threeQuarter: [],                                         // すべて平均的
@@ -262,8 +271,8 @@ export const DP_BASE = 34;
 /**
  * フォームと球種の相性が**試合の効きに与える倍率**。
  *
- * ⚠ `FORM_PITCH_SYNERGY` は長らく**キャンプの成長倍率と習得成功率にしか
- * 効いていなかった**。そのため同じレベルで揃えると
+ * ⚠ 以前は相性が**試合に効いていなかった**（キャンプの練習にだけ効いていた。
+ * そのキャンプも別の表を持っていたが、今は `FORM_PITCH_SYNERGY` から作る）。そのため同じレベルで揃えると
  *   サイド＋シンカー(適性) 2.670 対 サイド＋フォーク(適性外) 2.643
  * と適性が結果に一切出ず、「サイド・アンダースローはシンカーが武器」という
  * 設計が球速ペナルティ（アンダーは×0.92）だけ受けて損をする形になっていた。
@@ -635,10 +644,24 @@ export const getFatigueGrowthPenalty = (fatigue) => {
  * ⚠ 投手かどうかの判定は「スタミナ100以上なら投手」という当て推量を含む
  *    （野手も `pitching.stamina` を持つため）。投手から野手へコンバートした
  *    選手はスタミナが高いままなので、印を付けないと**登録を変えても投げ続ける**。
- * ⚠ 判定は3か所にある（`isPitcherPlayer`・`autoSimulation` の中の写し・
- *    `generatePitchingRotation` の絞り込み）。この印は**その全部で見ること**。
+ * ⚠ 投手かどうかの判定は下の `isPitcherPlayer` の1か所だけ（試合と `generatePitchingRotation`
+ *    の両方がこれを使う）。写しを置くと、この印を見落とした方だけ投げ続ける。
  */
 export const registeredAsFielder = (player) => player?.primaryRole === 'fielder';
+
+/** 選手が投手かどうか（position だけでなく能力値も見る） */
+export const isPitcherPlayer = (player) => {
+  // ⚠ **コンバートで野手にした選手は投手にしない**。下の「スタミナ100以上」は
+  //    当て推量なので、投手から野手へ移した選手が投げ続けてしまう
+  if (registeredAsFielder(player)) return false;
+  // 明示的にpitcherと設定されている場合
+  if (player.position === 'pitcher') return true;
+  // 投手としての能力を持っている（スタミナ100以上は投手専用）
+  if (player.pitching?.stamina >= 100) return true;
+  // primaryRoleが設定されている場合はそれを優先
+  if (player.primaryRole === 'pitcher') return true;
+  return false;
+};
 
 /**
  * 疲労の重さ → 画面で名前に付ける色の段。
@@ -851,3 +874,19 @@ export const rosterCounts = (players) => {
   for (const p of players || []) counts[rosterGroup(p.position)] += 1;
   return counts;
 };
+
+// ============================================================
+// 空の成績欄（新しく作る選手に入れる）。⚠ 2つの形がある。混ぜないこと
+// ============================================================
+
+/** 空の成績（試合数・セーブ/ホールド・失点・球数まで持つ形。トライアウト・高校生・OB） */
+export const createEmptyStats = () => ({
+  batting: { games: 0, atBats: 0, hits: 0, doubles: 0, triples: 0, homeruns: 0, rbis: 0, walks: 0, strikeouts: 0, stolenBases: 0, sacrificeBunts: 0 },
+  pitching: { games: 0, wins: 0, losses: 0, saves: 0, holds: 0, inningsPitched: 0, runsAllowed: 0, earnedRuns: 0, hits: 0, homeruns: 0, walks: 0, strikeouts: 0, pitches: 0 },
+});
+
+/** 大学・独立の補充で入れる今季の成績（盗塁死・先発/救援・対戦打者まで持つ形） */
+export const blankSeasonStats = () => ({ batting: { atBats: 0, hits: 0, doubles: 0, triples: 0, homeruns: 0, walks: 0, strikeouts: 0, rbis: 0, stolenBases: 0, caughtStealing: 0, sacrificeBunts: 0 }, pitching: { inningsPitched: 0, hits: 0, walks: 0, strikeouts: 0, earnedRuns: 0, wins: 0, losses: 0, saves: 0, gamesStarted: 0, gamesRelieved: 0, battersFaced: 0, homeruns: 0 } });
+
+/** 同じ補充で入れる通算の成績（今季の形から盗塁死・犠打・対戦打者・被本塁打を除いた形） */
+export const blankCareerStats = () => ({ batting: { atBats: 0, hits: 0, doubles: 0, triples: 0, homeruns: 0, walks: 0, strikeouts: 0, rbis: 0, stolenBases: 0 }, pitching: { inningsPitched: 0, hits: 0, walks: 0, strikeouts: 0, earnedRuns: 0, wins: 0, losses: 0, saves: 0, gamesStarted: 0, gamesRelieved: 0 } });

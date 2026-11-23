@@ -1,7 +1,7 @@
 import React from 'react';
 import { TEAMS_DATA } from '../teams-data.js';
 import { getPlayerSalary, getStaffSalary } from '../corporate/staffData.js';
-import { getReputationBudgetBonus, getManagingBudgetBonus, getTournamentBudgetBonus, getSponsorIncome, applyBudgetDeficitPenalty } from '../corporate/corporateInit.js';
+import { budgetBreakdown, applyBudgetDeficitPenalty } from '../corporate/corporateInit.js';
 
 const BudgetSettlementScreen = ({ seasonData, onComplete }) => {
   const userTeamName = seasonData?.settings?.teamNames?.[0]
@@ -11,14 +11,7 @@ const BudgetSettlementScreen = ({ seasonData, onComplete }) => {
   const staff = cd?.staff || [];
   const players = teamData?.players || [];
 
-  const baseBudget = cd?.budget || 13000;
-  const reputation = cd?.reputation || 0;
-  const reputationBonus = cd?.yearlyBudgetBonus ?? getReputationBudgetBonus(reputation);
-  const managingValue = Math.max(...staff.map(s => s.abilities?.managing || 0), 0);
-  const managingBonus = getManagingBudgetBonus(managingValue);
-  const tournamentBonus = getTournamentBudgetBonus(cd);
-  const sponsorIncome = getSponsorIncome(cd);
-  const totalBudget = baseBudget + reputationBonus + managingBonus + tournamentBonus + sponsorIncome;
+  const { baseBudget, reputationBonus, managingBonus, tournamentBonus, sponsorIncome, total: totalBudget } = budgetBreakdown(cd, staff);
 
   const playerSalary = players.reduce((sum, p) => sum + getPlayerSalary(p), 0);
   const staffSalary = staff.reduce((sum, s) => sum + getStaffSalary(s), 0);
@@ -29,7 +22,7 @@ const BudgetSettlementScreen = ({ seasonData, onComplete }) => {
   const handleConfirm = () => {
     if (isDeficit && cd) {
       cd.budgetDeficit = Math.abs(balance);
-      const deficitRate = Math.min(1, Math.abs(balance) / (baseBudget || 13000));
+      const deficitRate = Math.min(1, Math.abs(balance) / baseBudget);
       cd.scoutPenalty = Math.min(4, Math.round(deficitRate * 5));
       const penalties = applyBudgetDeficitPenalty(teamData);
       if (penalties && penalties.length > 0) {

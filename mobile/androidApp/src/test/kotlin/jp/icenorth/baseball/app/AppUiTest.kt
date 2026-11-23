@@ -4,19 +4,24 @@ import android.app.Application
 import android.os.Looper
 import androidx.activity.OnBackPressedDispatcher
 import androidx.activity.compose.LocalOnBackPressedDispatcherOwner
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsSelected
+import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.test.junit4.StateRestorationTester
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithContentDescription
+import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
+import androidx.compose.material3.Typography
+import androidx.compose.ui.text.font.FontSynthesis
 import io.ktor.http.content.TextContent
 import java.util.Collections
 import kotlinx.coroutines.CompletableDeferred
@@ -27,11 +32,14 @@ import io.ktor.http.HttpHeaders
 import io.ktor.http.headersOf
 import jp.icenorth.baseball.app.ui.BaseballTheme
 import jp.icenorth.baseball.app.ui.OnlineApp
+import jp.icenorth.baseball.app.ui.lookTypography
 import jp.icenorth.baseball.shared.LatestApp
 import jp.icenorth.baseball.shared.OnlineApi
 import org.junit.Assume.assumeTrue
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotEquals
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -42,6 +50,21 @@ import org.robolectric.RuntimeEnvironment
 import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.LooperMode
+import androidx.compose.foundation.clickable
+import androidx.compose.material3.Text
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
+import jp.icenorth.baseball.app.ui.LocalLook
+import jp.icenorth.baseball.app.ui.LookState
+import jp.icenorth.baseball.app.ui.StatTable
+import jp.icenorth.baseball.shared.StatColumn
+import jp.icenorth.baseball.shared.StatFormat
+import jp.icenorth.baseball.app.ui.LookTypography
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [35])
@@ -189,6 +212,97 @@ class AppUiTest {
         rule.runOnIdle { back!!.onBackPressed() }
         // ⚠ 以前は一覧とスクロールの位置が詳細の分岐の後ろにあり、戻ると一覧の先頭に戻っていた
         rule.onNodeWithText("5/25").assertIsDisplayed()
+    }
+
+    @Test fun newLookDrawsMarksOnlyWhenTurnedOn() {
+        // 新しい見た目（試作）: 既定は切で、絵を1つも描かない。メニューで入にすると順位表に球団マーク、端末に覚える
+        open(
+            """"roster":[],"standings":[{"team":"team","wins":2},{"team":"rival","wins":1}],""" +
+                """"teamLabels":{"team":{"label":"札幌レッドスターズ","short":"札幌","city":"札幌","nickname":"レッドスターズ"},""" +
+                """"rival":{"label":"那覇シーサーズ","short":"那覇","city":"那覇","nickname":"シーサーズ"}}""",
+        )
+        rule.onNodeWithTag("tab-Games").performClick()
+        rule.onNodeWithTag("chip-standings").performClick()
+        rule.onAllNodesWithTag("team-mark", useUnmergedTree = true).assertCountEquals(0)
+        rule.onNodeWithTag("tab-Home").performClick()
+        rule.onAllNodesWithContentDescription("メニュー").onFirst().performClick()
+        // ⚠ メニューの下の方の項目は、テストの小さい画面ではメニューの外に出ていて、座標で押すと当たらない
+        //    （項目が増えて届かなくなった）。押す動作を直接送る
+        rule.onNodeWithText("新しい見た目（試作）", substring = true).performSemanticsAction(SemanticsActions.OnClick)
+        rule.runOnIdle { assertTrue(model.lookOn) }
+        assertTrue(SessionStore(RuntimeEnvironment.getApplication()).lookOn)
+        rule.onNodeWithTag("tab-Games").performClick()
+        rule.onNodeWithTag("chip-standings").performClick()
+        rule.onAllNodesWithTag("team-mark", useUnmergedTree = true).assertCountEquals(2)
+        // 切に戻すと消える
+        rule.runOnIdle { model.changeLookOn(false) }
+        rule.onAllNodesWithTag("team-mark", useUnmergedTree = true).assertCountEquals(0)
+    }
+
+    @Test fun newLookPutsGradeChipsOnStatTable() {
+        // 新しい見た目（試作）: 成績の数字の頭に S〜F の札（リーグ平均比）。切のときは付けない
+        val players = (1..3).map { i ->
+            kotlinx.serialization.json.buildJsonObject {
+                put("id", kotlinx.serialization.json.JsonPrimitive(i))
+                put("name", kotlinx.serialization.json.JsonPrimitive("選手$i"))
+                put("position", kotlinx.serialization.json.JsonPrimitive("catcher"))
+            }
+        }
+        val avg = StatColumn("avg", "打率", StatFormat.Rate, get = { 0.25 + (it["id"].toString().toDouble()) / 100 })
+        var on by mutableStateOf(true)
+        rule.setContent {
+            CompositionLocalProvider(LocalLook provides LookState(on = on)) {
+                StatTable(
+                    players = players,
+                    columns = listOf(avg),
+                    sortId = "avg",
+                    ascending = false,
+                    onSort = {},
+                    onPlayer = {},
+                    grade = { _, _, p -> if (p["id"].toString() == "1") null else 'A' },
+                )
+            }
+        }
+        rule.onAllNodesWithTag("rank-chip", useUnmergedTree = true).assertCountEquals(2)
+        rule.runOnIdle { on = false }
+        rule.onAllNodesWithTag("rank-chip", useUnmergedTree = true).assertCountEquals(0)
+    }
+
+    @Test fun turningTheNewLookOnKeepsTheScreenState() {
+        // ⚠ 入／切で字の表を差しかえても、中の画面の状態（remember）は消えない（部品の並びを変えないため）
+        var on by mutableStateOf(false)
+        rule.setContent {
+            CompositionLocalProvider(LocalLook provides LookState(on = on)) {
+                LookTypography {
+                    var count by remember { mutableIntStateOf(0) }
+                    Text("押した回数 $count", Modifier.clickable { count++ })
+                }
+            }
+        }
+        rule.onNodeWithText("押した回数 0").performClick()
+        rule.onNodeWithText("押した回数 1").assertIsDisplayed()
+        rule.runOnIdle { on = true }
+        rule.onNodeWithText("押した回数 1").assertIsDisplayed()
+        rule.runOnIdle { on = false }
+        rule.onNodeWithText("押した回数 1").assertIsDisplayed()
+    }
+
+    @Test fun newLookChangesOnlyTheFonts() {
+        // 入のときの字: 見出しの型は見出しのフォント（太字を作らせない）、本文と札は本文のフォント（日本語＋数字）。大きさは変えない
+        val base = Typography()
+        val look = lookTypography(base)
+        for ((b, l) in listOf(base.titleLarge to look.titleLarge, base.titleSmall to look.titleSmall, base.headlineSmall to look.headlineSmall)) {
+            assertEquals(b.fontSize, l.fontSize)
+            assertNotNull(l.fontFamily)
+            assertEquals(FontSynthesis.None, l.fontSynthesis)
+        }
+        assertEquals(look.titleLarge.fontFamily, look.headlineMedium.fontFamily)
+        assertNotNull(look.bodyMedium.fontFamily)
+        assertNotEquals(look.titleLarge.fontFamily, look.bodyMedium.fontFamily)
+        assertEquals(look.bodyMedium.fontFamily, look.labelLarge.fontFamily)
+        assertEquals(base.bodyMedium.fontSize, look.bodyMedium.fontSize)
+        assertNotEquals(base.titleLarge.fontFamily, look.titleLarge.fontFamily)
+        assertNotEquals(base.bodyMedium.fontFamily, look.bodyMedium.fontFamily)
     }
 
     @Test fun backFromTeamPlayersReturnsToTheStandings() {

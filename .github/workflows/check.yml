@@ -33,19 +33,14 @@ jobs:
           node-version: 20
           cache: npm
       - run: npm ci
+      # ⚠ CHECKS の検査は dist を読まない（画面検査は ui ジョブ）。ビルドが通るかだけを1台目で確かめる
       - name: Build
+        if: ${{ matrix.shard == 1 }}
         run: npm run build
+      # アプリの共通部（mobile/shared）の写しの照合（gen-tables・expect-* の --check）も、この中で回る
+      # （run-checks.mjs の CHECKS の app-*。写し元だけを変えた push でも気づける）
       - name: Simulation checks
         run: npm run check -- --shard ${{ matrix.shard }}/2
-      # アプリの共通部（mobile/shared）は Web の表と計算を写している。写し元だけを変えた push でも
-      # ずれに気づけるよう、Node だけで動く照合はここでも毎回回す（android.yml は paths で絞っている）
-      - name: App tables match web
-        if: ${{ !cancelled() && matrix.shard == 1 }}
-        run: |
-          node mobile/tools/gen-tables.mjs --check
-          node mobile/tools/expect-logic.mjs --check
-          node mobile/tools/expect-social.mjs --check
-          node mobile/tools/expect-paper.mjs --check
 
   # progression-check（多年次の人口保存・年齢ピラミッド・ポジション均衡）
   progression:

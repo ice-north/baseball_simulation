@@ -10,6 +10,7 @@ import {
 } from '../../src/online/shared.js';
 import {
   projectLeague,
+  createViewShared,
   projectGames,
   projectGameInfo,
   projectPlayerInfo,
@@ -27,6 +28,7 @@ import {
   splitBundle,
   assembleBundle,
   assembleLight,
+  assembleWorld,
   runWithLightRead,
 } from './snapshotParts.mjs';
 /** 部分の履歴（`views._parts.history`）が指すオブジェクトのパス */
@@ -206,14 +208,16 @@ export class SupabaseStore {
    * 世代を読む。古い形（bundle をまるごと1つ）も分けた形（芯＋部分）も読める。
    * `light` なら芯と記録だけ読み、世界の部分は番人にする（`assembleLight`）。
    */
-  async loadSnapshot(row, { light = false, records = true } = {}) {
+  async loadSnapshot(row, { light = false, records = true, world = false } = {}) {
     if (!row?.snapshot_path)
       return { bundle: { league: null, sessions: {}, receipts: {} }, refs: {} };
     const snapshot = await this.object(row.snapshot_path);
     if (!isSplitSnapshot(snapshot)) return { bundle: snapshot, refs: {} };
     const { core, order, parts: refs } = snapshot;
+    // `world`: 終わった年の試合（pastGames）だけ読まない（`assembleWorld`）
+    const skipPast = world && !light && Boolean(refs.pastGames);
     const names = Object.keys(refs).filter(
-      (name) => !light || (records && name === 'records'),
+      (name) => (light ? records && name === 'records' : !(skipPast && name === 'pastGames')),
     );
     const data = Object.fromEntries(
       await Promise.all(
@@ -222,6 +226,10 @@ export class SupabaseStore {
     );
     if (light) {
       const run = assembleLight(core, order, data, refs);
+      return { bundle: run.bundle, light: run, refs };
+    }
+    if (skipPast) {
+      const run = assembleWorld(core, order, data);
       return { bundle: run.bundle, light: run, refs };
     }
     return { bundle: assembleBundle(core, order, data), refs };
@@ -336,7 +344,7 @@ export class SupabaseStore {
    * 保存の世代だけを読む（ビューは読まない）。画面の定期の読み直しで「変わったか」を見るため。
    * ⚠ 版（revision）ではなく世代を見ること。版を上げない書き込み（ログイン・形の移行）でも
    *    ビューは変わる（書けるか・形）が、世代は公開のたびに必ず上がる。
-   * ⚠ 保存の版（`_meta.schema`）も返す。サーバーを更新して版が上がっても
+   * ⚠ 保存の版（`_meta.schema`・`_meta.engineVersion`）も返す。サーバーを更新して版が上がっても
    *    世代は変わらないので、世代だけで「変わっていない」と答えると、
    *    開いていた画面が版の門番（`versionMismatch`）を通らない。
    */
@@ -348,6 +356,8 @@ export class SupabaseStore {
       writable: isLiveSession(row?.sessions, userId, sessionId),
       // 絞り込みを通さない環境（全列が返る）でも読めるように、元の列も見る
       schema: (row?.meta ?? row?.views?._meta)?.schema ?? null,
+      // ⚠ 計算の版も返す（形が同じで計算だけ上がったときも近道させない。`LeagueService.view`）
+      engineVersion: (row?.meta ?? row?.views?._meta)?.engineVersion ?? null,
     };
   }
   async archive(row, kind, year) {
@@ -558,10 +568,10 @@ export class SupabaseStore {
    * 命令を1回走らせ、変更があれば公開するビュー・記録の索引・保存する形を作る（`transaction` の1回ぶん）。
    * `loaded.run` があれば軽い読み（保存する形は `run.inspect`。null なら全体で読み直す）
    */
-  async attemptCommand(fn, loaded, row) {
+  async attemptCommand(fn, loaded, row, control) {
     let views, archives, prepared;
     const value = loaded.bundle;
-    const outcome = await fn(value);
+    const outcome = await fn(value, control);
     if (!outcome?.unchanged) {
       // ⚠ **ビューはリーグの参加者ぶん作る**。環境変数で固定していた頃の
       //    `this.members` を使うと、招待で増えた人のぶんが作られず、
@@ -569,6 +579,9 @@ export class SupabaseStore {
       const viewMembers = value.league?.members?.length
         ? value.league.members
         : this.members;
+      // ⚠ 順位・リーダー・12球団の戦力など誰が見ても同じ部分は、1人目で作って残りの人に使い回す
+      //    （参加者の人数ぶん作り直していた。`createViewShared`）。命令が済んだ後の同じ状態なので安全
+      const shared = createViewShared();
       views = Object.fromEntries(
         viewMembers.map((m) => [
           m.userId,
@@ -578,6 +591,7 @@ export class SupabaseStore {
             // 書けるかは読むときに端末ごとに決め直す（`readView`）。ここは目安
             sessionIdsOf(value.sessions[m.userId])[0],
             this.adminId,
+            shared,
           ),
         ]),
       );
@@ -639,6 +653,39 @@ export class SupabaseStore {
     }
     return (await this.rpc('online_claim', { p_token: token }))[0];
   }
+  /**
+   * 1回の処理（`transaction`）の中で使う、試行の印（定期処理の打ち切り対策）。
+   * `markAttempt(key)` は重い処理を始める**前に**管理行へ印と回数を書き（`online_attempt`）、
+   * これより前に終わらなかった同じ鍵の試行の数を返す。公開すると印は消える。
+   * ⚠ 印は保存（Storage）とは別に、すぐ書く。Vercel の300秒で打ち切られると保存も例外の処理も
+   *    通らないので、保存の中に持つと打ち切りを数えられない。
+   * ⚠ 関数がまだ無い環境（マイグレーション 202611230001 の適用前）では印を付けずに null を返す
+   *    （従来どおり動く）。軽い読みから全体の読み直しに移っても、同じ鍵は1回しか数えない。
+   */
+  attemptControl(token) {
+    const marks = new Map();
+    let marked = false;
+    return {
+      marked: () => marked,
+      markAttempt: async (key) => {
+        if (marks.has(key)) return marks.get(key);
+        let previous = null;
+        if (!this.attemptUnsupported) {
+          try {
+            previous = await this.rpc('online_attempt', { p_token: token, p_key: key });
+          } catch (error) {
+            if (error.storageStatus !== 404) throw error;
+            this.attemptUnsupported = true;
+            console.error('online: 試行の印の関数（online_attempt）がありません。supabase/migrations の 202611230001_online_attempt.sql を適用してください');
+          }
+        }
+        if (Number.isInteger(previous)) marked = true;
+        else previous = null;
+        marks.set(key, previous);
+        return previous;
+      },
+    };
+  }
   async transaction(fn, { full = false } = {}) {
     const token = randomUUID();
     const row = await this.claim(token);
@@ -649,21 +696,23 @@ export class SupabaseStore {
       'busy',
     );
     let published = false;
+    // 試行の印（`markAttempt`）。印を付けた処理は、公開と同時に印を消す（`online_publish_attempt`）
+    const control = this.attemptControl(token);
     try {
       // ⚠ まず軽い読み、だめなら全体で読み直す判定は `runWithLightRead`（検査用の保存と共通）
       const { loaded, outcome, views, archives, prepared } = await runWithLightRead({
         full,
-        load: async (light) => {
-          const loaded = await this.loadSnapshot(row, { light });
+        load: async (light, mode) => {
+          const loaded = await this.loadSnapshot(row, { light, world: mode === 'world' });
           return { ...loaded, run: loaded.light || null };
         },
-        attempt: (loaded) => this.attemptCommand(fn, loaded, row),
+        attempt: (loaded) => this.attemptCommand(fn, loaded, row, control),
       });
       if (outcome?.unchanged) return outcome.value;
       const { path, refs } = await this.writeSnapshot(prepared, loaded.refs);
       const partHistory = [refs, ...(row.views?._parts?.history || [])].slice(0, 3);
       views._parts = { history: partHistory };
-      published = await this.rpc('online_publish', {
+      published = await this.rpc(control.marked() ? 'online_publish_attempt' : 'online_publish', {
         p_token: token,
         p_generation: row.generation,
         p_path: path,
@@ -718,7 +767,11 @@ export class SupabaseStore {
   async writeSnapshot(prepared, previous = {}) {
     let core, order, refs;
     if (prepared.bundle) {
-      const split = splitBundle(prepared.bundle);
+      // `keepPastGames`: 終わった年の試合は読んでいない（`assembleWorld`）。前の部分をそのまま指す
+      const keepPastGames = Boolean(prepared.keepPastGames);
+      if (keepPastGames && !previous.pastGames)
+        throw new Error('終わった年の試合の部分が見つからないまま、使い回して保存しようとしました');
+      const split = splitBundle(prepared.bundle, { keepPastGames });
       core = split.core;
       order = split.order;
       // ⚠ 部分の上げ直しは互いに関係しないので並べて待つ（1つずつ待つと往復の数だけ遅れた）。
@@ -731,6 +784,7 @@ export class SupabaseStore {
           ]),
         ),
       );
+      if (keepPastGames) refs.pastGames = previous.pastGames;
     } else {
       core = prepared.core;
       order = prepared.order;

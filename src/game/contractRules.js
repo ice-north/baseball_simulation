@@ -2,6 +2,9 @@
 const AI_MIN_ROSTER = 17;   // この人数を下回らない範囲で解雇
 const AI_MIN_RELEASES = 3;  // 各AIチームの最低解雇人数（ロスター余裕がある限り適用）
 
+/** 伸びしろを見て戦力外にしにくくする年齢（`releaseScore`） */
+const YOUNG_AGE = 22;
+
 /** 年齢の点（26歳以降、加齢で急増）。⚠ 式はここだけ */
 const agePointsOf = (age) =>
   age >= 38 ? 60 : age >= 36 ? 45 : age >= 34 ? 30 : age >= 32 ? 20
@@ -29,11 +32,19 @@ export const releaseScore = (p) => {
     if (overall / 3 < 35) low = 25;
     else if (overall / 3 < 45) low = 15;
   } else {
-    const overall = ((p.batting?.meet||0) + (p.batting?.power||0) + (p.physical?.speed||0) + (p.physical?.arm||0) + (p.fielding?.defense||0)) / 5;
+    // ⚠ 選球眼も入れる（`calculatePlayerRank` と同じ理由）
+    //    選球眼の無い古いデータは、残りの5つの平均で見る
+    const parts = [p.batting?.meet||0, p.batting?.power||0, p.physical?.speed||0, p.physical?.arm||0, p.fielding?.defense||0];
+    if (p.batting?.eye != null) parts.push(p.batting.eye);
+    const overall = parts.reduce((a, b) => a + b, 0) / parts.length;
     if (overall < 35) low = 25;
     else if (overall < 45) low = 15;
   }
-  score += low;
+  // ⚠ **22歳以下は伸びしろを見て、能力の低さを軽く見る**（6割引き）。能力の線は決まった数
+  //    （35・45）なので、入ったばかりの若手ほど引っかかり、毎年の戦力外で若手から出していた。
+  //    10年で22歳以下が 114人→28人、平均年齢 23.8→26.3歳（10年の長期シミュ 2026-11-23）
+  // ⚠ 理由の文は能力そのもので出す（若手でも低いものは低い）
+  score += age <= YOUNG_AGE ? Math.round(low * 0.4) : low;
   if (low >= 25) reasons.push('能力が低い');
   else if (low > 0) reasons.push('能力がやや低い');
 

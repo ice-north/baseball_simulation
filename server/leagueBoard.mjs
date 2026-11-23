@@ -12,6 +12,7 @@
 //    （参加者ごとに呼ぶと人数ぶん重くなる）。
 // ============================================================
 import { observedSeason, completeCoverage, recordedStats } from './recordedStats.mjs';
+import { conditionValue } from '../src/online/statsView.js';
 
 /**
  * 試合ごとの先発予定（`{ home: { player, mark }, away: { player, mark } }` の並び）。
@@ -79,6 +80,10 @@ export function withStarters(games, teams, statsOf = null, picks = null) {
     return {
       id: player.id,
       name: player.name,
+      // 年齢と調子（新しい見た目の試作で、今日の一戦の札に顔を描く。顔はほかの画面と同じ作り）
+      // ⚠ 年齢は整数だけ（アプリは Int で読む。小数が来ると読み込みごと落ちる）。調子は 0〜4（選手の表と同じ決まり）
+      age: Number.isInteger(player.age) ? player.age : null,
+      condition: conditionValue(player),
       // ⚠ 投げる手は `physical.throws`（選手直下ではない）。選手直下を見ると
       //    全員 undefined になり、**全員が右投げ**として出る。
       // ⚠ 既定は右。未設定の選手を「左」に倒すと、左投手が実際より多く見える
@@ -231,13 +236,22 @@ export function teamSeasonStats(league, statsOf) {
     Array.isArray(game.teams?.[game.home]) && Array.isArray(game.teams?.[game.away]),
   );
   const totals = Object.fromEntries(
-    names.map((name) => [name, { hits: 0, atBats: 0, earnedRuns: 0, outs: 0 }]),
+    names.map((name) => [
+      name,
+      { hits: 0, atBats: 0, earnedRuns: 0, outs: 0, onBase: 0, onBaseDenom: 0, bases: 0 },
+    ]),
   );
   const add = (total, stats) => {
     total.hits += stats?.batting?.hits || 0;
     total.atBats += stats?.batting?.atBats || 0;
     total.earnedRuns += stats?.pitching?.earnedRuns || 0;
     total.outs += stats?.pitching?.inningsPitched || 0;
+    // 出塁率・長打率（新しい見た目で、選手の成績をリーグ平均と比べる物差し）
+    const b = stats?.batting || {};
+    const free = (b.walks || 0) + (b.hitByPitch || 0);
+    total.onBase += (b.hits || 0) + free;
+    total.onBaseDenom += (b.atBats || 0) + free + (b.sacrificeFlies || 0);
+    total.bases += (b.hits || 0) + (b.doubles || 0) + 2 * (b.triples || 0) + 3 * (b.homeruns || 0);
   };
   if (recorded) {
     for (const game of games)
@@ -251,10 +265,12 @@ export function teamSeasonStats(league, statsOf) {
   }
   const out = {};
   for (const name of names) {
-    const { hits, atBats, earnedRuns, outs } = totals[name];
+    const { hits, atBats, earnedRuns, outs, onBase, onBaseDenom, bases } = totals[name];
     out[name] = {
       average: atBats > 0 ? hits / atBats : null,
       era: outs > 0 ? (earnedRuns * 27) / outs : null,
+      obp: onBaseDenom > 0 ? onBase / onBaseDenom : null,
+      slg: atBats > 0 ? bases / atBats : null,
     };
   }
   return out;

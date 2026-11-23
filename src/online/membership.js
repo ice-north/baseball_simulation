@@ -200,6 +200,12 @@ export function teamNicknameOf(team) {
   return city && shown.startsWith(city) ? shown.slice(city.length) : shown;
 }
 
+/** 画面に出す球団名（参加者が付けた名前。無ければ内部名） */
+export function teamLabelIn(league, name) {
+  const team = (league.teams || []).find((t) => t.name === name);
+  return team?.displayName || name;
+}
+
 /**
  * 画面に出す名前ひとそろい（`label` 正式名・`short` 略称・`city` 地域名・`nickname` チーム名）。
  *

@@ -116,6 +116,7 @@ fun StandingsBoard(view: LeagueView, onTeam: ((String) -> Unit)? = null) {
                     Text("${i + 1}", modifier = Modifier.width(24.dp), color = MaterialTheme.colorScheme.onSurfaceVariant)
                     Column(Modifier.weight(1f)) {
                         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                            TeamMark(row.team, size = 22.dp)
                             Text(
                                 view.teamShort(row.team),
                                 fontWeight = if (own) FontWeight.Bold else FontWeight.Normal,

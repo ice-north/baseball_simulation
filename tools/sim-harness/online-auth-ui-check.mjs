@@ -1,23 +1,14 @@
 // 実React画面の認証競合を検査する。Auth/APIはfixtureで、実Supabase受入とは分ける。
 import assert from 'node:assert/strict';
-import { readFile } from 'node:fs/promises';
-import { chromium } from 'playwright';
+import { launchBrowser, distHtml } from './lib/browser.mjs';
 import { withDeadline } from './lib/deadline.mjs';
 import { ONLINE_SCHEMA } from '../../src/online/shared.js';
 import { failureShots } from './lib/failureShots.mjs';
-const html = await readFile(
-  new URL('../../dist/index.html', import.meta.url),
-  'utf8',
-);
+const html = await distHtml();
 const base = 'http://localhost:3000';
 const key = 'baseball-online-auth-v1';
 const viewKey = 'baseball-online-view-v1';
-const browser = await chromium.launch({
-  ...(process.env.PLAYWRIGHT_CHROME_CHANNEL
-    ? { channel: process.env.PLAYWRIGHT_CHROME_CHANNEL }
-    : {}),
-  headless: true,
-});
+const browser = await launchBrowser();
 const errors = [];
 async function fixture({
   expired = false,
