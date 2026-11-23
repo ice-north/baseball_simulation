@@ -790,6 +790,7 @@ function barScale(column, players) {
  *    横に足す印（一人用の大学の学年・入部の種類）。
  * ⚠ `periodLabel` は見出しの脇に出す期間の名前。**合計の出し方は呼ぶ側が決める**
  *    （通算は `careerTotals` が出した値を `seasonStats` に差し替えて渡す）。
+ * ⚠ `league` は自分のビュー（他球団の名簿を渡すときだけ。新しい見た目の成績の札が部の平均を引く）。
  */
 export function CompactRoster({
   view,
@@ -800,6 +801,7 @@ export function CompactRoster({
   volumeOrder = false,
   onOpen,
   extraMark,
+  league,
 }) {
   const look = useLook();
   const [page, setPage] = useState(0);
@@ -920,7 +922,7 @@ export function CompactRoster({
     active && (active.column === 'name' ? '選手名' : active.column.label);
   // 新しい見た目（試作）: 成績の札（リーグ平均比。⚠ 通算・過去の年は平均が違うので今季だけ）・
   // 並べ替えた列の棒・列のまとまり
-  const baseline = look.on && periodLabel === '今季' ? leagueBaseline(view) : null;
+  const baseline = look.on && periodLabel === '今季' ? leagueBaseline(league || view, view.teamName) : null;
   const bar = look.on && desktop && active ? barScale(active.column, order) : null;
   const sections = look.on && desktop && group.id === 'overview' ? LOOK_SECTIONS[category] : null;
   return (
@@ -1040,7 +1042,7 @@ export function CompactRoster({
                   return (
                     <span
                       key={column.id}
-                      className={`online-stat-${column.format} ${rank ? `online-ability-grade ${getRankColor(rank)}` : ''}${grade ? ` online-stat-graded ${getRankColor(grade)}` : ''}${length != null ? ' online-look-bar' : ''}${sections?.[column.id] ? ' online-look-section-start' : ''}`}
+                      className={`online-stat-${column.format} ${rank ? `online-ability-grade ${getRankColor(rank)}` : ''}${grade ? ` online-stat-graded ${getRankColor(grade)}` : ''}${length != null ? ' online-look-bar' : ''}${sections?.[column.id] ? ' online-look-section-start' : ''}${look.on && column.format === 'count' && value === 0 ? ' is-zero' : ''}`}
                       style={
                         !desktop && text.length > 5
                           ? { fontSize: `${60 / text.length}px` }

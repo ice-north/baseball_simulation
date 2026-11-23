@@ -29,7 +29,7 @@ import SeasonFlow, { stageLines } from './SeasonFlow.jsx';
 import YearSummary from './YearSummary.jsx';
 import ProDraftResult from './ProDraftResult.jsx';
 import { nextAdvanceText, STATUS } from './api.js';
-import { findShortClash, formatTurn, shortClashMessage, shortNameOf, TURN_MINUTES } from './shared.js';
+import { findShortClash, formatTurn, shortClashMessage, shortNameOf, turnOfDate, TURN_MINUTES } from './shared.js';
 import { SEASON_TURNS } from './pyramidLeague.js';
 import { teamLabel } from './gameText.js';
 import {
@@ -62,6 +62,8 @@ import {
 import { rosterGroup } from '../utils/constants.js';
 import { InvitesAdmin } from './Invites.jsx';
 import { TeamMark } from './look/Art.jsx';
+import { NavIcon } from './look/NavIcon.jsx';
+import { SeasonProgress } from './look/Parts.jsx';
 // ============================================================
 // PC版の画面。**どのページも同じ形にする**:
 //
@@ -218,6 +220,10 @@ function NavStatus({ view, busy, run, reload, showTimes, onRename }) {
           </b>
           <span className="online-status">{STATUS[view.status]}</span>
         </p>
+        {/* 新しい見た目（試作）: シーズンの進み具合の棒（試合のある間だけ） */}
+        {(!view.stage || ['season', 'pack_select'].includes(view.stage.key)) && (
+          <SeasonProgress turn={turnOfDate(view.currentDate, view.seasonTurns)} turns={view.seasonTurns} />
+        )}
         <small>
           {view.year}年目 · 次の進行 {nextAdvanceText(view)}
         </small>
@@ -568,6 +574,7 @@ export default function DesktopView(props) {
           aria-current={current === 'today' ? 'page' : undefined}
           onClick={() => setTab('today')}
         >
+          <NavIcon id="today" />
           ホーム
           {counts.today > 0 && (
             <span className="online-count" aria-label="未完了の手続き">
@@ -585,6 +592,7 @@ export default function DesktopView(props) {
                 aria-current={current === id ? 'page' : undefined}
                 onClick={() => setTab(id)}
               >
+                <NavIcon id={id} />
                 {label}
                 {/* ⚠ 印は**数で出す**（LINEの通知のように）。以前は色の●だけで、
                     手続きとトレードの返事待ちが何件あるのか分からなかった */}
@@ -618,6 +626,7 @@ export default function DesktopView(props) {
               aria-current={current === 'admin' ? 'page' : undefined}
               onClick={() => setTab('admin')}
             >
+              <NavIcon id="admin" />
               リーグ管理
             </button>
           </div>

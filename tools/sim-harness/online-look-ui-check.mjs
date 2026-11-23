@@ -94,6 +94,7 @@ await withDeadline(
       assert.deepEqual(loadedFonts(), [], '切なのに新しい見た目の字を読んだ');
       // 切のときはブラウザの枠の印を足さない
       assert.equal(await p.locator('head [data-look]').count(), 0, '切なのにアドレスバーの色などを足した');
+      assert.equal(await p.locator('.online-nav-icon, .online-season-progress').count(), 0, '切なのに目次の絵・進み具合の棒が出ている');
       // 段3: 切のときは今日の一戦の札も打席速報も出さない
       assert.equal(await p.locator('.online-today-game').count(), 0, '切なのに今日の一戦の札が出ている');
       assert.equal(await p.locator('.online-reporter-memo').count(), 0, '切なのに番記者のメモが出ている');
@@ -115,6 +116,17 @@ await withDeadline(
       // 左メニューの自球団と、順位表の12球団にマーク
       assert.equal(await p.locator('.online-nav-context .online-team-mark').count(), 1);
       assert.equal(await p.locator('.online-standings .online-team-mark').count(), 12);
+      // 左メニューの絵（ホーム・13ページ・リーグ管理）と、シーズンの進み具合の棒
+      assert.ok((await nav.locator('.online-nav-icon').count()) >= 14, '左メニューに絵が無い');
+      assert.match(
+        await p.locator('.online-season-progress').evaluate((e) => e.style.getPropertyValue('--progress')),
+        /^\d+(\.\d)?%$/,
+        'シーズンの進み具合の棒が無い',
+      );
+      assert.ok(
+        await nav.evaluate((n) => n.scrollHeight <= n.clientHeight),
+        '左メニューが画面からはみ出した',
+      );
       // 自球団の色が CSS に渡っている
       const c2 = await p.evaluate(() =>
         getComputedStyle(document.querySelector('.online')).getPropertyValue('--team-c2').trim(),
@@ -197,6 +209,49 @@ await withDeadline(
       const heights = await p.locator('.online-compact-roster .online-roster-rows article').evaluateAll((els) => [...new Set(els.map((e) => e.offsetHeight))]);
       assert.deepEqual(heights, [44], `選手成績の行の高さがそろっていない: ${heights}`);
 
+      // 数える項目の 0 は沈ませる
+      assert.ok((await p.locator('.online-roster-values > .is-zero').count()) >= 1, '0 を沈ませていない');
+      // 説明のふきだし: 乗せると自前のふきだしが出て、ブラウザの title は預かる。離すと戻す
+      const tipTarget = graded.first();
+      const tipText = await tipTarget.getAttribute('title');
+      await tipTarget.hover();
+      const tip = p.locator('.online-look-tip');
+      await tip.waitFor();
+      assert.equal(await tip.textContent(), tipText, 'ふきだしの字が title と違う');
+      assert.equal(await tipTarget.getAttribute('title'), null, 'ブラウザのふきだしも出る（title が残っている）');
+      await p.mouse.move(2, 2);
+      await tip.waitFor({ state: 'detached' });
+      assert.equal(await tipTarget.getAttribute('title'), tipText, '離しても title が戻らない');
+
+      // どの表でも同じ部品: 守備位置の色の札・成績と能力の S〜F の札・順位の札・平均との差
+      const tabs = p.locator('.online-page-tabs');
+      await tabs.getByRole('button', { name: 'スタメン・投手陣', exact: true }).click();
+      await p.locator('.online-team-lineup').first().waitFor();
+      assert.ok((await p.locator('.online-team-lineup .online-pos-chip.has-pos').count()) >= 8, 'スタメンの守備位置が色の札でない');
+      assert.ok((await p.locator('.online-team-lineup .online-stat-graded').count()) >= 3, 'スタメン・投手陣の成績に札が無い');
+      await tabs.getByRole('button', { name: '守備分析', exact: true }).click();
+      await p.locator('.online-defense-table').waitFor();
+      assert.ok((await p.locator('.online-defense-table .online-pos-chip').count()) >= 8, '守備分析の守備位置が色の札でない');
+      assert.ok((await p.locator('.online-defense-table .online-rank-chip').count()) >= 16, '守備分析の守備範囲・能力に札が無い');
+      await tabs.getByRole('button', { name: 'チーム能力・成績', exact: true }).click();
+      await p.locator('.online-radar-table').waitFor();
+      assert.equal(await p.locator('.online-radar-table .online-place-chip').count(), 6, 'チーム能力値の順位が札でない');
+      assert.equal(await p.locator('.online-radar-table .online-delta').count(), 6, 'チーム能力値に平均との差が無い');
+      await tabs.getByRole('button', { name: '年齢構成', exact: true }).click();
+      await p.locator('.online-age-core').waitFor();
+      assert.ok((await p.locator('.online-age-core .online-tone-chip').count()) >= 1, '年齢構成の見込みが札でない');
+      // 各球団の指導者: 球団マークと顔
+      await nav.getByRole('button', { name: '指導者', exact: true }).click();
+      await p.locator('.online-staff-table').waitFor();
+      assert.equal(await p.locator('.online-staff-table .online-team-mark').count(), 12, '各球団の指導者に球団マークが無い');
+      assert.ok((await p.locator('.online-staff-table .online-face').count()) >= 12, '各球団の指導者に顔が無い');
+      // 折りたたみの三角は自前（ブラウザの印を消している）
+      assert.equal(
+        await p.locator('.online-staff-more summary').first().evaluate((e) => getComputedStyle(e).listStyleType),
+        'none',
+        '折りたたみがブラウザの三角のまま',
+      );
+
       // スタメン設定: 顔・調子の顔
       await nav.getByRole('button', { name: 'スタメン設定', exact: true }).click();
       await p.locator('.online-lineup-person').first().waitFor();
@@ -231,6 +286,11 @@ await withDeadline(
       assert.doesNotMatch(await fontOf(p, '.online h1'), /LookHead/, '切に戻しても見出しの字が残った');
       assert.equal(await p.locator('head [data-look]').count(), 0, '切に戻してもアドレスバーの色などが残った');
       assert.equal(await p.evaluate(() => document.documentElement.classList.contains('online-look-root')), false);
+      assert.equal(
+        await p.locator('.online-nav-icon, .online-season-progress, .online-pos-chip, .online-look-tip').count(),
+        0,
+        '切に戻しても目次の絵・札が残った',
+      );
       await context.close();
     }
 
@@ -268,6 +328,9 @@ await withDeadline(
         isMobile: true,
         hasTouch: true,
       });
+      // 切のとき: 下の帯は今までの字（← ⌂ ☰）
+      await p.locator('.online-mobile-controls button').first().waitFor();
+      assert.deepEqual(await p.locator('.online-mobile-controls button').allTextContents(), ['←', '⌂', '☰']);
       await p.getByRole('button', { name: 'メニュー', exact: true }).click();
       const toggle = p.locator('.online-mobile-menu-panel').getByRole('button', { name: /新しい見た目（試作）/ });
       assert.equal(await toggle.getAttribute('aria-pressed'), 'false');
@@ -275,6 +338,16 @@ await withDeadline(
       // 押すとメニューは閉じ、ホームの球団名にマークが付く
       await p.locator('.online.online-look').waitFor();
       assert.equal(await p.locator('.online-mobile-overview .online-team-mark').count(), 1);
+      // 下の帯は絵と小さな字、ホームの近道にも絵
+      assert.deepEqual(await p.locator('.online-mobile-controls button').allTextContents(), ['戻る', 'ホーム', 'メニュー']);
+      assert.equal(await p.locator('.online-mobile-controls .online-nav-icon').count(), 3);
+      assert.ok((await p.locator('.online-home-actions .online-nav-icon').count()) >= 5, 'ホームの近道に絵が無い');
+      // 試合の「結果／日程」の切り替え: 帯は中身の幅だけ（画面いっぱいに伸びない）
+      await p.getByRole('button', { name: '試合', exact: true }).first().click();
+      const seg = p.locator('.online-segments').first();
+      await seg.waitFor();
+      assert.ok((await seg.evaluate((e) => e.offsetWidth)) < 200, '切り替えの帯が画面いっぱいに伸びた');
+      await p.getByRole('button', { name: 'ホーム', exact: true }).click();
       // スマホの順位表は名前を1行に保つためマークを出さない
       const shown = await p
         .locator('.online-standings .online-team-mark')

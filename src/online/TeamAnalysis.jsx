@@ -1,5 +1,4 @@
 import React, { useState } from 'react';
-import { POS } from './api.js';
 import { Page, PageTabs, usePageTab } from './Page.jsx';
 import TeamRoster from './TeamRoster.jsx';
 import { CompactRoster, PlayerStatsButton } from './PlayerPerformance.jsx';
@@ -14,6 +13,7 @@ import { PYRAMID_LEAGUES } from './pyramidLeague.js';
 import { RATING_AXES, teamRatings } from './teamRatings.js';
 import { positionFitness } from './lineupEdit.js';
 import { defenseRange, defenseGrade } from '../utils/defenseRange.js';
+import { AbilityNum, Delta, PlaceChip, PosChip, RangeGrade } from './look/Parts.jsx';
 
 // ============================================================
 // チーム分析（PC の左メニュー「チーム分析」）。1球団を選んで、戦力と成績をまとめて見る。
@@ -166,9 +166,12 @@ export function TeamRadar({ ratings, average, ranks, label, league = [] }) {
               onMouseLeave={() => setActive(null)}
             >
               <th>{axis.label}</th>
-              <td>{ratings[axis.key] ?? '—'}</td>
+              <td>
+                {ratings[axis.key] ?? '—'}
+                <Delta value={ratings[axis.key]} base={average?.[axis.key]} />
+              </td>
               <td className="online-muted">{average?.[axis.key] ?? '—'}</td>
-              <td>{ranks?.[axis.key] ? `${ranks[axis.key]}位` : '—'}</td>
+              <td>{ranks?.[axis.key] ? <PlaceChip place={ranks[axis.key]} /> : '—'}</td>
             </tr>
           ))}
         </tbody>
@@ -206,8 +209,8 @@ function Overview({ view, shown, setTab }) {
   const errors = sumOf(roster, 'batting', 'errors');
   const league = leagueNameOf(view, shown.teamName);
   const tiles = [
-    ['チーム打率', rate3(stats.average), avgRank && `${league}${avgRank}位`],
-    ['チーム防御率', stats.era != null ? stats.era.toFixed(2) : '—', eraRank && `${league}${eraRank}位`],
+    ['チーム打率', rate3(stats.average), avgRank && league, avgRank],
+    ['チーム防御率', stats.era != null ? stats.era.toFixed(2) : '—', eraRank && league, eraRank],
     ['本塁打', sumOf(roster, 'batting', 'homeruns'), null],
     ['盗塁', sumOf(roster, 'batting', 'stolenBases'), null],
     ['奪三振', sumOf(roster, 'pitching', 'strikeouts'), null],
@@ -231,11 +234,16 @@ function Overview({ view, shown, setTab }) {
       <section className="online-card">
         <h2>今季のチーム成績</h2>
         <div className="online-team-tiles">
-          {tiles.map(([label, value, note]) => (
+          {tiles.map(([label, value, note, place]) => (
             <div key={label}>
               <small>{label}</small>
               <b>{value}</b>
-              {note && <small>{note}</small>}
+              {note && (
+                <small>
+                  {note}
+                  {place && <PlaceChip place={place} />}
+                </small>
+              )}
             </div>
           ))}
         </div>
@@ -285,7 +293,9 @@ function Defense({ shown }) {
               if (!p)
                 return (
                   <tr key={e.battingOrder}>
-                    <th>{POS[e.position] || e.position}</th>
+                    <th>
+                      <PosChip position={e.position} />
+                    </th>
                     <td colSpan={8} className="online-muted">
                       （空き）
                     </td>
@@ -296,17 +306,25 @@ function Defense({ shown }) {
               const b = p.seasonStats?.batting || {};
               return (
                 <tr key={e.battingOrder}>
-                  <th>{POS[e.position] || e.position}</th>
+                  <th>
+                    <PosChip position={e.position} />
+                  </th>
                   <td>
                     <PlayerStatsButton player={shown.own ? p : { ...p, tradeTeam: shown.teamName }} />
                   </td>
                   <td>
-                    <b style={{ color: grade.color }}>{grade.label}</b> <small>{Math.round(range * 100)}</small>
+                    <RangeGrade grade={grade} /> <small>{Math.round(range * 100)}</small>
                   </td>
                   <td>{positionFitness(p, e.position)}</td>
-                  <td>{p.fielding?.defense ?? '—'}</td>
-                  <td>{p.physical?.arm ?? '—'}</td>
-                  <td>{p.physical?.speed ?? '—'}</td>
+                  <td>
+                    <AbilityNum value={p.fielding?.defense} />
+                  </td>
+                  <td>
+                    <AbilityNum value={p.physical?.arm} />
+                  </td>
+                  <td>
+                    <AbilityNum value={p.physical?.speed} />
+                  </td>
                   <td>{b.errors ?? 0}</td>
                   <td>{b.fieldingChances > 0 ? rate3((b.fieldingChances - (b.errors || 0)) / b.fieldingChances) : '—'}</td>
                 </tr>
@@ -351,6 +369,7 @@ function TabBody({ tab, view, shown, selector, setTab }) {
               own ? shown : { ...shown, roster: (shown.roster || []).map((p) => ({ ...p, tradeTeam: shown.teamName })) }
             }
             desktop
+            league={view}
           />
         </section>
       </Page>
@@ -359,7 +378,7 @@ function TabBody({ tab, view, shown, selector, setTab }) {
     return (
       <Page title="スタメン・投手陣" sub="いまの打順と守備位置、先発ローテとリリーフの役割です。" actions={actions}>
         <section className="online-card online-team-lineup-card">
-          <TeamLineupBody team={shown} own={own} />
+          <TeamLineupBody team={shown} own={own} view={view} />
         </section>
       </Page>
     );

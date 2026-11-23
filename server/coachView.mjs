@@ -557,6 +557,8 @@ const brief = (coach, role = 'manager') => ({
   // 名前を押すと人物の小窓（その球団の読み込みから、この id の人を探す）
   id: coach.id,
   name: coach.name,
+  // 年齢（新しい見た目の顔のしわ・白髪。詳細の顔と同じにする）
+  age: coach.age,
   // 紙面の呼び名（「山田監督」）
   shortName: shortName(coach),
   color: roleTypeLabel(coach, role) || coachColor(coach),

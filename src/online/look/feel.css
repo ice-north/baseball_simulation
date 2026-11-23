@@ -370,3 +370,258 @@ html.online-look-root ::-webkit-scrollbar-thumb,
     transition: none !important;
   }
 }
+
+/* ===== 6. どの表でも同じ部品（`look/Parts.jsx`） =========================== */
+/* 守備位置の札（スタメン設定の札と同じ色。`online.css` の `.is-pos-*` が色を決める） */
+.online.online-look .online-pos-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 20px;
+  padding: 0 5px;
+  border: 1px solid var(--pos-line);
+  border-radius: 5px;
+  background: var(--pos-bg);
+  color: var(--pos-ink);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+}
+/* 表の中の成績・能力の数字: 札と数字を横に並べる（選手成績の行は上の 4 で別に決めている） */
+.online.online-look :is(td, th, dd) > .online-stat-graded {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-weight: 700;
+}
+.online.online-look :is(td, th, .online-detail-stats dd) .online-rank-chip {
+  width: 15px;
+  height: 15px;
+  vertical-align: -2px;
+}
+.online.online-look :is(td, th, .online-detail-stats dd) .online-rank-chip > span {
+  font-size: 10px;
+}
+/* 順位の札（順位表の 1〜3 位と同じ色）と「位」 */
+.online.online-look .online-place-chip {
+  display: inline-flex;
+  align-items: center;
+  color: #c4d4e5;
+  font-size: 12px;
+}
+.online.online-look .online-place-chip > .online-rank {
+  margin-right: 3px;
+  font-size: 12px;
+}
+/* 平均との差（+3 緑・-2 赤）。⚠ 幅を決める（差の桁で左の数字の位置がずれないように） */
+.online.online-look .online-delta {
+  display: inline-block;
+  width: 2.4em;
+  margin-left: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  text-align: left;
+  color: #9fb0c4;
+}
+.online.online-look .online-delta.is-up {
+  color: #86efac;
+}
+.online.online-look .online-delta.is-down {
+  color: #fca5a5;
+}
+/* 良し悪しの札 */
+.online.online-look .online-tone-chip {
+  display: inline-block;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.5;
+}
+.online.online-look .online-tone-chip.is-good {
+  background: rgba(134, 239, 172, 0.16);
+  color: #bbf7d0;
+}
+.online.online-look .online-tone-chip.is-warn {
+  background: rgba(250, 204, 21, 0.18);
+  color: #fde68a;
+}
+.online.online-look .online-tone-chip.is-bad {
+  background: rgba(252, 165, 165, 0.2);
+  color: #fecaca;
+}
+/* 表の中の球団マーク・顔 */
+.online.online-look .online-inline-mark {
+  margin: 0 6px 0 0;
+  vertical-align: -4px;
+}
+.online.online-look .online-staff-row-face {
+  float: left;
+  margin: 1px 8px 0 0;
+}
+/* 各球団の指導者: 顔を左に置くので、名前も左寄せにする（中央寄せだと顔と名前が離れる） */
+.online.online-look .online-staff-table :is(td, thead th) {
+  text-align: left;
+}
+
+/* ===== 7. 枠（目次の絵・シーズンの進み具合） ============================== */
+/* 目次の絵（`look/NavIcon.jsx`）。字の色を受け継ぎ、開いているページだけ水色 */
+.online.online-look .online-nav-icon {
+  /* ⚠ Tailwind の初期化が svg を block にするので、字と同じ行に並べ直す */
+  display: inline-block;
+  flex: none;
+  margin-right: 8px;
+  vertical-align: -3px;
+  opacity: 0.8;
+}
+.online.online-look.online-desktop .online-nav-group button {
+  padding-left: 12px;
+}
+.online.online-look .online-page-nav button[aria-current] .online-nav-icon {
+  color: var(--accent);
+  opacity: 1;
+}
+/* シーズンの進み具合（「第Nターン / 160」の箱の上の縁に細い棒）。
+   ⚠ 箱の高さを変えない（背の低い画面で左メニューの一番下が画面の外に出る） */
+.online.online-look .online-nav-clock {
+  position: relative;
+  overflow: hidden;
+}
+.online.online-look .online-season-progress {
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 3px;
+  background: linear-gradient(
+    to right,
+    var(--accent) 0 var(--progress, 0%),
+    rgba(255, 255, 255, 0.14) var(--progress, 0%) 100%
+  );
+}
+/* スマホの下の帯（戻る・ホーム・メニュー）: 絵の下に小さな字。押せないときは薄く */
+.online.online-look .online-mobile-controls {
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 -6px 16px rgba(0, 0, 0, 0.28);
+}
+.online.online-look .online-mobile-controls button {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  background: transparent;
+  color: #dbe4ee;
+}
+.online.online-look .online-mobile-controls button:disabled {
+  opacity: 0.35;
+}
+.online.online-look .online-mobile-controls .online-nav-icon {
+  margin: 0;
+  opacity: 1;
+}
+.online.online-look .online-nav-label {
+  font-size: 10px;
+  line-height: 1;
+  letter-spacing: 0.06em;
+}
+/* スマホのホームの近道: 絵と字を真ん中に並べる */
+.online.online-look .online-home-actions button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* ===== 8. 残ったブラウザの部品 ============================================ */
+/* 折りたたみ: ブラウザの三角を消して、自前の山形に（開くと下を向く） */
+.online.online-look summary:not(:where(.online-sp *, .online-paper *)) {
+  list-style: none;
+  cursor: pointer;
+}
+.online.online-look summary:not(:where(.online-sp *, .online-paper *))::-webkit-details-marker {
+  display: none;
+}
+.online.online-look summary:not(:where(.online-sp *, .online-paper *))::before {
+  content: '';
+  display: inline-block;
+  flex: none;
+  width: 7px;
+  height: 7px;
+  margin: 0 9px 0 2px;
+  border: solid currentColor;
+  border-width: 0 2px 2px 0;
+  transform: rotate(-45deg);
+  transition: transform 0.15s;
+  vertical-align: 1px;
+}
+.online.online-look details[open]:not(:where(.online-sp *, .online-paper *)) > summary::before {
+  transform: rotate(45deg);
+}
+/* チェック・丸ボタン・つまみの色をアクセントの水色に（ブラウザ標準は青） */
+.online.online-look :is(input[type='checkbox'], input[type='radio'], input[type='range'], progress) {
+  accent-color: var(--accent-strong);
+}
+/* 説明のふきだし（`look/tips.js`。ブラウザ標準の黄色い小窓の代わり） */
+.online-look-tip {
+  position: fixed;
+  z-index: 1000;
+  max-width: 300px;
+  margin: 0;
+  padding: 6px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 8px;
+  background: #0f1b2d;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+  color: #e8eef6;
+  font: 12px/1.5 LookNum, LookJP, -apple-system, BlinkMacSystemFont, 'Hiragino Kaku Gothic ProN', sans-serif;
+  white-space: pre-line;
+  pointer-events: none;
+  animation: look-enter 0.12s ease-out backwards;
+}
+@media (prefers-reduced-motion: reduce) {
+  .online-look-tip {
+    animation: none;
+  }
+}
+/* 背の低い画面（1280×800 など）では左メニューの球団マークを小さくする
+   （マークのぶん 8px はみ出して、一番下の「リーグ管理」が欠けていた） */
+@media (max-height: 840px) {
+  .online.online-look.online-desktop .online-nav-mark {
+    width: 34px;
+    height: 34px;
+    margin-bottom: 4px;
+  }
+}
+
+/* ===== 9. 読みやすさ ======================================================= */
+/* 0 は沈ませる（打った・取った数字だけが目に入る）。数える項目だけで、防御率 0.00 などは沈ませない */
+.online.online-look .online-record-table td[data-zero],
+.online.online-look .online-roster-values > .is-zero {
+  color: #8a9cb1;
+  font-weight: 400;
+}
+/* 試合の小窓の切り替え（個人成績・打席速報・観戦リプレイ）もほかの切り替えと同じ形に。
+   ⚠ 観戦リプレイの窓（上に貼りつく帯）は触らない */
+.online.online-look dialog:not(.online-replay-dialog) > .online-replay-launch {
+  gap: 4px;
+  padding: 4px;
+  border-radius: 10px;
+  background: rgba(15, 23, 42, 0.45);
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.25);
+}
+.online.online-look.online-desktop dialog:not(.online-replay-dialog) > .online-replay-launch {
+  width: fit-content;
+  max-width: 100%;
+}
+.online.online-look dialog:not(.online-replay-dialog) > .online-replay-launch button {
+  border-color: transparent;
+  border-radius: 7px;
+  background: transparent;
+  font-weight: 600;
+}
+.online.online-look dialog:not(.online-replay-dialog) > .online-replay-launch button[aria-pressed='true'] {
+  background: var(--accent-strong);
+  color: #06232b;
+  font-weight: 700;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+}

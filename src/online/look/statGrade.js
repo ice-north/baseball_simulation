@@ -44,13 +44,14 @@ const BANDS = {
 export const isGradedColumn = (column) => !!column && Object.hasOwn(GRADED, column.id);
 
 /**
- * 自球団と同じ部の平均（球団ごとの値をならす）と、自球団の試合数。
+ * その球団（省くと自球団）と同じ部の平均（球団ごとの値をならす）と、その球団の試合数。
  * 値の無い球団（開幕前）は数えない。1球団も無ければ `null`。
+ * @param team 見ている球団（他球団の表に札を付けるとき）。`view` は自分のビュー
  */
-export function leagueBaseline(view) {
+export function leagueBaseline(view, team = view?.teamName) {
   const stats = view?.teamStats;
   if (!stats) return null;
-  const own = view.teamLeagues?.[view.teamName];
+  const own = view.teamLeagues?.[team];
   const teams = Object.keys(stats).filter(
     (team) => !own || !view.teamLeagues || view.teamLeagues[team] === own,
   );
@@ -60,7 +61,7 @@ export function leagueBaseline(view) {
   };
   const obp = mean((s) => s?.obp);
   const slg = mean((s) => s?.slg);
-  const games = view.standings?.find((s) => s.team === view.teamName)?.gamesPlayed ?? 0;
+  const games = view.standings?.find((s) => s.team === team)?.gamesPlayed ?? 0;
   return {
     average: mean((s) => s?.average),
     era: mean((s) => s?.era),
