@@ -3,7 +3,7 @@
 // アプリの Kotlin の表（shared/.../Tables.kt）を書き出す。
 //
 // ⚠ **表を手で写さないこと**。Web 側で選択肢やしきい値を変えたとき、写しだけ古くなる。
-//    `node mobile/tools/gen-tables.mjs` で作り直し、`--check` で食い違いを検査する（CI で回す）。
+//    `node mobile/tools/gen-tables.mjs` で作り直し、`--check` で食い違いを検査する（`npm run check:quick` の app-gen-tables で回る）。
 // ============================================================
 import fs from 'node:fs';
 import path from 'node:path';

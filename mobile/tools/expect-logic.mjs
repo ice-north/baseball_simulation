@@ -1,5 +1,6 @@
 // アプリの共通部（Kotlin）に写した計算が Web 版と同じ答えを出すかの検査用に、期待値を書き出す。
 //   node mobile/tools/expect-logic.mjs > mobile/shared/src/jvmTest/resources/logic-expected.json
+import { emitExpected } from './expected.mjs';
 import fs from 'node:fs';
 import { resolveTraining, playerWish, describeMood, recommendedPolicy } from '../../src/season/trainingPolicy.js';
 // 画面（CampPlanner.jsx）と同じ判定を読む（以前は JSX から読めないので写していた）
@@ -108,11 +109,4 @@ for (let i = 0; i < field.length; i += 1)
   for (let j = 0; j < field.length; j += 1)
     if (i !== j) restPlansTwoWay.push(restCase(field.map((_, k) => (k === j ? 100 : 0)), field[i].playerId));
 const text = JSON.stringify({ restPlans, restPlansTwoWay, camp, wish, recommended, relief, tryout: { ranked, picks, added, removed, shifted, moved, totals, shorts, blocking: summary.blocking, warnings: summary.warnings, warningCases: [fullStaff.warnings, fewPitchers.warnings] } });
-// --check: 書き出し済みの期待値が今の Web 版の答えと同じか（CI で、Web 版だけ直したときに気づく）
-if (process.argv.includes('--check')) {
-  const file = new URL('../shared/src/jvmTest/resources/logic-expected.json', import.meta.url);
-  if (fs.readFileSync(file, 'utf8').trim() !== text) {
-    console.error('logic-expected.json が古い。node mobile/tools/expect-logic.mjs > mobile/shared/src/jvmTest/resources/logic-expected.json で書き出し直し、アプリの共通部も揃えること');
-    process.exit(1);
-  }
-} else console.log(text);
+emitExpected(text, { script: 'expect-logic.mjs', file: 'logic-expected.json', also: 'アプリの共通部も揃えること' });
