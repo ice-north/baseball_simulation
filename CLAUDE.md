@@ -14,6 +14,7 @@
 - `npm run check:ui`（約2分）: 一人用の通し検査。ビルドしてブラウザで開幕からドラフト会議まで進める。
 - 一人用の画面確認は、日程画面の開発用の早送り（`npm run dev`、またはビルドに `?dev=1`）と、`npm run scenes` で作る場面（`npm run scene -- <名前>`）を使う。詳細は `tools/sim-harness/README.md`。
 
+- 動きを変えない整理（関数の移動・写しの片付け）は `node tools/sim-harness/replay-hash-check.mjs` で確かめる（約40秒。`check` に入っている）。固定の種で一人用の試合とオンラインの開幕40回を回し、結果のハッシュを `tools/sim-harness/replay-hashes.json` と比べる。年度更新をまたぐ分は `--year`（`check:full`）。**狙って結果を変えたときだけ** `--update` で書き直し、コミットに理由を書く。
 - 取りこぼし検知: `npm run check:unmerged` で、フォークのブランチにあって ice-north の main に無いコミットが一覧になる。**PR を出す前と、総合監査の最初に回す**。直しは別のブランチに置かず、開いている PR のブランチに載せる（別のブランチに置いた直しは、PR に入らないまま忘れられたことがある）。
 - PR: 作業用のフォークから ice-north へは、題と本文だけのコミットを作業ブランチの先頭に載せて `pr/<ブランチ名>` へ push すると作られる。使い方は `.github/workflows/upstream-pr.yml` の先頭。
 
@@ -21,7 +22,7 @@
 
 | 触った場所 | 回す検査 |
 |---|---|
-| `src/game/autoSimulation.js`・`src/simulation-logic.js`・投球判断 | `check:season` |
+| `src/game/autoSimulation.js`・`src/simulation-logic.js`・投球判断 | `check:season`・`replay-hash-check`（動きを変えないつもりの整理のとき） |
 | ドラフト・成長・年次進行（`src/season/`） | `check:draft`・`check:progression`・`check:ui:yearend` |
 | 日程画面・大会・フェーズ（`DateProgressScreen.jsx`・`dateProgression.js`） | `check:bracket`・`check:ui` |
 | セーブ（`src/game/saveSystem.js`・`saveMigration.js`） | `check:quick`・`check:ui` |
