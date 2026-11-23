@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { POS, POS_FULL } from './api.js';
+import { POS, POS_FULL, posTone } from './api.js';
 import {
   useDraftState,
   useDraftMemoryStore,
@@ -456,7 +456,7 @@ export default function TapLineup({
           <ul>
             {notes.map((note) => (
               <li key={`${note.index}:${note.kind}`} className={`is-${note.kind}`}>
-                <span className="online-tap-pos is-note">
+                <span className={`online-tap-pos is-note ${posTone(order[note.index]?.position)}`}>
                   {POS[order[note.index]?.position] || '?'}
                 </span>
                 {note.text}
@@ -510,7 +510,7 @@ export default function TapLineup({
                 </span>
                 <button
                   type="button"
-                  className={`online-tap-pos ${posSelected ? 'is-selected' : ''}`}
+                  className={`online-tap-pos ${posTone(slot.position)} ${posSelected ? 'is-selected' : ''}`}
                   aria-pressed={posSelected}
                   aria-label={
                     posSelected
@@ -576,7 +576,7 @@ export default function TapLineup({
             <span className="online-tap-order" aria-hidden="true">
               9
             </span>
-            <span className="online-tap-pos is-fixed">投</span>
+            <span className={`online-tap-pos is-fixed ${posTone('pitcher')}`}>投</span>
             <span className="online-tap-main">
               <span className="online-tap-line1">
                 <span className="online-tap-name">
@@ -638,7 +638,7 @@ export default function TapLineup({
                       }
                     >
                       <span className="online-tap-order" aria-hidden="true" />
-                      <span className="online-tap-pos is-bench">
+                      <span className={`online-tap-pos is-bench ${posTone(player.position)}`}>
                         {POS[player.position] || '?'}
                       </span>
                       <button

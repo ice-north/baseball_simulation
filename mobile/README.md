@@ -80,6 +80,11 @@
   - 送る: 契約更改の `coachOffers`（`{ pitching, batting }` → 選手 id。打診が無ければ送らない）、自動采配の `restLine`（`standard`・`early`・`late`）。
   - ⚠ **古いサーバーは自動采配の知らない項目を「未対応の采配項目です」で弾く**（`server/lineupTactics.mjs`）。だからアプリは、既定のままで元の自動采配に無い項目は送らない（`Plan.kt` の `toPayload`）。新しい項目を足すときも同じにする。
   - ⚠ 古いサーバーは `coachOffers` を黙って捨てる（`validatePhasePlan` が `releaseIds` しか返さない）。打診はサーバーを先に出してからアプリで使えるようにする。
+- 先方3項目（2026-11-23。指導者の異動・守備位置の色・トライアウトの能力で絞り込み）で読む・送る項目。古いサーバーには無く、無ければ出さない（版は上げていない）:
+  - 読む: ビューの `staff.seats`（契約更改の「指導者の異動」の席）、`staff.scheduled[]`（年度更新で動く人事の文）、`staff.events[].stepDown`（契約更改で決めた退任）。
+  - 送る: 契約更改の `staffMoves`（`{ manager: leave|pitching|batting, pitching: leave, batting: leave }`。続投は送らない。`Commands.withStaffMove`）。
+  - ⚠ 古いサーバーは `staffMoves` を黙って捨てる（`coachOffers` と同じ）。サーバーを先に出してからアプリで使う。
+  - トライアウトの能力の絞り込み（`Tryout.kt` の `ABILITY_FILTERS`）は画面の中だけ。サーバーには送らない。
 - 手続きの任せ方は、ビューの `phase.delegated`（自分がその手続きを指導者に任せているか）と `members` の `ready`・`cpu`・`delegated` を読む。任せた手続きは決定の帯を出さず、`defaults` の案（指導者の案）を読むだけで見せる。待たれている最後の1人が手続きの分野を「任せる」にして保存すると、サーバーはその場で手続きを決めるので、アプリは送る前に確かめる（`shared/.../Staff.kt` の `delegationSettles`。`server/leagueEngine.mjs` の `waitsFor` と同じ見方）。
 
 ### 検査に使う実際の窓口の答え（`shared/src/jvmTest/resources/`）

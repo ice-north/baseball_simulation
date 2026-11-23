@@ -10,6 +10,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.material3.Button
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -31,6 +33,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import jp.icenorth.baseball.app.AppViewModel
 import jp.icenorth.baseball.shared.TeamFit
+import jp.icenorth.baseball.shared.ABILITY_FILTERS
+import jp.icenorth.baseball.shared.ABILITY_FILTER_MAX
+import jp.icenorth.baseball.shared.AbilityFilter
+import jp.icenorth.baseball.shared.passesAbilityFilters
 import jp.icenorth.baseball.shared.teamFitRank
 import jp.icenorth.baseball.shared.Commands
 import jp.icenorth.baseball.shared.DEFAULT_WEIGHTS
@@ -179,6 +185,14 @@ fun TryoutPanel(
                     PlayerSummary(p, { model.openPlayer = it }) {
                         Column(horizontalAlignment = Alignment.End) {
                             Score(scores[p.pid])
+                            // 絞り込みの条件にした能力のうち、この選手のふだんの行に無いもの（投手のミートなど）
+                            val side = if (p.at("position").str() == "pitcher") "pitcher" else "fielder"
+                            val extra = abilityFilters.mapNotNull { f -> ABILITY_FILTERS.firstOrNull { it.key == f.key } }.distinct().filter { it.side != side }
+                            if (extra.isNotEmpty()) Text(
+                                extra.joinToString(" ") { "${it.label}${it.get(p).toInt()}" },
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.tertiary,
+                            )
                             Fit(teamFitRank(p, roster, weights))
                             // 獲得する人数より下は「取られたときの繰り上がり」
                             if (i >= total) Tag("繰り上がり用", MaterialTheme.colorScheme.onSurfaceVariant)
@@ -199,11 +213,13 @@ fun TryoutPanel(
     var group by rememberSaveable { mutableStateOf("all") }
     var sortKey by rememberSaveable { mutableStateOf(WEIGHTED_SORT_KEY) }
     var query by rememberSaveable { mutableStateOf("") }
+    // 能力で絞り込む条件（先方要望 2026-11-23。Web 版 TryoutPlanner の `AbilityFilters`）。この画面の間だけ
+    var abilityFilters by remember { mutableStateOf(listOf<AbilityFilter>()) }
     // 何人まで出しているか（「続きを表示」で増やす。絞り込み・並べ替えを変えたら最初に戻す）
     var shownCount by rememberSaveable { mutableStateOf(PAGE) }
     val scoreOf: (JsonObject) -> Double = if (sortKey == WEIGHTED_SORT_KEY) { p -> scores[p.pid] ?: 0.0 } else TRYOUT_SORT_KEYS.firstOrNull { it.key == sortKey }?.of ?: ::overallScore
     val pool = candidates
-        .filter { inTryoutGroup(it, group) && (query.isBlank() || it.at("name").str().orEmpty().contains(query.trim())) }
+        .filter { inTryoutGroup(it, group) && (query.isBlank() || it.at("name").str().orEmpty().contains(query.trim())) && passesAbilityFilters(it, abilityFilters) }
         .sortedWith(compareByDescending<JsonObject> { scoreOf(it) }.thenBy { it.pid })
     val shown = pool.take(shownCount)
     if (side == "pool") Section("候補 ${candidates.size}人") {
@@ -212,6 +228,8 @@ fun TryoutPanel(
         ChoiceRow(TRYOUT_GROUPS, group) { group = it; shownCount = PAGE }
         ChoiceRow(listOf(WEIGHTED_SORT_KEY to "評価") + TRYOUT_SORT_KEYS.map { it.key to it.label }, sortKey) { sortKey = it; shownCount = PAGE }
         OutlinedTextField(query, { query = it; shownCount = PAGE }, label = { Text("名前で探す") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+        AbilityFilters(abilityFilters) { abilityFilters = it; shownCount = PAGE }
+        if (pool.isEmpty()) Muted("条件に合う候補がいません（守備位置・名前・能力の条件をゆるめてください）")
         shown.forEach { p ->
             val at = ranked.indexOf(p.pid)
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -219,6 +237,14 @@ fun TryoutPanel(
                     PlayerSummary(p, { model.openPlayer = it }) {
                         Column(horizontalAlignment = Alignment.End) {
                             Score(scores[p.pid])
+                            // 絞り込みの条件にした能力のうち、この選手のふだんの行に無いもの（投手のミートなど）
+                            val side = if (p.at("position").str() == "pitcher") "pitcher" else "fielder"
+                            val extra = abilityFilters.mapNotNull { f -> ABILITY_FILTERS.firstOrNull { it.key == f.key } }.distinct().filter { it.side != side }
+                            if (extra.isNotEmpty()) Text(
+                                extra.joinToString(" ") { "${it.label}${it.get(p).toInt()}" },
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.tertiary,
+                            )
                             Fit(teamFitRank(p, roster, weights))
                             Koshien(p)
                             ListedByChips(p) { model.view?.teamShort(it) ?: it }
@@ -249,6 +275,46 @@ fun TryoutPanel(
             OutlinedButton(onClick = { shownCount += PAGE * 2 }, modifier = Modifier.fillMaxWidth()) { Text("続きを表示（残り${pool.size - shown.size}人）") }
         }
     }
+}
+
+/** 能力を選んだときの最初の下限（球速は km/h、スタミナは 0〜200 なので別の数から） */
+private fun defaultMin(key: String): Int = when (key) {
+    "velocity" -> 140
+    "stamina" -> 100
+    else -> 50
+}
+
+/**
+ * 能力で絞り込む（先方要望 2026-11-23）。条件は「能力」と「何以上」の組で、すべてを満たす人だけ出す。
+ * 投手・野手を問わず全員から探す（投手の野手能力・野手の投手能力も）。⚠ Web 版 TryoutPlanner の `AbilityFilters`
+ */
+@Composable
+private fun AbilityFilters(filters: List<AbilityFilter>, onChange: (List<AbilityFilter>) -> Unit) {
+    Text("能力で絞り込む", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
+    if (filters.isEmpty()) Muted("投手の野手能力（ミートなど）・野手の投手能力（球速など）も、全員から探せます")
+    filters.forEachIndexed { i, f ->
+        val def = ABILITY_FILTERS.firstOrNull { it.key == f.key }
+        var open by remember { mutableStateOf(false) }
+        fun set(next: AbilityFilter) = onChange(filters.mapIndexed { j, x -> if (j == i) next else x })
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box {
+                OutlinedButton(onClick = { open = true }) { Text(def?.label ?: f.key) }
+                DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+                    listOf("fielder" to "野手の能力", "pitcher" to "投手の能力").forEach { (side, title) ->
+                        Text(title, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(horizontal = 12.dp))
+                        ABILITY_FILTERS.filter { it.side == side }.forEach { d ->
+                            DropdownMenuItem(text = { Text(d.label) }, onClick = { open = false; set(AbilityFilter(d.key, defaultMin(d.key))) })
+                        }
+                    }
+                }
+            }
+            TextButton(onClick = { set(f.copy(min = (f.min - 5).coerceAtLeast(0))) }) { Text("−") }
+            Text("${f.min}${def?.unit.orEmpty()}以上", fontWeight = FontWeight.Bold)
+            TextButton(onClick = { set(f.copy(min = f.min + 5)) }) { Text("＋") }
+            TextButton(onClick = { onChange(filters.filterIndexed { j, _ -> j != i }) }) { Text("外す") }
+        }
+    }
+    if (filters.size < ABILITY_FILTER_MAX) TextButton(onClick = { onChange(filters + AbilityFilter("meet", defaultMin("meet"))) }) { Text("＋ 条件を足す") }
 }
 
 /**

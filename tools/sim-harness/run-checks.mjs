@@ -101,6 +101,7 @@ const CHECKS = [
   // 年代記（節目・引退・裏の大会・マジック・球団史）。1年を通して進める
   { name: 'online-chronicle-check', group: 'check', online: true, slow: 130 },
   { name: 'online-owner-draft-five-check', group: 'check', online: true, slow: 165 },
+  { name: 'online-staff-moves-check', group: 'check', online: true, slow: 150 },
   // 指導者（監督・コーチ）。種・任せ方・人事・40年の入れ替わり・1年を通して翌年のキャンプまで
   { name: 'online-coach-check', group: 'check', online: true, slow: 200 },
   // 人どうしの関わり（ひとこと・取引の記録・おるすばん・予告先発・練習試合・得点経過）

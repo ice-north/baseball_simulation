@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { POS, POS_FULL } from '../../online/api.js';
+import { POS, POS_FULL, posTone, posInk } from '../../online/api.js';
 import { Fatigue } from '../../online/BoardParts.jsx';
 import FieldDiagram from '../../online/FieldDiagram.jsx';
 import {
@@ -398,7 +398,7 @@ export default function SoloLineupBoard({ team, useDH, nextStarter, onChange, on
                         <span className="online-lineup-playable">
                           <button
                             type="button"
-                            className={`online-lineup-pos ${selectedPos === index ? 'is-selected' : ''}`}
+                            className={`online-lineup-pos ${posTone(entry.position)} ${selectedPos === index ? 'is-selected' : ''}`}
                             aria-pressed={selectedPos === index}
                             aria-label={`${index + 1}番の守備位置（${POS_SHORT[entry.position]}）を入れ替える`}
                             draggable
@@ -417,7 +417,7 @@ export default function SoloLineupBoard({ team, useDH, nextStarter, onChange, on
                             playablePositions(player)
                               .filter((e) => e.position !== entry.position)
                               .slice(0, 2)
-                              .map((e) => <span key={e.position}>{POS[e.position]}</span>)}
+                              .map((e) => <span key={e.position} className={posInk(e.position)}>{POS[e.position]}</span>)}
                         </span>
                       </td>
                       {player ? (
@@ -440,7 +440,7 @@ export default function SoloLineupBoard({ team, useDH, nextStarter, onChange, on
                       <span>9</span>
                     </td>
                     <td className="online-lineup-poscell">
-                      <span className="online-lineup-pos is-fixed">投</span>
+                      <span className={`online-lineup-pos is-fixed ${posTone('pitcher')}`}>投</span>
                     </td>
                     <td colSpan={COLUMN_COUNT - 2} className="online-lineup-person">
                       {nextStarter ? `${nextStarter.name}（次の先発）` : '次の先発'}
@@ -526,12 +526,12 @@ export default function SoloLineupBoard({ team, useDH, nextStarter, onChange, on
                           </td>
                           <td className="online-lineup-poscell" title={`本職と、ほかに守れる位置（適性${LOW_FITNESS}%以上、高い順）`}>
                             <span className="online-lineup-playable">
-                              <span className="online-lineup-pos is-bench">{POS[player.position] || '?'}</span>
+                              <span className={`online-lineup-pos is-bench ${posTone(player.position)}`}>{POS[player.position] || '?'}</span>
                               {playablePositions(player)
                                 .filter((e) => e.position !== player.position)
                                 .slice(0, 2)
                                 .map((e) => (
-                                  <span key={e.position}>{POS[e.position]}</span>
+                                  <span key={e.position} className={posInk(e.position)}>{POS[e.position]}</span>
                                 ))}
                             </span>
                           </td>

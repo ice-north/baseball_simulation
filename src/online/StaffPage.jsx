@@ -678,7 +678,7 @@ function OwnStaff({ view, busy, run, command }) {
         <p className="online-muted">
           {staff.canEditSeats
             ? 'キャンプの間は、解任・役職の入れ替え・市場から呼ぶことができます。何もしなければ留任です。'
-            : '入れ替えられるのは年度更新のすぐ後のキャンプの間だけです。'}
+            : '入れ替えられるのは年度更新のすぐ後のキャンプの間です（契約更改でも、年度更新に向けて監督の退任・コーチの昇格・退任を決められます）。'}
         </p>
         <div className="online-staff-grid">
           {staff.seats.map((seat) => (
@@ -706,6 +706,17 @@ function OwnStaff({ view, busy, run, command }) {
       <TacticsLines lines={staff.tactics} />
       {staff.canEditSeats && (
         <Market staff={staff} busy={busy} act={act} ask={ask} setAsk={setAsk} />
+      )}
+      {/* 年度更新で動く人事（契約更改で決めた異動・コーチ打診。サーバーの `scheduledStaffLines`） */}
+      {staff.scheduled?.length > 0 && (
+        <section className="online-card">
+          <h2>年度更新で動く人事</h2>
+          <ul className="online-staff-events">
+            {staff.scheduled.map((line) => (
+              <li key={line}>{line}</li>
+            ))}
+          </ul>
+        </section>
       )}
       <Events events={staff.events} title="うちの球団の人事" />
     </>

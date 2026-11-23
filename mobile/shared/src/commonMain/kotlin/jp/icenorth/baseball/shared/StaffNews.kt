@@ -27,7 +27,7 @@ private fun eventHead(e: StaffEvent, short: (String) -> String): String {
     return when (e.kind) {
         "fire" -> "${team}、${name}監督を解任"
         "retire" -> "${team}・${name}${role}が勇退"
-        "resign" -> "${team}・${name}${role}が辞任"
+        "resign" -> "${team}・${name}${role}が${if (e.stepDown) "退任" else "辞任"}"
         "release" -> "${team}、${name}${role}と別れ"
         "promote" -> "${team}、${name}が監督に昇格"
         "turn" -> "${team}の${name}、指導者の道へ"

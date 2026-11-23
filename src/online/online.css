@@ -5187,6 +5187,54 @@ small.online-gain:not(:where(.online-sp *)) {
   font-weight: 700;
 }
 
+/* 契約更改: 指導者の異動（`ContractPlanner.jsx` の `StaffMoves`。先方要望 2026-11-23） */
+.online-contract-staff {
+  margin: 0 0 12px;
+  padding: 8px 10px;
+  border: 1px solid #ffffff1f;
+  border-radius: 8px;
+}
+.online-contract-staff h4 {
+  margin: 0 0 6px;
+  font-size: 14px;
+}
+.online-contract-staff h4 small {
+  margin-left: 8px;
+  font-weight: 400;
+  color: #9fb0c4;
+}
+.online-contract-staff ul {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.online-contract-staff li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+}
+.online-contract-staff-seat {
+  display: inline-flex;
+  gap: 6px;
+  min-width: 13em;
+  color: #9fb0c4;
+}
+.online-contract-staff-seat b {
+  color: #e2e8f0;
+}
+.online-contract-staff-note {
+  font-size: 12px;
+  color: #fcd34d;
+}
+.online-contract-staff-plan {
+  margin: 6px 0 0;
+  font-size: 13px;
+  color: #fcd34d;
+}
+
 /* 契約更改: 退団後の人数・標準案の理由・今季の成績 */
 .online-contract-summary {
   display: flex;
@@ -7711,4 +7759,107 @@ table.paper-table {
 .online .online-contract-offer .online-contract-release.is-on {
   background: #1d4ed8;
   border-color: #93c5fd;
+}
+
+/* ------------------------------------------------------------
+   守備位置の色（先方要望 2026-11-23「パワプロリスペクトで投手→赤・捕手→青・内野→黄・外野→緑」）。
+   クラスは api.js の `posTone`（札）・`posInk`（字だけ）。⚠ アプリは FielderRow.kt の `positionColor`。
+   ⚠ 選んでいる札は色を変えず白い縁で示す（色＝守備位置の意味を崩さない）
+   ------------------------------------------------------------ */
+.is-pos-pitcher {
+  --pos-bg: #c81e3a;
+  --pos-line: #fb7185;
+  --pos-ink: #ffffff;
+  --pos-soft: #fda4af;
+  --pos-tint: #c81e3a40;
+}
+.is-pos-catcher {
+  --pos-bg: #1d4ed8;
+  --pos-line: #60a5fa;
+  --pos-ink: #ffffff;
+  --pos-soft: #93c5fd;
+  --pos-tint: #1d4ed840;
+}
+.is-pos-infield {
+  --pos-bg: #eab308;
+  --pos-line: #fde047;
+  --pos-ink: #1c1917;
+  --pos-soft: #fde047;
+  --pos-tint: #eab30838;
+}
+.is-pos-outfield {
+  --pos-bg: #15803d;
+  --pos-line: #4ade80;
+  --pos-ink: #ffffff;
+  --pos-soft: #86efac;
+  --pos-tint: #15803d40;
+}
+.online .online-lineup-pos.has-pos,
+.online .online-lineup-pos.has-pos:hover:enabled,
+.online .online-tap-pos.has-pos,
+.online button.online-tap-pos.has-pos,
+.online button.online-tap-pos.has-pos:hover:enabled {
+  border-color: var(--pos-line);
+  background: var(--pos-bg);
+  color: var(--pos-ink);
+}
+.online .online-lineup-pos.has-pos:hover:enabled,
+.online button.online-tap-pos.has-pos:hover:enabled {
+  filter: brightness(1.12);
+}
+.online .online-lineup-pos.has-pos.is-selected,
+.online .online-lineup-pos.has-pos.is-selected:hover:enabled,
+.online button.online-tap-pos.has-pos.is-selected,
+.online button.online-tap-pos.has-pos.is-selected:hover:enabled {
+  border-color: #ffffff;
+  background: var(--pos-bg);
+  color: var(--pos-ink);
+  box-shadow: 0 0 0 3px #ffffffb3;
+}
+/* 控え・候補の札は薄く塗る（守っている位置より一段控えめに） */
+.online .online-lineup-pos.is-bench.has-pos,
+.online .online-tap-pos.is-bench.has-pos {
+  border-color: var(--pos-line);
+  background: var(--pos-tint);
+  color: var(--pos-soft);
+}
+/* ほかに守れる位置の小さな字 */
+.online .pos-ink {
+  color: var(--pos-soft);
+  font-weight: 700;
+}
+
+/* トライアウトの「能力で絞り込む」（`TryoutPlanner.jsx` の `AbilityFilters`。先方要望 2026-11-23） */
+.online-tryout-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  flex-basis: 100%;
+  font-size: 13px;
+}
+.online-tryout-filters-title {
+  font-weight: 700;
+}
+.online-tryout-filter {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 4px 2px 6px;
+  border: 1px solid #fcd34d66;
+  border-radius: 6px;
+}
+.online-tryout-filter {
+  white-space: nowrap;
+}
+.online .online-tryout-filter select {
+  width: auto;
+  min-width: 0;
+}
+.online .online-tryout-filter input {
+  width: 5em;
+  min-width: 0;
+}
+.online-tryout-extra {
+  color: #fcd34d;
 }

@@ -68,6 +68,9 @@ import {
   weightedRanked,
   weightFactor,
   WEIGHT_MAX,
+  ABILITY_FILTERS,
+  passesAbilityFilters,
+  activeAbilityFilters,
 } from '../../src/online/tryoutPlan.js';
 import { rosterCounts } from '../../src/utils/constants.js';
 // ⚠ 目標構成は**オンライン専用の表**（26人）。一人用の表（24人）ではない
@@ -1314,6 +1317,25 @@ try {
   await rm(dir, { recursive: true, force: true });
 }
 
+// ------------------------------------------------------------------
+// 能力で絞り込む（先方要望 2026-11-23）。投手の野手能力・野手の投手能力も、全員から探せる
+{
+  const pitcher = { id: 1, name: '投', position: 'pitcher', batting: { meet: 48 }, pitching: { velocity: 146, arsenal: [{ type: 'straight', level: 100 }, { type: 'slider', level: 40 }] } };
+  const fielder = { id: 2, name: '野', position: 'short', batting: { meet: 60 }, pitching: { velocity: 138, arsenal: [] } };
+  assert.ok(passesAbilityFilters(pitcher, [{ key: 'meet', min: 45 }]), '投手のミートで探せない');
+  assert.ok(!passesAbilityFilters(pitcher, [{ key: 'meet', min: 45 }, { key: 'velocity', min: 150 }]), '条件はすべて満たす（かつ）');
+  assert.ok(passesAbilityFilters(pitcher, [{ key: 'velocity', min: 145 }]), '球速は km/h のまま');
+  assert.ok(passesAbilityFilters(pitcher, [{ key: 'breaking', min: 40 }]) && !passesAbilityFilters(pitcher, [{ key: 'breaking', min: 41 }]), '変化球は直球を除いた最高');
+  assert.ok(passesAbilityFilters(fielder, [{ key: 'velocity', min: 135 }]), '野手の球速で探せない');
+  // 数の入っていない条件は見ない
+  assert.ok(passesAbilityFilters(fielder, [{ key: 'velocity', min: '' }]));
+  assert.deepEqual(activeAbilityFilters([{ key: 'meet', min: '' }, { key: 'x', min: 3 }, { key: 'arm', min: '50' }]), [{ key: 'arm', min: '50' }]);
+  const pool = filterCandidates([pitcher, fielder], { abilities: [{ key: 'meet', min: 45 }] });
+  assert.deepEqual(pool.map((p) => p.id).sort(), [1, 2], '投手・野手を問わず絞り込む');
+  // ⚠ アプリの Tryout.kt の ABILITY_FILTERS と同じ並び（OwnerThreeTest）
+  assert.deepEqual(ABILITY_FILTERS.map((d) => d.key), ['meet', 'power', 'eye', 'speed', 'arm', 'defense', 'velocity', 'control', 'stamina', 'spin', 'breaking']);
+}
+
 console.log(
-  '■ 希望リストの組み立て: OK（絞り込み・並べ替え・人数が減らない・提出が通る・交渉は20人まで・希望順のとおりに取る・標準案は希望のあとの空き枠が埋まる・取られたら交渉リストの下が繰り上がる・順位が上の球団が競合に勝つ・獲得する人数で止まる・入団した選手が結果に残る・成り立たない編成を提出前に知らせる・標準案なら名簿が偏らない・入れ替えを繰り返しても押したとおりに動く・重みからおすすめ順を作る）',
+  '■ 希望リストの組み立て: OK（絞り込み・並べ替え・人数が減らない・提出が通る・交渉は20人まで・希望順のとおりに取る・標準案は希望のあとの空き枠が埋まる・取られたら交渉リストの下が繰り上がる・順位が上の球団が競合に勝つ・獲得する人数で止まる・入団した選手が結果に残る・成り立たない編成を提出前に知らせる・標準案なら名簿が偏らない・入れ替えを繰り返しても押したとおりに動く・重みからおすすめ順を作る・能力で絞り込む）',
 );

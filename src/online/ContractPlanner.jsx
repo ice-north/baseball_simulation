@@ -4,7 +4,9 @@ import { AbilityGrade, PlayerStatsButton } from './PlayerPerformance.jsx';
 import { statGroup, formatStat } from './statsView.js';
 import { ONLINE_ROSTER_TARGETS, ROSTER_LIMIT, ROSTER_STANDARD } from './shared.js';
 import { rosterGroup } from '../utils/constants.js';
-import { contractColumns, sortContractRoster } from './contractTable.js';
+import { contractColumns, sortContractRoster, STAFF_MOVE_CHOICES, STAFF_ROLE_NAMES as ROLE_NAMES, staffMoveLines } from './contractTable.js';
+
+export { staffMoveLines };
 
 // ============================================================
 // 契約更改（解雇する選手を選ぶ）。
@@ -61,7 +63,69 @@ export const COACH_OFFER_ROLES = [
   ['batting', '野手コーチ'],
 ];
 
-export default function ContractPlanner({ roster, plan, advice = {}, onChange }) {
+/** 契約更改の「指導者の異動」の欄。席ごとに続投・退任・昇格を選ぶ */
+function StaffMoves({ seats, plan, onMoves }) {
+  const moves = plan.staffMoves || {};
+  const offers = plan.coachOffers || {};
+  const set = (role, to) => {
+    const next = { ...moves };
+    if (to == null) delete next[role];
+    else next[role] = to;
+    // ⚠ 監督に上げるコーチは退任にできない（サーバーも弾く）。昇格を選んだらそのコーチの退任を外す
+    if (role === 'manager' && to && to !== 'leave') delete next[to];
+    onMoves(next);
+  };
+  const lines = staffMoveLines(plan, seats);
+  return (
+    <section className="online-contract-staff" aria-label="指導者の異動">
+      <h4>
+        指導者の異動
+        <small>年度更新で動きます。空いた席はキャンプの間に指導者のページで呼んでください</small>
+      </h4>
+      <ul>
+        {['manager', 'pitching', 'batting'].map((role) => {
+          const coach = seats.find((s) => s.role === role)?.coach;
+          const promoted = moves.manager === role;
+          return (
+            <li key={role}>
+              <span className="online-contract-staff-seat">
+                {ROLE_NAMES[role]}
+                <b>{coach ? coach.name : '（空席）'}</b>
+              </span>
+              {coach && !promoted ? (
+                <span className="online-segments" role="group" aria-label={`${ROLE_NAMES[role]}の異動`}>
+                  {STAFF_MOVE_CHOICES[role].map(([to, label]) => {
+                    // 昇格させるコーチが居なければ押せない
+                    const missing = role === 'manager' && to && to !== 'leave' && !seats.find((s) => s.role === to)?.coach;
+                    return (
+                      <button
+                        key={label}
+                        type="button"
+                        aria-pressed={(moves[role] ?? null) === to}
+                        disabled={missing}
+                        onClick={() => set(role, to)}
+                      >
+                        {label}
+                      </button>
+                    );
+                  })}
+                </span>
+              ) : (
+                <span className="online-muted">{promoted ? '監督に昇格' : 'キャンプの間に呼べます'}</span>
+              )}
+              {role !== 'manager' && offers[role] != null && (
+                <span className="online-contract-staff-note">打診した選手が就任</span>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+      {lines.length > 0 && <p className="online-contract-staff-plan">年度更新で: {lines.join('。')}。</p>}
+    </section>
+  );
+}
+
+export default function ContractPlanner({ roster, plan, advice = {}, staff = null, onChange }) {
   const released = new Set(plan.releaseIds);
   const offers = plan.coachOffers || {};
   const offerOf = (id) => COACH_OFFER_ROLES.find(([role]) => offers[role] === id)?.[0] || null;
@@ -75,11 +139,17 @@ export default function ContractPlanner({ roster, plan, advice = {}, onChange })
   // ⚠ 解雇と打診は同じ選手に重ねない（サーバーも弾く）。片方を選んだらもう片方を外す
   const withoutOffer = (id) =>
     Object.fromEntries(Object.entries(offers).filter(([, x]) => x !== id));
-  // 打診が無ければ `coachOffers` ごと外す（前と同じ形の案を送る）
-  const send = (releaseIds, coachOffers) => {
-    const { coachOffers: _drop, ...rest } = plan;
+  // 打診・異動が無ければ `coachOffers`・`staffMoves` ごと外す（前と同じ形の案を送る）
+  const send = (releaseIds, coachOffers, staffMoves = plan.staffMoves || {}) => {
+    const { coachOffers: _drop, staffMoves: _dropMoves, ...rest } = plan;
     void _drop;
-    onChange({ ...rest, releaseIds, ...(Object.keys(coachOffers).length ? { coachOffers } : {}) });
+    void _dropMoves;
+    onChange({
+      ...rest,
+      releaseIds,
+      ...(Object.keys(coachOffers).length ? { coachOffers } : {}),
+      ...(Object.keys(staffMoves).length ? { staffMoves } : {}),
+    });
   };
   const toggle = (id, on) =>
     send(
@@ -99,6 +169,9 @@ export default function ContractPlanner({ roster, plan, advice = {}, onChange })
     );
   return (
     <div>
+      {staff?.seats && (
+        <StaffMoves seats={staff.seats} plan={plan} onMoves={(next) => send(plan.releaseIds, offers, next)} />
+      )}
       <p className="online-contract-summary">
         <strong>
           解雇予定 {released.size}人
@@ -124,7 +197,7 @@ export default function ContractPlanner({ roster, plan, advice = {}, onChange })
         右端の「解雇」を押した選手が退団します（もう一度押すと取り消し）。最低9人を残してください。
         見出しを押すと、その項目で並べ替えます。
         「投手C」「野手C」はコーチ打診です。打診した選手は現役を退いて名簿を離れ、年度更新でその役職のコーチに就きます（いまのコーチは市場へ戻ります。各役職1人まで）。
-        監督には、キャンプの間に指導者のページで入れ替えて上げられます。
+        上の「指導者の異動」で、監督の退任・コーチの監督への昇格・コーチの退任も決められます（年度更新で動きます）。
         標準案は「30歳以上」と「能力の低さ」で点を付けて選び、トライアウトで入れ替えるため
         毎年少なくとも3人を出します。このあとの年度更新で、若い選手は伸び、30歳を過ぎると衰えやすくなります。
       </p>
