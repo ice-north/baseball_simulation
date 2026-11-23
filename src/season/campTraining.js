@@ -335,7 +335,7 @@ export const SUB_TRAINING_MENUS = {
   stretch: {
     name: 'ストレッチ',
     icon: '🧘',
-    description: '野手：ミート/パワー/走力/肩/守備からランダム1能力+1。投手：制球/球速/肩/守備/ミートからランダム1能力+1。回復力30%UP',
+    description: '野手：ミート/パワー/選球眼/走力/肩/守備からランダム1能力+1。投手：制球/球速/スタミナ/肩/守備/ミートからランダム1能力+1。回復力30%UP',
     targets: ['all_minor', 'recovery_sub'],
   },
   defense_sub: {
@@ -546,17 +546,22 @@ export function executeSubTraining(player, subType, options = {}, staffBonus = n
       break;
     }
     case 'stretch': {
-      // 投手は制球・球速含む5能力、野手はミート・パワー・走力・肩力・守備からランダム1つ+1
+      // 投手は制球・球速・スタミナ含む6能力、野手はミート・パワー・選球眼・走力・肩力・守備からランダム1つ+1
+      // ⚠ 野手に選球眼、投手にスタミナを足した（2026-11-23）。指導者の「満遍なく」のサブ練習はこれで、
+      //    毎クール必ずどれかが+1になる。野手は選球眼が候補に無く、投手は制球・球速に2割ずつ入るので、
+      //    10年でリーグの制球が 49→69・選球眼は横ばいになり、四球が半分になっていた（10年の長期シミュ）
       const isPitcher = player.position === 'pitcher';
       const stats = isPitcher ? [
         { key: 'pitching.control', name: '制球', isTech: true },
         { key: 'pitching.velocity', name: '球速', isTech: false, isVelocity: true },
+        { key: 'pitching.stamina', name: 'スタミナ', isTech: false, isStamina: true },
         { key: 'physical.arm', name: '肩力', isTech: false },
         { key: 'fielding.defense', name: '守備', isTech: true },
         { key: 'batting.meet', name: 'ミート', isTech: true },
       ] : [
         { key: 'batting.meet', name: 'ミート', isTech: true },
         { key: 'batting.power', name: 'パワー', isTech: true },
+        { key: 'batting.eye', name: '選球眼', isTech: true },
         { key: 'physical.speed', name: '走力', isTech: false },
         { key: 'physical.arm', name: '肩力', isTech: false },
         { key: 'fielding.defense', name: '守備', isTech: true },
@@ -573,7 +578,8 @@ export function executeSubTraining(player, subType, options = {}, staffBonus = n
           gain = picked.isTech ? applyTechStatDecay(old, 1) : 1;
         }
         if (gain > 0) {
-          const maxVal = picked.isVelocity ? getVelocityCap(player.physical?.arm || 50) : ABILITY_CAP;
+          // ⚠ スタミナは 1〜200 の物差し（`executeCampTraining` の maxValue と同じ）
+          const maxVal = picked.isVelocity ? getVelocityCap(player.physical?.arm || 50) : picked.isStamina ? 200 : ABILITY_CAP;
           player[obj][prop] = Math.min(maxVal, old + gain);
           growthReport.push({ statName: picked.name, before: old, after: player[obj][prop], growth: gain });
           if (picked.key === 'physical.arm' && !isPitcher) {
