@@ -48,11 +48,6 @@ const sourceKey = (source) => (source === 'university_team' ? 'university' : sou
 // 通算防御率の規定（アウト数。10回）
 const MIN_ERA_OUTS = 30;
 
-const FULL_POSITION_NAMES = {
-  pitcher: '投手', catcher: '捕手', first: '一塁手', second: '二塁手',
-  third: '三塁手', short: '遊撃手', left: '左翼手', center: '中堅手', right: '右翼手',
-};
-
 const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory = [], seasonData, onClose }) => {
   const [activeTab, setActiveTab] = useState('npbdraft');
   const [statCategory, setStatCategory] = useState('avg');

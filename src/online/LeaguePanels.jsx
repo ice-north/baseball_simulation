@@ -35,7 +35,6 @@ import { Page } from './Page.jsx';
 import { gamesBehind, gapText } from './standingsGap.js';
 import TryoutPlanner from './TryoutPlanner.jsx';
 import AgeOutlook from './AgeOutlook.jsx';
-import TryoutResult from './TryoutResult.jsx';
 import { fillsAutomatically, plannedPicks, signTotal } from './tryoutPlan.js';
 import PackSelect, { TeamIdentity } from './PackSelect.jsx';
 import { packWaiting, phaseStatusLabel } from './notices.js';

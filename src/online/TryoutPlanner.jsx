@@ -3,7 +3,7 @@ import { POS } from './api.js';
 import { AbilityGrade, PlayerStatsButton } from './PlayerPerformance.jsx';
 import { PageNav } from './PageNav.jsx';
 import { teamShort } from './gameText.js';
-import { rosterGroup, rosterCounts } from '../utils/constants.js';
+import { rosterCounts } from '../utils/constants.js';
 import { AbilityValue } from '../components/AbilityValue.jsx';
 import { formatStat } from './statsView.js';
 import { playablePositions } from './lineupEdit.js';

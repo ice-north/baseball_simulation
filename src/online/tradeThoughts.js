@@ -5,7 +5,6 @@ import {
   squadStrength,
   needOfDrop,
   playerDrops,
-  NEED_LIMIT,
 } from './tradeSearch.js';
 import { PLAYER_GROUPS } from './playerColumns.js';
 
@@ -127,4 +126,3 @@ export function thoughtsText(thoughts, name) {
 /** 上乗せを％で（「+12%」）。`NEED_LIMIT` が上限 */
 export const factorText = (factor) =>
   `+${Math.round(((factor ?? 1) - 1) * 100)}%`;
-export const FACTOR_MAX_TEXT = `+${Math.round(NEED_LIMIT * 100)}%`;
