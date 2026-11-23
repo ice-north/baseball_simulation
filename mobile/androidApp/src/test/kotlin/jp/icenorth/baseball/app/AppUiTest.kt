@@ -4,9 +4,11 @@ import android.app.Application
 import android.os.Looper
 import androidx.activity.OnBackPressedDispatcher
 import androidx.activity.compose.LocalOnBackPressedDispatcherOwner
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsSelected
+import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.test.junit4.StateRestorationTester
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -224,7 +226,9 @@ class AppUiTest {
         rule.onAllNodesWithTag("team-mark", useUnmergedTree = true).assertCountEquals(0)
         rule.onNodeWithTag("tab-Home").performClick()
         rule.onAllNodesWithContentDescription("メニュー").onFirst().performClick()
-        rule.onNodeWithText("新しい見た目（試作）", substring = true).performClick()
+        // ⚠ メニューの下の方の項目は、テストの小さい画面ではメニューの外に出ていて、座標で押すと当たらない
+        //    （項目が増えて届かなくなった）。押す動作を直接送る
+        rule.onNodeWithText("新しい見た目（試作）", substring = true).performSemanticsAction(SemanticsActions.OnClick)
         rule.runOnIdle { assertTrue(model.lookOn) }
         assertTrue(SessionStore(RuntimeEnvironment.getApplication()).lookOn)
         rule.onNodeWithTag("tab-Games").performClick()
