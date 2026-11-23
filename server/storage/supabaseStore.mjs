@@ -10,6 +10,7 @@ import {
 } from '../../src/online/shared.js';
 import {
   projectLeague,
+  createViewShared,
   projectGames,
   projectGameInfo,
   projectPlayerInfo,
@@ -571,6 +572,9 @@ export class SupabaseStore {
       const viewMembers = value.league?.members?.length
         ? value.league.members
         : this.members;
+      // ⚠ 順位・リーダー・12球団の戦力など誰が見ても同じ部分は、1人目で作って残りの人に使い回す
+      //    （参加者の人数ぶん作り直していた。`createViewShared`）。命令が済んだ後の同じ状態なので安全
+      const shared = createViewShared();
       views = Object.fromEntries(
         viewMembers.map((m) => [
           m.userId,
@@ -580,6 +584,7 @@ export class SupabaseStore {
             // 書けるかは読むときに端末ごとに決め直す（`readView`）。ここは目安
             sessionIdsOf(value.sessions[m.userId])[0],
             this.adminId,
+            shared,
           ),
         ]),
       );

@@ -25,7 +25,7 @@ import { dirname, resolve } from 'node:path';
 import { withSeededRandom } from '../../src/game/rng.js';
 import { buildLeague, runSeason, TEAMS_DATA } from './lib/league.mjs';
 import { createLeague, defaultPhasePlan, submitPhase, advanceLeagueDay } from '../../server/leagueEngine.mjs';
-import { projectLeague } from '../../server/projection.mjs';
+import { projectLeague, createViewShared } from '../../server/projection.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const FILE = resolve(HERE, 'replay-hashes.json');
@@ -89,10 +89,15 @@ const step = (i) => {
 };
 const onlineHash = () => {
   const bundle = { league, sessions: { a: {}, b: {} } };
-  return hash({
-    league,
-    views: league.members.map((m) => quiet(() => projectLeague(bundle, m.userId, null, ADMIN))),
-  });
+  const views = league.members.map((m) => quiet(() => projectLeague(bundle, m.userId, null, ADMIN)));
+  // 保存のときの作り方（リーグ全体で同じ部分を使い回す。`createViewShared`）でも、1人ずつ作ったのと同じになるか
+  const shared = createViewShared();
+  const sharedViews = league.members.map((m) => quiet(() => projectLeague(bundle, m.userId, null, ADMIN, shared)));
+  if (stable(sharedViews) !== stable(views)) {
+    console.log('  ✗ 使い回して作ったビューが、1人ずつ作ったビューと違う');
+    process.exit(1);
+  }
+  return hash({ league, views });
 };
 {
   const t0 = Date.now();
