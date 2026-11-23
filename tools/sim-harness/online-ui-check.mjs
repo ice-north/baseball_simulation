@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { chromium } from 'playwright';
+import { launchBrowser } from './lib/browser.mjs';
 import { withDeadline } from './lib/deadline.mjs';
 import { tryoutService, routeToService } from './lib/serviceRoute.mjs';
 import { SEASON_TURNS } from '../../src/online/pyramidLeague.js';
@@ -9,12 +9,7 @@ assert.ok(
   ['localhost', '127.0.0.1'].includes(new URL(base).hostname),
   'ローカル環境だけを検証する',
 );
-const browser = await chromium.launch({
-  ...(process.env.PLAYWRIGHT_CHROME_CHANNEL
-    ? { channel: process.env.PLAYWRIGHT_CHROME_CHANNEL }
-    : {}),
-  headless: true,
-});
+const browser = await launchBrowser();
 const errors = [];
 try {
   const pc = await browser.newContext({

@@ -18,22 +18,13 @@
 //  - ⚠ スマホの幅に変えて戻しても、保存していない編集が残る（横向き⇔縦向きの切り替え）
 //  - 保存して読み直しても残る
 import assert from 'node:assert/strict';
-import { readFile } from 'node:fs/promises';
-import { chromium } from 'playwright';
+import { launchBrowser, distHtml } from './lib/browser.mjs';
 import { seasonService, routeToService } from './lib/serviceRoute.mjs';
 import { failureShots } from './lib/failureShots.mjs';
 
-const html = await readFile(
-  new URL('../../dist/index.html', import.meta.url),
-  'utf8',
-);
+const html = await distHtml();
 const base = 'http://localhost:3000';
-const browser = await chromium.launch({
-  ...(process.env.PLAYWRIGHT_CHROME_CHANNEL
-    ? { channel: process.env.PLAYWRIGHT_CHROME_CHANNEL }
-    : {}),
-  headless: true,
-});
+const browser = await launchBrowser();
 const errors = [];
 try {
   const fixture = await seasonService({ days: 6 });

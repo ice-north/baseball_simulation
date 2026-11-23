@@ -10,18 +10,14 @@
 //  - ホームに「開幕待ち」が出て、手続きの帯（決めてください）は出ない
 //  - 選手の詳細で能力名を押すと、何にどう効くかの説明が出る（体幹など）
 import assert from 'node:assert/strict';
-import { readFile } from 'node:fs/promises';
-import { chromium } from 'playwright';
+import { launchBrowser, distHtml } from './lib/browser.mjs';
 import { seasonService, routeToService } from './lib/serviceRoute.mjs';
 import { ABILITY_HELP } from '../../src/online/playerInfo.js';
 import { failureShots } from './lib/failureShots.mjs';
 
-const html = await readFile(
-  new URL('../../dist/index.html', import.meta.url),
-  'utf8',
-);
+const html = await distHtml();
 const base = 'http://localhost:3000';
-const browser = await chromium.launch({ headless: true });
+const browser = await launchBrowser();
 try {
   const fixture = await seasonService({ days: 3 });
   const session = (await fixture.service.login('p2')).sessionId;

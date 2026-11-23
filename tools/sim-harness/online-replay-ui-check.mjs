@@ -3,8 +3,6 @@
 //    `online-records-check` 側で明示的に記録を有効にして作っている。
 //    ここで `process.env` を立てても **ESM の import が先に走るので間に合わない**。
 import assert from 'node:assert/strict';
-import { readFile } from 'node:fs/promises';
-import { chromium } from 'playwright';
 import { recordedFixture } from './online-records-check.mjs';
 import {
   projectLeague,
@@ -15,22 +13,15 @@ import {
 } from '../../server/projection.mjs';
 import { saveLineup } from '../../server/lineupCommand.mjs';
 import { STRATEGY_FIELDS } from '../../src/online/tactics.js';
+import { launchBrowser, distHtml } from './lib/browser.mjs';
 import { shortLastLines, midWordBreaks } from './lib/textWrap.mjs';
 import { setTeamLabels, teamNameParts } from '../../src/online/gameText.js';
 import { failureShots } from './lib/failureShots.mjs';
 const league = structuredClone(recordedFixture);
-const html = await readFile(
-  new URL('../../dist/index.html', import.meta.url),
-  'utf8',
-);
+const html = await distHtml();
 const base = 'http://localhost:3000',
   authKey = 'baseball-online-auth-v1';
-const browser = await chromium.launch({
-  ...(process.env.PLAYWRIGHT_CHROME_CHANNEL
-    ? { channel: process.env.PLAYWRIGHT_CHROME_CHANNEL }
-    : {}),
-  headless: true,
-});
+const browser = await launchBrowser();
 const errors = [];
 let commands = 0;
 try {

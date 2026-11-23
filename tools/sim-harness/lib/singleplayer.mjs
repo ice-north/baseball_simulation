@@ -4,12 +4,11 @@
 //   effect を2回走らせるので、成績の数え方が本番と変わる（CLAUDE.md 参照）。
 // - URL に `?dev=1` を付けて、開発用の早送り（src/game/devTools.js）を出す。
 // - ブラウザは Playwright のものを使う。別の場所の Chromium を使うときは
-//   PW_CHROMIUM にその実行ファイルを指定する。
+//   PW_CHROMIUM にその実行ファイルを指定する（`lib/browser.mjs`）。
 import { spawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { chromium } from 'playwright';
 
 export const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
 export const PORT = Number(process.env.SINGLE_TEST_PORT || 4173);
@@ -40,11 +39,8 @@ export async function startPreview() {
   throw new Error(`vite preview が応答しません\n${log}`);
 }
 
-export async function launchBrowser({ headless = true } = {}) {
-  const options = { headless };
-  if (process.env.PW_CHROMIUM) options.executablePath = process.env.PW_CHROMIUM;
-  return chromium.launch(options);
-}
+// ブラウザの起動は画面検査で共通（`PW_CHROMIUM`・`PLAYWRIGHT_CHROME_CHANNEL` を見る）
+export { launchBrowser } from './browser.mjs';
 
 // 画面の操作。押せるボタンの名前で探す（文言が変わったらここを直す）。
 export function driver(page) {
