@@ -456,7 +456,8 @@ export function hirePlayerAsCoach(league, teamName, player, role, career = null)
  *   （「選手が引退してコーチに → コーチが監督に → 監督は退任」の流れ）
  * - **年度更新で動かす**（`applyStaffMoves`）。コーチ打診と同じく、終わった年の成績を席に居る人の通算に
  *   足してから替える（契約更改で替えると、務めた年が消える）
- * - 空いた席は、すぐ後のキャンプの間に指導者のページで市場から呼ぶ（人の球団は自動で埋めない）
+ * - 空いた席は、すぐ後のキャンプの間に指導者のページで市場から呼べる。呼ばなければキャンプの終わりに
+ *   市場から埋める（`c.refill` → `fillVacancies`。先方の判断 2026-11-23）
  * - 退任は解任に数えない（`markFired` しない。紙面・画面は「退任」）
  * @returns 送られた案を検めて整えたもの（動かさない席は書かない）。動かす席が無ければ null
  */
@@ -510,8 +511,11 @@ function applyStaffMoves(c, year) {
   for (const [team, moves] of Object.entries(c.moves || {})) {
     const seats = (c.teams[team] ||= { manager: null, pitching: null, batting: null });
     const still = (role) => moves[role] && seats[role] === moves[role].id ? c.people[moves[role].id] : null;
+    // 異動で空いた席（キャンプの終わりにまだ空いていれば市場から埋める。`fillVacancies`）
+    const emptied = new Set();
     const leave = (role, coach) => {
       unassign(c, coach, year);
+      emptied.add(role);
       events.push({ year, kind: 'resign', stepDown: true, team, role, coachId: coach.id, name: coach.name });
     };
     for (const role of ['pitching', 'batting']) {
@@ -526,11 +530,14 @@ function applyStaffMoves(c, year) {
         leave('manager', head);
         if (up) {
           unassign(c, up, year);
+          emptied.add(to);
+          emptied.delete('manager');
           assign(c, team, 'manager', up, year);
           events.push(hireEvent(c, { year, kind: 'promote', team, role: 'manager', coach: up }));
         }
       }
     }
+    if (emptied.size) (c.refill ||= {})[team] = [...emptied];
   }
   delete c.moves;
   return events;
@@ -863,7 +870,6 @@ export function fillVacancies(league) {
   const events = [];
   seededIn(league, `fill:${year}`, () => {
     for (const team of order) {
-      if (memberOf(league, team)) continue;
       const seats = c.teams[team];
       const pickFrom = (role) => {
         // ⚠ 点は1人1回だけ引く（並べ替えの比べるたびに乱数を引くと、比べ方が食い違う）
@@ -885,6 +891,18 @@ export function fillVacancies(league) {
         scored.sort((a, b) => b.score - a.score || a.p.id.localeCompare(b.p.id));
         return scored[0]?.p || null;
       };
+      if (memberOf(league, team)) {
+        // 人の球団は、契約更改の異動（`applyStaffMoves`）で空けた席だけ、キャンプの間に呼ばなければ
+        // ここで市場から埋める（先方の判断 2026-11-23: おすすめどおり）。解任して空けた席・前から空いている席は埋めない
+        for (const role of c.refill?.[team] || []) {
+          if (seats[role]) continue;
+          const coach = pickFrom(role);
+          if (!coach) continue;
+          assign(c, team, role, coach, year);
+          events.push(hireEvent(c, { year, team, role, coach }));
+        }
+        continue;
+      }
       if (!seats.manager) {
         const insiders = ['pitching', 'batting']
           .map((role) => c.people[seats[role]])
@@ -912,6 +930,7 @@ export function fillVacancies(league) {
       }
     }
   });
+  delete c.refill;
   for (const event of events.reverse()) logEvent(c, event);
   return events;
 }

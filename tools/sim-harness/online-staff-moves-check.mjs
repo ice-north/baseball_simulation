@@ -1,6 +1,6 @@
 // 契約更改の「指導者の異動」（先方要望 2026-11-23）の検査。1年を通して進め、翌年のキャンプまで行く。
 //   A: 監督が退任 → 投手コーチを監督に昇格 → 投手の選手を投手コーチに打診（引退してコーチに）・野手コーチは退任
-//   B: 監督だけ退任（監督の席はキャンプまで空く）
+//   B: 監督だけ退任（監督の席はキャンプの間は空き、呼ばなければキャンプの終わりに市場から埋まる）
 //   ・決めた案は年度更新で動く（契約更改の間は席が替わらない。終わった年の通算は前の席に残る）
 //   ・退任は解任に数えない。出来事の文は「退任」・昇格は promote
 //   ・おかしな案（空席の昇格・昇格させるコーチの退任・知らない値）は弾く
@@ -14,7 +14,7 @@ import {
 } from '../../server/leagueEngine.mjs';
 import { touchPresence } from '../../server/social.mjs';
 import { projectLeague } from '../../server/projection.mjs';
-import { validateStaffMoves } from '../../server/coachEngine.mjs';
+import { validateStaffMoves, staffCommand } from '../../server/coachEngine.mjs';
 import { staffMoveLines } from '../../src/online/contractTable.js';
 
 let now = new Date('2026-10-28T00:00:00Z');
@@ -38,6 +38,8 @@ function resolve(extra = {}) {
 let before = null; // 契約更改のときの席 { A: {...}, B: {...} }
 let offered = null;
 let done = false;
+let campChecked = false;
+let kept = null;
 let days = 0;
 const startYear = league.season.year;
 while (days < 700) {
@@ -106,9 +108,16 @@ while (days < 700) {
       const up = c.people[before.A.pitching];
       assert.ok(up.career?.some((r) => r.year === startYear && r.role === 'pitching'), '昇格した人の投手コーチの年が消えた');
       assert.ok(!up.career?.some((r) => r.year === startYear && r.role === 'manager'), '昇格した人に務めていない監督の年が付いた');
-      // B は監督の席が空く（人の球団は自動で埋めない）・ほかの席はそのまま
+      // B は監督の席が空く（キャンプの間は人が呼べるよう、まだ埋めない）
       const seatsB = c.teams[B.teamName];
       assert.equal(seatsB.manager, null, 'B の監督の席が空いていない');
+      // 異動で空いた席は控える（キャンプの終わりに、まだ空いていれば市場から埋める）
+      assert.deepEqual([...(c.refill?.[A.teamName] || [])].sort(), ['batting', 'pitching'], `A の埋める席の控えが違う: ${c.refill?.[A.teamName]}`);
+      assert.deepEqual(c.refill?.[B.teamName], ['manager'], 'B の埋める席の控えが違う');
+      // B の野手コーチを、キャンプの間に人が解任する（異動で空けた席ではないので埋めない）
+      staffCommand(league, B.userId, { action: 'release', role: 'batting' });
+      assert.equal(c.teams[B.teamName].batting, null);
+      kept = { pitchingA: seatsA.pitching };
       // 出来事の文
       const ev = view(A.userId).staff.events;
       assert.ok(ev.some((e) => e.kind === 'promote' && e.coachId === before.A.pitching), '昇格の出来事が無い');
@@ -116,11 +125,24 @@ while (days < 700) {
       assert.ok(stepDown && stepDown.text.endsWith('監督が退任'), `退任の文が違う: ${stepDown?.text}`);
       assert.ok(!c.moves, '異動の控えが残っている');
       assert.equal(view(A.userId).staff.scheduled.length, 0, '年度更新の後も「動く人事」が残っている');
-      done = true;
-      break;
+      campChecked = true;
+      resolve();
+      continue;
     }
     resolve();
     continue;
+  }
+  // キャンプが終わったら: 異動で空いた席だけ市場から埋まっている
+  if (campChecked && !done) {
+    const c = league.coaches;
+    assert.ok(c.teams[B.teamName].manager, 'キャンプの終わりに B の監督の席が埋まっていない');
+    assert.equal(c.people[c.teams[B.teamName].manager].status, 'active', '埋めた監督が席に就いていない');
+    assert.equal(c.teams[B.teamName].batting, null, 'キャンプの間に人が解任した席まで埋めた');
+    assert.ok(c.teams[A.teamName].batting, 'キャンプの終わりに A の野手コーチの席が埋まっていない');
+    assert.equal(c.teams[A.teamName].pitching, kept.pitchingA, '埋まっていた投手コーチの席が替わった');
+    assert.ok(!c.refill, '埋める席の控えが残っている');
+    done = true;
+    break;
   }
   now = new Date(now.getTime() + 4 * 3600000);
   for (const m of league.members) touchPresence(league, m.userId, iso());

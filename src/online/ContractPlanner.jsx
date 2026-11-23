@@ -80,7 +80,7 @@ function StaffMoves({ seats, plan, onMoves }) {
     <section className="online-contract-staff" aria-label="指導者の異動">
       <h4>
         指導者の異動
-        <small>年度更新で動きます。空いた席はキャンプの間に指導者のページで呼んでください</small>
+        <small>年度更新で動きます。空いた席はキャンプの間に指導者のページで呼べます（呼ばなければキャンプの終わりに市場から埋めます）</small>
       </h4>
       <ul>
         {['manager', 'pitching', 'batting'].map((role) => {
