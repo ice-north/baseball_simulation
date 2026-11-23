@@ -153,7 +153,7 @@ export const TRAINING_MENUS = {
     // ミートは1.0倍維持（+0〜2）、パワー/選球眼/バントは0.3〜0.5倍（+0〜1）
     // ⚠ 選球眼 0.5→0.8（2026-11-23）。投手の制球（投げ込み 0.45 を毎クール）に対して選球眼だけ
     //    伸びず、10年で四球が半分になっていた（10年の長期シミュ）
-    growthMultipliers: { power: 0.7, eye: 0.8, bunt: 0.3 },
+    growthMultipliers: { power: 0.7, eye: 1.0, bunt: 0.3 },
     category: 'batting'
   },
   baserunning: {
@@ -194,7 +194,7 @@ export const TRAINING_MENUS = {
     // ⚠ 0.45 → **0.3**（2026-11-23、いしだ「3件とも直す」）。0.45 でも10年でリーグの制球が
     //    49→65 と伸び続け、選球眼（横ばい）との差で四球が半分になった。指導者の「長所を伸ばす」の
     //    制球集中にも同じ係数を掛ける（`executeCampTraining` の `focusStatMult`）
-    growthMultipliers: { control: 0.3, stamina: 0.5 },
+    growthMultipliers: { control: 0.2, stamina: 0.5 },
     category: 'pitching'
   },
   velocity: {
