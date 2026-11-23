@@ -96,6 +96,8 @@ export function saveLineup(league, userId, plan) {
     position: 'pitcher',
   });
   team.pitchingRotation.starters = [...plan.starters];
+  // 人が決めたローテの人数（引退などで空いた枠をキャンプの終わりに埋める上限。`refillOwnRotations`）
+  team.pitchingRotation.plannedStarters = plan.starters.length;
   team.pitchingRotation.currentStarterIndex = index;
   if (strategy) team.strategy = strategy;
   if (tactical.tactics) team.onlineTactics = tactical.tactics;

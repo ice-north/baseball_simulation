@@ -2,8 +2,8 @@
 //   - 捕手に代打を出したら、次の守備で控えの捕手が入る（代打の野手がマスクをかぶり続けない）。
 //     守備固め・大差の控え起用でも野手を捕手に回さない
 //   - 年度更新の後に捕手0人の対人リーグの球団へ、放出された選手などから捕手を1人補う
-//   - 自分で組んだ先発ローテに引退で空いた枠があれば、年度更新の後に指導者の案で前の人数まで埋め、
-//     お知らせで伝える（守護神・セットアッパーは動かさない）
+//   - 自分で組んだ先発ローテに引退・退団で空いた枠があれば、キャンプの終わりに指導者の案で
+//     人が保存した人数まで埋め、お知らせで伝える（守護神・セットアッパーは動かさない）
 import { quiet } from './lib/quiet.mjs';
 import assert from 'node:assert/strict';
 import './lib/bootstrap.mjs';
@@ -76,7 +76,7 @@ const names = league.season.settings.teamNames;
   assert.equal(fillMissingCatchers(league, NOW).length, 0);
 }
 
-// 3. 自分で組んだローテの空き枠を埋める
+// 3. 自分で組んだローテの空き枠を埋める（キャンプの終わりに呼ぶ）
 {
   const team = TEAMS_DATA[own];
   const rotation = team.pitchingRotation;
@@ -89,7 +89,9 @@ const names = league.season.settings.teamNames;
   team.players = team.players.filter((p) => !gone.includes(p.id));
   assert.equal(rotation.starters.length, size - 2);
   const kept = [...rotation.starters];
-  refillOwnRotations(league, new Set([own]), new Map([[own, size]]), NOW);
+  rotation.plannedStarters = size;
+  const filled = refillOwnRotations(league, NOW);
+  assert.equal(filled.length, 1);
   assert.equal(rotation.starters.length, size, '前の人数まで埋まっていない');
   assert.deepEqual(rotation.starters.slice(0, kept.length), kept, '残っていた先発の順が変わった');
   assert.equal(rotation.closer, closer, '守護神が動いた');
@@ -99,8 +101,14 @@ const names = league.season.settings.teamNames;
   assert.ok(fresh.every((id) => !(rotation.middleRelievers || []).includes(id)), '中継ぎの欄に残っている');
   const inbox = league.members[0].inbox || [];
   assert.equal(inbox[0]?.type, 'rotationFilled', 'お知らせが無い');
-  // 4人で回していた人に5人目は足さない
-  refillOwnRotations(league, new Set([own]), new Map([[own, size - 1]]), NOW);
-  assert.equal(rotation.starters.length, size);
+  // 4人で回すと決めた人に5人目は足さない
+  rotation.starters.pop();
+  rotation.plannedStarters = rotation.starters.length;
+  assert.equal(refillOwnRotations(league, NOW).length, 0);
+  // 投手起用を任せている人は触らない（指導者が組み直す）
+  league.members[0].staffModes = { ...(league.members[0].staffModes || {}), pitching: 'delegate' };
+  rotation.plannedStarters = 5;
+  rotation.starters.pop();
+  assert.equal(refillOwnRotations(league, NOW).length, 0);
 }
 console.log('online-catcher-rotation-check: OK');

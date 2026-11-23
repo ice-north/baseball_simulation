@@ -31,8 +31,8 @@ const rankKeys = [
 ];
 
 // 一人用セーブは未完了の背景大会を省略するため、そのままサーバー保存に流用しない。
-export function captureWorld() {
-  return clone({
+export function captureWorld({ take = false } = {}) {
+  const snapshot = {
     teams: TEAMS_DATA,
     settings: LEAGUE_SETTINGS,
     world: {
@@ -53,7 +53,24 @@ export function captureWorld() {
     playerIdCounter: getPlayerIdCounter(),
     staffIdCounter: getStaffIdCounter(),
     staffNames: getStaffNameHistory(),
-  });
+  };
+  if (!take) return clone(snapshot);
+  // ⚠ `take`: 複製せず**大域状態の中身ごと写しにする**（`restoreWorld({ take: true })` の対）。
+  //    器（球団の表・自由契約の配列・名前の履歴）だけ新しくし、球団・選手のオブジェクトは
+  //    大域状態と同じものを指す。次に `restoreWorld` が大域状態を差し替えるまで、大域状態を
+  //    書き換えると写しも変わる。
+  //    世界の丸ごとの複製が1日の進行の8割を占め、世界は年度別の記録などで年々太るので、
+  //    10年で1日の進行が倍に重くなっていた（10年の長期シミュ）。
+  //    ⚠ 使ってよいのは、写しを作ったらその処理の中では大域状態を触らない呼び出しだけ
+  //       （`advanceLeagueDay` の最後）。触るなら先に `loadLeagueWorld` で戻すこと（どの命令も
+  //       そうしている。`leagueService` の `inWorld`）
+  return {
+    ...snapshot,
+    teams: { ...snapshot.teams },
+    settings: { ...snapshot.settings },
+    released: [...snapshot.released],
+    staffNames: [...snapshot.staffNames],
+  };
 }
 
 /**
