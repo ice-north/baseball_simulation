@@ -4,7 +4,7 @@
 // ========================================================================
 
 import { TEAMS_DATA, LEAGUE_SETTINGS } from '../teams-data.js';
-import { generateAILineup, singleFielderGameFatigue } from './autoSimulation.js';
+import { generateAILineup, singleFielderGameFatigue, accrueBatterExperience, accruePitcherExperience } from './autoSimulation.js';
 import { applyBattingOrderEntries } from './lineup.js';
 import { recordGameResult } from '../season/dateProgression.js';
 import { decidePitchers, recordDecisions } from './pitcherDecisions.js';
@@ -348,6 +348,10 @@ export function executeHandleManagedGameEnd(ctx) {
         addFatigue(playerData, singleFielderGameFatigue(playerData.physical?.bodyStamina || 50, gs));
         // 死球の疲労は打席数に関わらず乗る（代打の1打席で当たっても痛い）
         if (gs.hbpFatigue) addFatigue(playerData, gs.hbpFatigue);
+
+        // 経験値・ポジション別・打順別の経験。⚠ 以前は自動試合にしか無く、
+        //    采配した試合では一切増えなかった。式は自動試合と共有する
+        accrueBatterExperience(playerData, p, gs.atBats || 0);
       }
 
       // 守備成績。**采配モードにも自動シミュと同じ集計を持たせる**
@@ -405,6 +409,8 @@ export function executeHandleManagedGameEnd(ctx) {
         }
         const fatigue = isStarter ? pitchFatigue + startBonus : Math.max(11, pitchFatigue);
         addFatigue(playerData, fatigue);
+        // 経験値（登板1 + 投球回）。自動試合と共有する
+        accruePitcherExperience(playerData, ps.outs || 0);
         if (isStarter) {
           // 先発: 15イニング(45アウト)ごとに+0.01
           if (Math.floor(sp.inningsPitched / 45) > Math.floor(prevTotalOuts / 45)) {

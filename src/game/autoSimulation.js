@@ -368,6 +368,39 @@ export const setRecommendedLineup = (teamData, teamName) => {
 
 };
 
+/**
+ * 1試合に出た打者の経験を積む（出場1 + 打数/3、ポジション別・打順別の出場数）。
+ * ⚠ **自動試合（`updatePlayerSeasonStats`）と采配試合（`gameSetup` の
+ *    `updateManagedGameStats`）で共有する**。以前は自動試合にしか無く、采配した試合では
+ *    経験値が一切増えなかった（キャンプの覚醒率・ポジション別の伸びが采配するほど損）。
+ * ⚠ **DH はポジションの経験に数えない**（DH は守備位置ではなく `_isDH` の印。position は
+ *    本来の守備位置のままなので、以前は守っていない位置の経験として積まれていた）。
+ *    打順の経験と経験値は DH でも積む。
+ * @param {Object} playerData - TEAMS_DATA の選手（書き込む先）
+ * @param {Object} gamePlayer - 試合中の選手（position・battingOrder・_isDH を読む）
+ * @param {number} atBats - この試合の打数
+ */
+export function accrueBatterExperience(playerData, gamePlayer, atBats) {
+  playerData.experience = (playerData.experience || 0) + 1 + Math.floor((atBats || 0) / 3);
+
+  if (!playerData.positionExperience) playerData.positionExperience = {};
+  if (!gamePlayer._isDH) {
+    const pos = gamePlayer.position || 'unknown';
+    playerData.positionExperience[pos] = (playerData.positionExperience[pos] || 0) + 1;
+  }
+
+  if (!playerData.battingOrderExperience) playerData.battingOrderExperience = {};
+  const bo = gamePlayer.battingOrder || 0;
+  if (bo >= 1 && bo <= 9) {
+    playerData.battingOrderExperience[bo] = (playerData.battingOrderExperience[bo] || 0) + 1;
+  }
+}
+
+/** 1試合に登板した投手の経験値（登板1 + 投球回）。自動試合と采配試合で共有する */
+export function accruePitcherExperience(playerData, outs) {
+  playerData.experience = (playerData.experience || 0) + 1 + Math.floor((outs || 0) / 3);
+}
+
 // 野手が1試合（3打席以上）で溜める疲労。一人用は体力100→7・体力1→15。
 // ⚠ オンラインは休養日（4ターンに1回）があるので、この式だと疲労が溜まらない（先方指摘 2026-11-15）。
 //    オンラインの1日の処理だけ `withFielderGameFatigue` で式を差し替える（一人用の数字は変えない）。
@@ -3077,20 +3110,8 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false, observer = 
         // 犠飛は打った選手にだけ項目を足す（保存を膨らませない。読む側は無ければ 0）
         if (b.sacrificeFlies) season.sacrificeFlies = (season.sacrificeFlies || 0) + b.sacrificeFlies;
 
-        // 経験値蓄積（出場1 + 打席数/3）
-        const expGained = 1 + Math.floor(b.atBats / 3);
-        playerData.experience = (playerData.experience || 0) + expGained;
-
-        // ポジション・打順別経験を蓄積
-        if (!playerData.positionExperience) playerData.positionExperience = {};
-        const pos = player.position || 'unknown';
-        playerData.positionExperience[pos] = (playerData.positionExperience[pos] || 0) + 1;
-
-        if (!playerData.battingOrderExperience) playerData.battingOrderExperience = {};
-        const bo = player.battingOrder || 0;
-        if (bo >= 1 && bo <= 9) {
-          playerData.battingOrderExperience[bo] = (playerData.battingOrderExperience[bo] || 0) + 1;
-        }
+        // 経験値・ポジション別・打順別の経験（采配試合と共有）
+        accrueBatterExperience(playerData, player, b.atBats);
 
         // 野手疲労蓄積: スタメン出場(3打席以上)のみ疲労が溜まる
         // 代打(1-2打席)や守備固めは疲労の蓄積なし（ただし回復もしない）
@@ -3164,10 +3185,8 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false, observer = 
           }
         }
 
-        // 経験値蓄積（登板1 + 投球回数）
-        const inningsPitched = Math.floor(p.outs / 3);
-        const expGained = 1 + inningsPitched;
-        playerData.experience = (playerData.experience || 0) + expGained;
+        // 経験値蓄積（登板1 + 投球回数。采配試合と共有）
+        accruePitcherExperience(playerData, p.outs);
 
         // QS/HQS判定（先発投手のみ）
         if (wasStarter) {

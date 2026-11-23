@@ -23,7 +23,7 @@ import { autoSimulateGame, generateAILineup, setRecommendedLineup } from '../../
 import { generateFullSeasonSchedule, getValidTwoLeagueGameCounts, getValidSingleLeagueGameCounts, fitsInRegularSeason, fitGamesPerSeason, twoLeagueSizes } from '../../src/season/scheduleGenerator.js';
 import { applyNextSeasonRegulations, repairLeagueConfig, validateLeagueTeamNames } from '../../src/season/nextSeasonRegulations.js';
 import { twoLeagueGameCountLabel, twoLeagueSplitLabel } from '../../src/season/regulationSettings.js';
-import { executeSetupManagedGame } from '../../src/game/gameSetup.js';
+import { executeSetupManagedGame, executeHandleManagedGameEnd } from '../../src/game/gameSetup.js';
 import { leagueMagic } from '../../src/season/magicNumber.js';
 import { seasonChampion } from '../../src/season/seasonManager.js';
 import { departedEntry, withDeparted, rosterIndex, departedSince, withDepartedPlayers } from '../../src/season/departedStats.js';
@@ -808,4 +808,48 @@ for (const [count, games] of [[4, 144], [4, 150], [6, 145], [5, 148], [7, 150]])
   assert.equal(synced.leagues[0].teams[0], team.name, 'leagueConfig の先頭が自チームでない');
 }
 
-console.log('■ 一人用の進行の再発防止: OK（オフの CHAMPION はプレーオフの優勝球団 / 翌年の球団名の変更は改名で名簿を引き継ぐ・使えない名前は確定しない / 翌年の球団数の変更で leagueConfig も揃う・ロードで直す / 控えに回った元の DH に印が残らず DH が2人にならない / DH制の采配試合で相手の先発が予告どおり / 1球団の設定で日程づくりが終わらない / 翌年のレギュレーションの確定で次の画面へ / 監督移籍で自チームが先頭 / 派遣中はキャンプ練習なし / 日程は4月〜10月9日で全試合を置く / 同じ日に同じ球団は1試合・入りきる試合数だけ選べる / DH制の先発と打順が食い違わない / 戦力外の選手を二重に加齢しない / マジックは点灯してから出す / 名簿を離れた選手もその年の成績に残る / FA枠は解雇された選手から引く / 大学の部の入れ替えのあとも先頭は自チーム）');
+// --- 采配した試合でも経験値・ポジション別・打順別の経験が積まれる（DH は守備位置に数えない） ---
+// ⚠ 経験値は自動試合（`updatePlayerSeasonStats`）でしか積んでおらず、采配した試合では
+//    一切増えなかった（キャンプの覚醒率・ポジション別の伸びが、采配するほど損）。
+//    また DH の出場が本来の守備位置の経験として積まれていた。式は `accrueBatterExperience`
+//    ・`accruePitcherExperience`（autoSimulation.js）で共有する
+{
+  const { seasonData } = quiet(() => bootstrapWorld());
+  const [user, opp] = seasonData.settings.teamNames;
+  const roster = TEAMS_DATA[user].players;
+  const fielders = roster.filter(p => p.position !== 'pitcher');
+  const pitcher = roster.find(p => p.position === 'pitcher');
+  const [ss, dh] = fielders;
+  for (const p of [ss, dh, pitcher]) {
+    p.experience = 10;
+    p.positionExperience = {};
+    p.battingOrderExperience = {};
+  }
+  const copy = (p, extra) => ({ ...JSON.parse(JSON.stringify(p)), ...extra });
+  const homeTeam = {
+    name: user,
+    players: [
+      copy(ss, { position: 'short', battingOrder: 2, gameStats: { atBats: 4, hits: 1 } }),
+      copy(dh, { position: 'left', battingOrder: 4, _isDH: true, gameStats: { atBats: 3 } }),
+      copy(pitcher, { battingOrder: 0, gameStats: {}, stats: { pitching: { outs: 18, pitches: 90, earnedRuns: 2, runsAllowed: 2 } } }),
+    ],
+  };
+  const noop = () => {};
+  quiet(() => executeHandleManagedGameEnd({
+    managedGameInfoRef: { current: { gameId: 1 } },
+    score: { home: 0, away: 0 },
+    homeTeam, awayTeam: { name: opp, players: [] },
+    decisionLog: { appearances: { home: [{ id: pitcher.id, isStarter: true }], away: [] } },
+    seasonData, setSeasonData: noop, selectedMonth: 4, setSelectedMonth: noop,
+    setManagedGameInfo: noop, setScreenMode: noop, setManagementView: noop,
+  }));
+  assert.equal(ss.experience, 10 + 1 + 1, `采配した試合で打者の経験値が積まれない（${ss.experience}）`);
+  assert.deepEqual(ss.positionExperience, { short: 1 }, '采配した試合でポジション別の経験が積まれない');
+  assert.deepEqual(ss.battingOrderExperience, { 2: 1 }, '采配した試合で打順別の経験が積まれない');
+  assert.equal(dh.experience, 10 + 1 + 1, 'DH の経験値が積まれない');
+  assert.deepEqual(dh.positionExperience, {}, `DH の出場が守備位置の経験に入っている: ${JSON.stringify(dh.positionExperience)}`);
+  assert.deepEqual(dh.battingOrderExperience, { 4: 1 }, 'DH の打順別の経験が積まれない');
+  assert.equal(pitcher.experience, 10 + 1 + 6, `采配した試合で投手の経験値が積まれない（${pitcher.experience}）`);
+}
+
+console.log('■ 一人用の進行の再発防止: OK（采配した試合でも経験値を積む・DH は守備位置に数えない / オフの CHAMPION はプレーオフの優勝球団 / 翌年の球団名の変更は改名で名簿を引き継ぐ・使えない名前は確定しない / 翌年の球団数の変更で leagueConfig も揃う・ロードで直す / 控えに回った元の DH に印が残らず DH が2人にならない / DH制の采配試合で相手の先発が予告どおり / 1球団の設定で日程づくりが終わらない / 翌年のレギュレーションの確定で次の画面へ / 監督移籍で自チームが先頭 / 派遣中はキャンプ練習なし / 日程は4月〜10月9日で全試合を置く / 同じ日に同じ球団は1試合・入りきる試合数だけ選べる / DH制の先発と打順が食い違わない / 戦力外の選手を二重に加齢しない / マジックは点灯してから出す / 名簿を離れた選手もその年の成績に残る / FA枠は解雇された選手から引く / 大学の部の入れ替えのあとも先頭は自チーム）');
