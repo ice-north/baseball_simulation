@@ -625,4 +625,22 @@
 }
 .online.online-look .online-live[data-motion] {
   max-width: 760px;
+  /* 点の帯と絵をつなげる */
+  gap: 0;
+}
+/* 小窓の `header` には下の余白が付いている（`.online-player-dialog header`） */
+.online.online-look .online-live[data-motion] .online-live-bug {
+  margin-bottom: 0;
+}
+.online.online-look .online-live[data-motion] .online-live-telop,
+.online.online-look .online-live[data-motion] .online-live-flow,
+.online.online-look .online-live[data-motion] .online-live-controls {
+  margin-top: 8px;
+}
+/* 結果の行は動きが終わってから足す。下の「次の打席」が上下に動かないよう、4行ぶんの高さを取っておく */
+.online.online-look .online-live[data-motion] .online-live-flow {
+  min-height: 116px;
+}
+.online.online-look .online-live-telop[data-wait] strong {
+  color: #cbd5e1;
 }

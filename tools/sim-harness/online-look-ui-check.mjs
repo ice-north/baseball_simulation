@@ -169,16 +169,26 @@ await withDeadline(
       await motion.waitFor();
       const canvas = motion.locator('canvas.online-motion-canvas');
       await canvas.waitFor();
-      await p.waitForTimeout(600);
-      const painted = await canvas.evaluate((c) => {
-        const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
-        const colors = new Set();
-        for (let i = 0; i < d.length; i += 4 * 97) colors.add((d[i] << 16) | (d[i + 1] << 8) | d[i + 2]);
-        return colors.size;
-      });
+      // 絵は字を読んでから描きはじめる（待つのは最大1.2秒）
+      const colorsOf = () =>
+        canvas.evaluate((c) => {
+          const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
+          const colors = new Set();
+          for (let i = 0; i < d.length; i += 4 * 97) colors.add((d[i] << 16) | (d[i + 1] << 8) | d[i + 2]);
+          return colors.size;
+        });
+      let painted = 0;
+      for (let i = 0; i < 25 && painted <= 50; i++) {
+        await p.waitForTimeout(200);
+        painted = await colorsOf();
+      }
       assert.ok(painted > 50, `動きで見るの絵が描かれていない（色${painted}）`);
+      // 結果の文は、動きが終わるまで出さない
+      assert.equal(await motion.locator('.online-live-telop[data-wait]').count(), 1, '動きが終わる前に結果の文が出ている');
       if (process.env.LOOK_SHOTS) await motion.screenshot({ path: `${process.env.LOOK_SHOTS}/motion-pc.png` });
       await motion.getByRole('button', { name: '×2' }).click();
+      await motion.locator('.online-live-telop:not([data-wait])').waitFor({ timeout: 20000 });
+      assert.equal(await motion.locator('.online-live-flow li[data-now]').count(), 1, '動きが終わっても結果の行が出ない');
       await motion.getByRole('button', { name: '▶ 自動' }).click();
       await p.waitForFunction(
         () => /^[2-9]|^\d{2}/.test(document.querySelector('.online-live[data-motion] .online-live-controls small')?.textContent || ''),
