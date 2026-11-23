@@ -27,6 +27,7 @@ import {
   splitBundle,
   assembleBundle,
   assembleLight,
+  assembleWorld,
   runWithLightRead,
 } from './snapshotParts.mjs';
 /** 部分の履歴（`views._parts.history`）が指すオブジェクトのパス */
@@ -206,14 +207,16 @@ export class SupabaseStore {
    * 世代を読む。古い形（bundle をまるごと1つ）も分けた形（芯＋部分）も読める。
    * `light` なら芯と記録だけ読み、世界の部分は番人にする（`assembleLight`）。
    */
-  async loadSnapshot(row, { light = false, records = true } = {}) {
+  async loadSnapshot(row, { light = false, records = true, world = false } = {}) {
     if (!row?.snapshot_path)
       return { bundle: { league: null, sessions: {}, receipts: {} }, refs: {} };
     const snapshot = await this.object(row.snapshot_path);
     if (!isSplitSnapshot(snapshot)) return { bundle: snapshot, refs: {} };
     const { core, order, parts: refs } = snapshot;
+    // `world`: 終わった年の試合（pastGames）だけ読まない（`assembleWorld`）
+    const skipPast = world && !light && Boolean(refs.pastGames);
     const names = Object.keys(refs).filter(
-      (name) => !light || (records && name === 'records'),
+      (name) => (light ? records && name === 'records' : !(skipPast && name === 'pastGames')),
     );
     const data = Object.fromEntries(
       await Promise.all(
@@ -222,6 +225,10 @@ export class SupabaseStore {
     );
     if (light) {
       const run = assembleLight(core, order, data, refs);
+      return { bundle: run.bundle, light: run, refs };
+    }
+    if (skipPast) {
+      const run = assembleWorld(core, order, data);
       return { bundle: run.bundle, light: run, refs };
     }
     return { bundle: assembleBundle(core, order, data), refs };
@@ -690,8 +697,8 @@ export class SupabaseStore {
       // ⚠ まず軽い読み、だめなら全体で読み直す判定は `runWithLightRead`（検査用の保存と共通）
       const { loaded, outcome, views, archives, prepared } = await runWithLightRead({
         full,
-        load: async (light) => {
-          const loaded = await this.loadSnapshot(row, { light });
+        load: async (light, mode) => {
+          const loaded = await this.loadSnapshot(row, { light, world: mode === 'world' });
           return { ...loaded, run: loaded.light || null };
         },
         attempt: (loaded) => this.attemptCommand(fn, loaded, row, control),
@@ -755,7 +762,11 @@ export class SupabaseStore {
   async writeSnapshot(prepared, previous = {}) {
     let core, order, refs;
     if (prepared.bundle) {
-      const split = splitBundle(prepared.bundle);
+      // `keepPastGames`: 終わった年の試合は読んでいない（`assembleWorld`）。前の部分をそのまま指す
+      const keepPastGames = Boolean(prepared.keepPastGames);
+      if (keepPastGames && !previous.pastGames)
+        throw new Error('終わった年の試合の部分が見つからないまま、使い回して保存しようとしました');
+      const split = splitBundle(prepared.bundle, { keepPastGames });
       core = split.core;
       order = split.order;
       // ⚠ 部分の上げ直しは互いに関係しないので並べて待つ（1つずつ待つと往復の数だけ遅れた）。
@@ -768,6 +779,7 @@ export class SupabaseStore {
           ]),
         ),
       );
+      if (keepPastGames) refs.pastGames = previous.pastGames;
     } else {
       core = prepared.core;
       order = prepared.order;

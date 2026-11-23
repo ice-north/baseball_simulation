@@ -14,7 +14,8 @@
 //   pastGames   … 終わった年（今季より前）の試合の記録（records.seasons[年].games）。
 //                  1年で約22MB（展開後）増え、軽い読みでも毎回読んでいた（先方回答 F1）。
 //                  records の中のその場所には印（`PAST_GAMES`）を置き、全体を読むときに戻す。
-//                  軽い読みでは印を番人に差し替える（触ったら全体を読み直す）
+//                  軽い読みでは印を番人に差し替える（触ったら全体を読み直す）。
+//                  世界を読む処理（`{ full: true }`）も、まずはここだけ読まない（`assembleWorld`）
 //
 // 【軽い読み（light）】芯と records だけ読み、world と backup は「触ったら印を付けて
 //   止まる」番人（Proxy）に差し替える。命令やビュー作りが番人に触ったら、
@@ -105,16 +106,23 @@ export const isSplitSnapshot = (snapshot) =>
  * 記録から、終わった年（`year` より前）の試合の記録を抜き出す。元の記録は変えない。
  * ⚠ 抜いた場所に印を置く（キーの順を変えないため。全体を読んだとき1文字も違わないこと）
  */
-function splitPastGames(records, year) {
+function splitPastGames(records, year, { keepPastGames = false } = {}) {
   if (!isObject(records?.seasons) || !Number.isFinite(year)) return { records };
   let pastGames = null;
   let seasons = null;
   for (const [key, season] of Object.entries(records.seasons)) {
     // ⚠ 印のまま来た（軽い読みの記録を全体の保存に回した）なら止める。黙って飛ばすと
-    //    pastGames にその年が入らず、次に読むとき戻せなくてリーグが読めなくなる
-    if (season?.games === PAST_GAMES)
+    //    pastGames にその年が入らず、次に読むとき戻せなくてリーグが読めなくなる。
+    //    `keepPastGames`（世界まで読んだ。終わった年の試合は前の部分をそのまま使う）なら印のままでよい
+    if (season?.games === PAST_GAMES) {
+      if (keepPastGames) continue;
       throw new Error(`終わった年（${key}）の試合の記録が印のまま保存されようとしました`);
+    }
     if (!(Number(key) < year) || !isObject(season?.games)) continue;
+    // ⚠ 前の部分を使い回すときに、印でない終わった年が混じったら止める（その年だけの部分になり、
+    //    ほかの年が消える）。年が変わったら全体で読み直している（`assembleWorld` の `inspect`）
+    if (keepPastGames)
+      throw new Error(`終わった年（${key}）の試合の記録を、前の部分を使い回したまま保存しようとしました`);
     pastGames ||= {};
     seasons ||= { ...records.seasons };
     pastGames[key] = season.games;
@@ -124,9 +132,14 @@ function splitPastGames(records, year) {
 }
 
 /** 印の場所に、終わった年の試合の記録を戻す（その場で書き換える） */
-function restorePastGames(records, pastGames) {
+function restorePastGames(records, pastGames, guardOf = null) {
   for (const [key, season] of Object.entries(records?.seasons || {}))
     if (season?.games === PAST_GAMES) {
+      // 終わった年の試合を読まなかった（`assembleWorld`）なら、印の場所を番人にする
+      if (guardOf) {
+        season.games = guardOf(key);
+        continue;
+      }
       if (!isObject(pastGames?.[key])) throw new Error(`終わった年（${key}）の試合の記録が見つかりません`);
       season.games = pastGames[key];
     }
@@ -137,7 +150,7 @@ function restorePastGames(records, pastGames) {
  * 全体の bundle を芯と部分に分ける。返す core は保存用の包み（部分の参照は呼ぶ側が入れる）。
  * 元の bundle は変えない。
  */
-export function splitBundle(bundle) {
+export function splitBundle(bundle, { keepPastGames = false } = {}) {
   const order = { bundle: Object.keys(bundle) };
   const { backup, ...rest } = bundle;
   const parts = {};
@@ -172,7 +185,7 @@ export function splitBundle(bundle) {
   parts.world = world;
   const { records, ...leagueRest } = league;
   if (records !== undefined) {
-    const split = splitPastGames(records, league.season?.year);
+    const split = splitPastGames(records, league.season?.year, { keepPastGames });
     parts.records = split.records;
     if (split.pastGames) parts.pastGames = split.pastGames;
   }
@@ -189,7 +202,7 @@ const ordered = (keys, source) => {
 };
 
 /** 芯と全部の部分から、分ける前の bundle に戻す */
-export function assembleBundle(core, order, parts) {
+export function assembleBundle(core, order, parts, { pastGuardOf = null } = {}) {
   const bundle = { ...unpackResults(core) };
   if (parts.backup !== undefined) bundle.backup = parts.backup;
   const league = bundle.league;
@@ -206,7 +219,7 @@ export function assembleBundle(core, order, parts) {
     for (const key of WORLD_KEYS)
       if (Object.hasOwn(world, key)) game[key] = world[key];
     const nextLeague = { ...league, game: ordered(order.game, game) };
-    if (parts.records !== undefined) nextLeague.records = restorePastGames(parts.records, parts.pastGames);
+    if (parts.records !== undefined) nextLeague.records = restorePastGames(parts.records, parts.pastGames, pastGuardOf);
     bundle.league = ordered(order.league, nextLeague);
   }
   return ordered(order?.bundle, bundle);
@@ -218,7 +231,8 @@ export function assembleBundle(core, order, parts) {
  *    同じこの判定を使う**。両方に書き写していると、片方だけ直したときに検査が本番の
  *    取りこぼしを捕まえられなくなる。
  *
- * - `load(light)` … 保存を読む。軽い読みなら `run` に `assembleLight` の返り値を入れて返す
+ * - `load(light, mode)` … 保存を読む。軽い読み（`mode` が 'light'）なら `run` に `assembleLight` の、
+ *   'world' なら `assembleWorld` の返り値を入れて返す。'all' は全部（`run` なし）
  * - `attempt(loaded)` … 命令を走らせ、`{ outcome, prepared, ... }` を返す。
  *   `prepared` は変更を保存する形（軽い読みなら `run.inspect(bundle)`。null は保存できない）
  *
@@ -228,9 +242,14 @@ export function assembleBundle(core, order, parts) {
  * 返り値は `attempt` の返り値に、読んだもの（`loaded`）と読んだ回数（`attempts`）を足したもの。
  */
 export async function runWithLightRead({ full = false, load, attempt, onEscalate = () => {} }) {
-  let light = !full;
+  // 読み方: 'light'（芯と記録）→ 'world'（終わった年の試合のほか全部）→ 'all'（全部）。
+  // ⚠ `full: true` は 'world' から始める。世界を読む命令（定期進行・提出・トレードなど）も
+  //    終わった年の試合はまず読まない。その記録は1年で約22MB（展開後）ずつ増え、全部を読むと
+  //    読み・複製・書き出し（変わっていないかの確かめに JSON にする）が年々重くなっていた
+  //    （3年目で1回あたり約1.5秒、10年目で約6秒の見込み）。触ったら 'all' で読み直す
+  let mode = full === 'all' ? 'all' : full ? 'world' : 'light';
   for (let attempts = 1; ; attempts++) {
-    const loaded = await load(light);
+    const loaded = await load(mode === 'light', mode);
     const run = loaded.run || null;
     let result;
     try {
@@ -238,18 +257,75 @@ export async function runWithLightRead({ full = false, load, attempt, onEscalate
     } catch (error) {
       if (run && (run.tracker.touched || error?.name === 'DataCloneError')) {
         onEscalate(run.tracker.touched, error);
-        light = false;
+        mode = 'all';
         continue;
       }
       throw error;
     }
     if (run && (run.tracker.touched || (!result.outcome?.unchanged && !result.prepared))) {
       onEscalate(run.tracker.touched, null);
-      light = false;
+      mode = 'all';
       continue;
     }
-    return { ...result, loaded, attempts };
+    return { ...result, loaded, attempts, mode };
   }
+}
+
+/** 触ったら印を付けて止まる番人を作る道具（`assembleLight`・`assembleWorld`） */
+function guardKit() {
+  const tracker = { touched: null };
+  const touch = (reason) => {
+    tracker.touched ??= reason;
+    throw new NeedsFullWorld(reason);
+  };
+  const guard = (label, isArray = false) =>
+    new Proxy(isArray ? [] : {}, {
+      get: () => touch(label),
+      set: () => touch(label),
+      has: () => touch(label),
+      ownKeys: () => touch(label),
+      deleteProperty: () => touch(label),
+      defineProperty: () => touch(label),
+      getOwnPropertyDescriptor: () => touch(label),
+      getPrototypeOf: () => touch(label),
+    });
+  return { tracker, touch, guard };
+}
+
+/**
+ * 世界まで読む: 終わった年の試合（pastGames）**だけ**読まずに番人にし、ほかは全部読んで bundle を作る。
+ * 返す `inspect(bundle)` は、命令のあと保存する形（`{ bundle, keepPastGames }`）を返す。
+ * 終わった年の試合は前の部分をそのまま使うので、番人がその場所に残っていること・年が変わって
+ * いないこと（今季が終わった年に入ると、その年を pastGames に書き足すことになる）が条件。
+ * だめなら null（全体で読み直す）。
+ * ⚠ 命令は番人を複製できない（`structuredClone` は `DataCloneError`。全体で読み直しになる）。
+ *    定期進行はリーグの写しを、終わった年の試合だけ同じものを指して作る（`leagueService` の `cloneLeague`）
+ */
+export function assembleWorld(core, order, parts) {
+  const { tracker, guard } = guardKit();
+  const pastGuards = {};
+  const bundle = assembleBundle(core, order, parts, {
+    pastGuardOf: (key) => (pastGuards[key] = guard(`終わった年の試合 ${key}`)),
+  });
+  const originalYear = bundle.league?.season?.year;
+  const inspect = (after) => {
+    if (tracker.touched) return null;
+    const years = Object.keys(pastGuards);
+    if (!years.length) return { bundle: after };
+    const league = after.league;
+    if (!league || league.season?.year !== originalYear || !isObject(league.records?.seasons)) return null;
+    const seasons = { ...league.records.seasons };
+    for (const key of years) {
+      const season = seasons[key];
+      if (!season || season.games !== pastGuards[key]) return null;
+      seasons[key] = { ...season, games: PAST_GAMES };
+    }
+    return {
+      bundle: { ...after, league: { ...league, records: { ...league.records, seasons } } },
+      keepPastGames: true,
+    };
+  };
+  return { bundle, tracker, inspect };
 }
 
 /**
@@ -258,25 +334,9 @@ export async function runWithLightRead({ full = false, load, attempt, onEscalate
  * 返す `inspect(bundle)` は、命令のあとで「軽い読みのまま保存できるか」と、保存する芯を返す。
  */
 export function assembleLight(core, order, parts, refs) {
-  const tracker = { touched: null };
-  const touch = (reason) => {
-    tracker.touched ??= reason;
-    throw new NeedsFullWorld(reason);
-  };
-  const guard = (label) =>
-    new Proxy(
-      order?.arrays?.includes(label) ? [] : {},
-      {
-        get: () => touch(label),
-        set: () => touch(label),
-        has: () => touch(label),
-        ownKeys: () => touch(label),
-        deleteProperty: () => touch(label),
-        defineProperty: () => touch(label),
-        getOwnPropertyDescriptor: () => touch(label),
-        getPrototypeOf: () => touch(label),
-      },
-    );
+  const kit = guardKit();
+  const { tracker, touch } = kit;
+  const guard = (label) => kit.guard(label, order?.arrays?.includes(label));
   const bundle = { ...unpackResults(core) };
   const guards = {};
   // 終わった年の試合の記録の番人（年 → 番人）
