@@ -7,8 +7,8 @@
 //     スタメン設定に選手の顔、選手の詳細に顔と段位の字、調子は自前の顔になる
 //   - 入／切は端末に覚える（開き直しても入のまま）。リーグの球団でない名前にはマークを描かない
 //   - スマホはメニュー（☰）から切り替えられる
-//   - 字: 入のときだけ見出しが LookHead・数字が LookNum。見出しの中の注記と新聞は今までの字のまま。
-//     見出しのフォント（public/fonts/、約450KB）は入にするまで読まない
+//   - 字: 入のときだけ見出しが LookHead・本文が LookNum（数字と英字）＋LookJP（日本語）。見出しの中の注記と新聞は今までの字のまま。
+//     日本語のフォント（public/fonts/、1つ約450KB）は入にするまで読まない
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { chromium } from 'playwright';
@@ -23,8 +23,9 @@ const browser = await chromium.launch({
   headless: true,
 });
 const errors = [];
-const headFont = await readFile(new URL('../../public/fonts/look-head.woff2', import.meta.url));
-let headFontLoads = 0;
+// 日本語のフォント（public/fonts/）。読んだ回数を名前ごとに数える
+const fontLoads = {};
+const loadedFonts = () => Object.keys(fontLoads).sort();
 const fontOf = (p, selector) => p.evaluate((sel) => getComputedStyle(document.querySelector(sel)).fontFamily, selector);
 const EMOJI = /[🔥😊😐😞😰]/u;
 
@@ -35,9 +36,11 @@ async function open(contextOptions) {
   await context.route(`${base}/online`, (route) =>
     route.fulfill({ contentType: 'text/html', body: html }),
   );
-  await context.route(`${base}/fonts/look-head.woff2`, (route) => {
-    headFontLoads += 1;
-    return route.fulfill({ contentType: 'font/woff2', body: headFont });
+  await context.route(`${base}/fonts/*.woff2`, async (route) => {
+    const name = new URL(route.request().url()).pathname.split('/').pop();
+    fontLoads[name] = (fontLoads[name] ?? 0) + 1;
+    const body = await readFile(new URL(`../../public/fonts/${name}`, import.meta.url));
+    return route.fulfill({ contentType: 'font/woff2', body });
   });
   const p = await context.newPage();
   p.on('pageerror', (e) => errors.push(e.message));
@@ -62,7 +65,7 @@ await withDeadline(
       assert.doesNotMatch(await fontOf(p, '.online'), /LookNum/, '切なのに数字の字が変わっている');
       assert.doesNotMatch(await fontOf(p, '.online h2'), /LookHead/, '切なのに見出しの字が変わっている');
       await p.evaluate(() => document.fonts.ready);
-      assert.equal(headFontLoads, 0, '切なのに見出しのフォントを読んだ');
+      assert.deepEqual(loadedFonts(), [], '切なのに日本語のフォントを読んだ');
 
       // 入にする
       await toggle.click();
@@ -89,8 +92,8 @@ await withDeadline(
       assert.match(await fontOf(p, '.online'), /^LookNum,/);
       assert.match(await fontOf(p, '.online h2'), /^LookHead,/);
       assert.match(await fontOf(p, '.online h2 small'), /^LookNum,/, '見出しの中の注記まで見出しの字になった');
-      await p.waitForFunction(() => document.fonts.check('16px LookHead'));
-      assert.ok(headFontLoads > 0, '入なのに見出しのフォントを読んでいない');
+      await p.waitForFunction(() => ['16px LookHead', '16px LookJP', 'bold 16px LookJP'].every((f) => document.fonts.check(f)));
+      assert.deepEqual(loadedFonts(), ['look-body-bold.woff2', 'look-body-regular.woff2', 'look-head.woff2']);
       // 新聞は新聞の字のまま
       await p.locator('.online-paper-open').click();
       await p.locator('.online-paper h2').first().waitFor();
