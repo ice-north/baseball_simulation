@@ -192,6 +192,9 @@ export const ALL_PITCH_TYPES = [
   'cutter', 'splitter', 'twoSeam', 'palm', 'knuckle'
 ];
 
+// ⚠ **フォームと球種の相性の正本**。試合（`formPitchBonus`）・自然成長（`tryLearnNewPitch`）・
+//    キャンプ（`campTraining` の `FORM_PITCH_AFFINITY` はここから作る）・画面の「★フォーム適性」・
+//    大学の新球選びがみなこの一覧を読む。別の表を作らないこと
 export const FORM_PITCH_SYNERGY = {
   overhand: ['curve', 'fork', 'splitter', 'knuckle'],      // 縦変化
   threeQuarter: [],                                         // すべて平均的
@@ -268,8 +271,8 @@ export const DP_BASE = 34;
 /**
  * フォームと球種の相性が**試合の効きに与える倍率**。
  *
- * ⚠ `FORM_PITCH_SYNERGY` は長らく**キャンプの成長倍率と習得成功率にしか
- * 効いていなかった**。そのため同じレベルで揃えると
+ * ⚠ 以前は相性が**試合に効いていなかった**（キャンプの練習にだけ効いていた。
+ * そのキャンプも別の表を持っていたが、今は `FORM_PITCH_SYNERGY` から作る）。そのため同じレベルで揃えると
  *   サイド＋シンカー(適性) 2.670 対 サイド＋フォーク(適性外) 2.643
  * と適性が結果に一切出ず、「サイド・アンダースローはシンカーが武器」という
  * 設計が球速ペナルティ（アンダーは×0.92）だけ受けて損をする形になっていた。

@@ -7,8 +7,7 @@
 import { generateRandomPlayerName, getRandomGivenName } from '../data/playerNames.js';
 import { getRegionalSurname, REGIONAL_SHARE } from '../data/prefectureNames.js';
 import { homeBlockOf, blockOfUniversity, HOME_UNIV_PREF } from '../data/regions.js';
-import { generateCatcherLead, taperLow, ALL_PITCH_TYPES, createEmptyStats, blankSeasonStats } from '../utils/constants.js';
-import { FORM_PITCH_AFFINITY } from './campTraining.js';
+import { generateCatcherLead, taperLow, ALL_PITCH_TYPES, FORM_PITCH_SYNERGY, createEmptyStats, blankSeasonStats } from '../utils/constants.js';
 import { generatePositionFitness, generateRandomArsenal, generateTwoWayPositionFitness } from './tryoutSystem.js';
 import { getUniversityGrowthMultiplier, UNIVERSITY_TEAMS, getUniversityTeamsByRank } from '../university/universityTeamsData.js';
 import { assignHighSchool } from '../data/highSchoolData.js';
@@ -1211,9 +1210,9 @@ export function processUniversityYear(currentYear) {
   return { graduates, report };
 }
 
-// フォームごとの適性球種（キャンプの表のキー。順もそのまま使う）
-const UNI_FORM_PITCH_AFFINITY = Object.fromEntries(
-  Object.entries(FORM_PITCH_AFFINITY).map(([form, table]) => [form, Object.keys(table)]));
+// フォームごとの適性球種。**試合の表（`FORM_PITCH_SYNERGY`）が正本**——キャンプの
+// `FORM_PITCH_AFFINITY` もここから作るので、大学・キャンプ・試合で適性が揃う
+const UNI_FORM_PITCH_AFFINITY = FORM_PITCH_SYNERGY;
 
 /**
  * 大学での1年間の成長を適用

@@ -1327,12 +1327,16 @@ assert.ok(
 // ⚠ オンラインで新球種を覚える道は**サブ練習だけ**（`CAMP_MENUS` に newpitch は無い）。
 //    ここが遅いと一生覚えない。実測（初期セットの投手・器用さ平均53）:
 //    1クール 24.3%→29.9%、4クール続けて1つ以上 66.9%→75.7%
+// ⚠ フォームの適性は**試合の表（`FORM_PITCH_SYNERGY`）が正本**になった（監査 2026-11-23）。
+//    スリークォーターは試合の表で「すべて平均」＝適性球が無いので、適性の加算が無く
+//    1クール約22%（以前のキャンプの表では slider・changeup・cutter に適性があり約30%）。
+//    見本は適性球のあるオーバースローで測り、スリークォーターは別に下限だけ見る
 {
-  const pitcher = () => ({
+  const pitcher = (form = 'overhand') => ({
     position: 'pitcher',
     name: '新球種の見本',
     physical: { muscle: 50, bodyStamina: 50, arm: 50, dexterity: 50, speed: 50, recovery: 50 },
-    pitching: { velocity: 140, control: 50, stamina: 100, spinRate: 50, form: 'threeQuarter', arsenal: [{ id: 1, type: 'straight', level: 100 }] },
+    pitching: { velocity: 140, control: 50, stamina: 100, spinRate: 50, form, arsenal: [{ id: 1, type: 'straight', level: 100 }] },
     batting: { meet: 20, power: 20, eye: 20 },
     fielding: { defense: 50 },
   });
@@ -1356,6 +1360,15 @@ assert.ok(
     if (p.pitching.arsenal.length > 1) four += 1;
   }
   assert.ok(four / 1000 >= 0.65, `4クール続けても覚えない: ${((four / 1000) * 100).toFixed(1)}%`);
+  // スリークォーター（適性球なし）。素の 0.22×器用さ
+  let tq = 0;
+  for (let i = 0; i < runs; i++) {
+    const p = pitcher('threeQuarter');
+    executeSubTraining(p, 'newpitch', {});
+    if (p.pitching.arsenal.length > 1) tq += 1;
+  }
+  assert.ok(tq / runs >= 0.18 && tq / runs <= 0.27,
+    `スリークォーターの新球種の取得率が範囲外: 1クール ${((tq / runs) * 100).toFixed(1)}%`);
 }
 
 // ⚠ 世界を汚したまま終わらない（ほかの検査と同じプロセスで動くことがある）

@@ -9,7 +9,7 @@
 // ============================================================
 
 import { PHYSICAL_STATS, getAgeGrowthBase, getStatPath, getStatName, getNestedValue, setNestedValue, physiqueMultFor, dexterityMult, dexterityShift } from './growthUtils.js';
-import { PITCHING_FORM_EFFECTS, getPitchTypeName, FORM_SHORT, BATS_SHORT, ABILITY_CAP, ALL_PITCH_TYPES } from '../utils/constants.js';
+import { PITCHING_FORM_EFFECTS, FORM_PITCH_SYNERGY, getPitchTypeName, FORM_SHORT, BATS_SHORT, ABILITY_CAP, ALL_PITCH_TYPES } from '../utils/constants.js';
 import { syncPositionToFitness, getVelocityCap, getVelocityCatchupMult } from '../utils/physics.js';
 // ⚠ **確率的丸め**。年次成長（`growthSystem`）と同じものを使う（二重に書かない）
 import { stochasticRound } from './growthSystem.js';
@@ -1065,29 +1065,22 @@ function getBattingOrderGrowthBonus(player, targetStat) {
 
 // フォーム別の変化球適性（習得しやすさ・成長ボーナス）
 // affinity: 習得成功率ボーナス(加算), growth: 変化球練習の成長倍率
-// ⚠ 大学の新球種（`universityPool` の UNI_FORM_PITCH_AFFINITY）はこの表のキーの順を使う
-export const FORM_PITCH_AFFINITY = {
-  overhand: {
-    fork: { affinity: 0.15, growth: 1.5 },
-    curve: { affinity: 0.10, growth: 1.3 },
-    splitter: { affinity: 0.10, growth: 1.3 },
-  },
-  threeQuarter: {
-    slider: { affinity: 0.10, growth: 1.3 },
-    changeup: { affinity: 0.10, growth: 1.3 },
-    cutter: { affinity: 0.10, growth: 1.3 },
-  },
-  sidearm: {
-    sinker: { affinity: 0.15, growth: 1.5 },
-    slider: { affinity: 0.10, growth: 1.3 },
-    shoot: { affinity: 0.10, growth: 1.3 },
-  },
-  submarine: {
-    sinker: { affinity: 0.20, growth: 1.7 },
-    changeup: { affinity: 0.10, growth: 1.3 },
-    twoSeam: { affinity: 0.10, growth: 1.3 },
-  },
+// ⚠ **どの球種が適性かは試合の表（`constants.js` の `FORM_PITCH_SYNERGY`）が正本**。
+//    以前はここに別の一覧があり、アンダースローの適性がキャンプでは changeup・twoSeam、
+//    試合では sinker・curve・palm と食い違っていた（「相性◎」で練習した球が試合では×0.88）。
+//    ここで決めるのは**適性球のボーナスの大きさだけ**。`FORM_PITCH_STRONG` に無い適性球は
+//    標準（+0.10・×1.3）。スリークォーターは試合の表で「すべて平均」なので適性球は無い。
+// ⚠ 大学の新球種（`universityPool` の UNI_FORM_PITCH_AFFINITY）はこの表のキーの順
+//    （＝`FORM_PITCH_SYNERGY` の並び）を使う
+const FORM_PITCH_DEFAULT_AFF = { affinity: 0.10, growth: 1.3 };
+const FORM_PITCH_STRONG = {
+  overhand: { fork: { affinity: 0.15, growth: 1.5 } },
+  sidearm: { sinker: { affinity: 0.15, growth: 1.5 } },
+  submarine: { sinker: { affinity: 0.20, growth: 1.7 } },
 };
+export const FORM_PITCH_AFFINITY = Object.fromEntries(
+  Object.entries(FORM_PITCH_SYNERGY).map(([form, list]) => [form, Object.fromEntries(
+    list.map(t => [t, { ...(FORM_PITCH_STRONG[form]?.[t] || FORM_PITCH_DEFAULT_AFF) }]))]));
 
 function getFormPitchAffinity(form, pitchType) {
   return FORM_PITCH_AFFINITY[form]?.[pitchType] || null;
