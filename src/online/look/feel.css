@@ -1,0 +1,627 @@
+/* 新しい見た目（試作）その2: 「ブラウザゲームっぽさ」を減らす（いしだ依頼 2026-11-23。案1〜5）。
+   1 ブラウザの部品を消す  2 動き  3 表の型をそろえる  4 数字の札と棒  5 地の質感
+   ⚠ `look.css` と同じく `.online.online-look` の下にだけ書く（切のときは今までと1画素も変えない）。
+      html に当てるものは `html.online-look-root`（入のときだけ `look/chrome.js` が付ける）。
+   ⚠ 地の色・カードの色は変えない（`online.css` に色が約680か所ある）。上に重ねるだけ。 */
+
+/* ===== 1. ブラウザの部品を消す =========================================== */
+/* 暗い画面だと宣言する: プルダウンの一覧・チェックボックス・スクロールバーがブラウザ標準の白から暗い色になる */
+html.online-look-root,
+.online.online-look {
+  color-scheme: dark;
+  scrollbar-color: #5b7590 transparent;
+}
+/* 引っぱって戻す動き（ゴムのような伸び）と、押したときの青い四角を出さない */
+html.online-look-root {
+  overscroll-behavior-y: none;
+}
+.online.online-look {
+  -webkit-tap-highlight-color: transparent;
+}
+/* Safari はまだ scrollbar-color を読まないので、webkit の指定でも同じにする */
+html.online-look-root ::-webkit-scrollbar,
+.online.online-look ::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+html.online-look-root ::-webkit-scrollbar-track,
+.online.online-look ::-webkit-scrollbar-track {
+  background: transparent;
+}
+html.online-look-root ::-webkit-scrollbar-thumb,
+.online.online-look ::-webkit-scrollbar-thumb {
+  border: 2px solid transparent;
+  border-radius: 6px;
+  background: #5b7590 padding-box;
+}
+/* ボタンの字を長押しで選ばせない（スマホで文字選択の青が出ると一気にウェブページに見える） */
+.online.online-look button:not(:where(.online-sp *)) {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+/* プルダウン: ブラウザの矢印を消して、自前の矢印にする */
+.online.online-look select:not(:where(.online-sp *)) {
+  appearance: none;
+  -webkit-appearance: none;
+  padding-right: 26px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5l5 5 5-5' fill='none' stroke='%23cbd5e1' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 8px center;
+  background-size: 11px 7px;
+  cursor: pointer;
+}
+/* スマホの選手成績の球団選び（幅126px・余白3pxの指定が強い）にも矢印の場所を空ける */
+.online.online-look.online-mobile .online-roster-toolbar > div:first-child select {
+  padding-right: 20px;
+  background-position: right 6px center;
+}
+.online.online-look select:not(:where(.online-sp *)):hover {
+  border-color: #9fb0c4;
+}
+/* 押せる名前: 下線をやめて、太さと色で見せる（乗せたときだけ球団色の下線） */
+.online.online-look :is(.online-player-name, .online-team-name):not(:where(.online-sp *, .online-paper *)) {
+  text-decoration: none;
+  font-weight: 600;
+}
+.online.online-look :is(.online-player-name, .online-team-name):not(:where(.online-sp *, .online-paper *)):is(:hover, :focus-visible) {
+  text-decoration: underline;
+  text-decoration-color: var(--team-c2, var(--accent));
+  text-decoration-thickness: 2px;
+  text-underline-offset: 4px;
+}
+/* 選手成績の行はまるごと押せる名前のボタンなので、行の字ぜんぶに下線が付いてしまう。下線は名前だけにする */
+.online.online-look .online-roster-row:is(:hover, :focus-visible) {
+  text-decoration: none;
+}
+.online.online-look .online-roster-row:is(:hover, :focus-visible) .online-roster-player-name {
+  text-decoration: underline;
+  text-decoration-color: var(--team-c2, var(--accent));
+  text-decoration-thickness: 2px;
+  text-underline-offset: 4px;
+}
+/* 押したところの枠を球団の色に（キーボードで動かしたときだけ出る） */
+.online.online-look :is(button, select, input, [tabindex]):focus-visible {
+  outline: 2px solid var(--team-c2, var(--accent));
+  outline-offset: 2px;
+}
+
+/* ===== 2. 動き ============================================================ */
+/* ⚠ どれも 0.3 秒以内で、端末の「動きを減らす」設定のときは全部止める（いちばん下）。
+   ⚠ `fill-mode` は backwards（終わった後に transform を残さない。残すと中の固定の小窓や
+      貼りつく見出しの基準が変わる） */
+@keyframes look-enter {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+@keyframes look-pop {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.98);
+  }
+}
+@keyframes look-grow {
+  from {
+    transform: scaleX(0);
+  }
+}
+@keyframes look-grow-bg {
+  from {
+    background-size: 0 3px;
+  }
+}
+/* ページを開いたとき: 見出し → カードの順に、少しずつ遅らせて浮かび上がる */
+.online.online-look .online-page {
+  animation: look-enter 0.22s ease-out backwards;
+}
+.online.online-look .online-page .online-card {
+  animation: look-enter 0.28s ease-out backwards;
+}
+.online.online-look .online-page .online-card:nth-child(2) {
+  animation-delay: 0.04s;
+}
+.online.online-look .online-page .online-card:nth-child(3) {
+  animation-delay: 0.08s;
+}
+.online.online-look .online-page .online-card:nth-child(n + 4) {
+  animation-delay: 0.12s;
+}
+/* 小窓（選手の詳細・試合など）はふわっと出す */
+.online.online-look dialog[open] {
+  animation: look-pop 0.2s ease-out backwards;
+}
+/* ボタン: 色はなめらかに変え、押した瞬間に少し沈む */
+.online.online-look button:not(:where(.online-sp *)) {
+  transition:
+    background-color 0.15s,
+    border-color 0.15s,
+    color 0.15s,
+    box-shadow 0.15s,
+    transform 0.08s;
+}
+.online.online-look button:not(:where(.online-sp *)):active:not(:disabled) {
+  transform: translateY(1px) scale(0.97);
+}
+/* 行まるごとのボタン（選手成績の行）は縮めずに、押した色だけ */
+.online.online-look .online-roster-row:active:not(:disabled) {
+  transform: none;
+  background-color: rgba(255, 255, 255, 0.06);
+}
+/* 棒が左から伸びる（能力の棒・順位表の勝率・並べ替えた列の棒） */
+.online.online-look .online-ability-bar > i {
+  transform-origin: left center;
+  animation: look-grow 0.5s cubic-bezier(0.2, 0.7, 0.2, 1) backwards;
+}
+.online.online-look .online-standings td.online-standings-rate,
+.online.online-look .online-look-bar {
+  animation: look-grow-bg 0.5s cubic-bezier(0.2, 0.7, 0.2, 1) backwards;
+}
+/* 並べ替わる行が、表の見出しの上まで滑って重ならないように（`look/motion.js`） */
+.online.online-look .online-compact-roster .online-roster-rows {
+  overflow-y: clip;
+}
+/* 行に乗せたときの明るさ */
+.online.online-look :is(.online-card tbody tr, .online-roster-rows article) {
+  transition: background-color 0.12s;
+}
+.online.online-look.online-desktop :is(.online-card tbody tr, .online-roster-rows article):hover {
+  background-color: rgba(255, 255, 255, 0.05);
+}
+
+/* ===== 3. 表の型をそろえる ================================================ */
+/* 見出しの下に球団色の線、見出しの字は小さめ・やや明るく・字間を空ける */
+.online.online-look .online-card thead th:not(:where(.online-sp *, .online-paper *)),
+.online.online-look .online-roster-columns button {
+  letter-spacing: 0.04em;
+  color: #d5deea;
+}
+.online.online-look .online-card thead:not(:where(.online-sp *, .online-paper *)) tr:last-child th {
+  border-bottom: 2px solid var(--team-c2, #668196);
+}
+.online.online-look .online-roster-columns {
+  border-bottom: 2px solid var(--team-c2, #668196);
+}
+/* 縞: 1行おきにうっすら明るく。⚠ 詳細度0（:where）にして、自球団の行などの色を上書きしない */
+:where(.online.online-look) :where(.online-card tbody tr:nth-child(even):not(.online-own)),
+:where(.online.online-look) :where(.online-roster-rows article:nth-child(even)) {
+  background-color: rgba(255, 255, 255, 0.025);
+}
+/* 区切り線は細く薄く（縞があるので線は弱くてよい） */
+.online.online-look .online-compact-roster .online-roster-rows article {
+  border-bottom-color: rgba(255, 255, 255, 0.07);
+}
+/* 選手成績（PC）: 行の高さをそろえる。型の札は名前の右に1行で並べ、はみ出す分は隠す（押すと詳細に全部ある） */
+.online.online-look.online-desktop .online-compact-roster .online-roster-rows article {
+  height: 44px;
+}
+.online.online-look.online-desktop .online-compact-roster .online-roster-person {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  overflow: hidden;
+}
+.online.online-look.online-desktop .online-compact-roster .online-roster-name {
+  flex: none;
+}
+.online.online-look.online-desktop .online-compact-roster .online-stat-labels {
+  min-width: 0;
+  overflow: hidden;
+  -webkit-mask-image: linear-gradient(to right, #000 85%, transparent);
+  mask-image: linear-gradient(to right, #000 85%, transparent);
+}
+/* 切り替えのボタン: 3段に積まず、区分（打撃・投球）は名前の横、項目は1列の帯（入りきらなければ横に送る） */
+.online.online-look.online-desktop .online-roster-toolbar {
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  justify-content: flex-start;
+}
+.online.online-look.online-desktop .online-group-tabs {
+  flex: 1 0 100%;
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 4px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.online.online-look.online-desktop .online-group-tabs > .online-segments {
+  flex: none;
+  flex-wrap: nowrap;
+  margin: 0;
+}
+/* 切り替えのボタンの形を1つに（ページの切り替え・区分・項目） */
+.online.online-look :is(.online-page-tabs, .online-segments):not(:where(.online-sp *)) {
+  border-radius: 10px;
+  background: rgba(15, 23, 42, 0.45);
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.25);
+}
+.online.online-look :is(.online-page-tabs, .online-segments):not(:where(.online-sp *)) button {
+  border-radius: 7px;
+  white-space: nowrap;
+}
+.online.online-look :is(.online-page-tabs, .online-segments):not(:where(.online-sp *)) button[aria-pressed='true'] {
+  /* ⚠ 球団の色にしない（白に近い色の球団では白い字が読めなかった）。押したものは「決める」ボタンと同じ水色 */
+  background: var(--accent-strong);
+  border-color: transparent;
+  color: #06232b;
+  font-weight: 700;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+}
+.online.online-look.online-desktop .online-group-tabs button {
+  padding: 4px 8px;
+  font-size: 12.5px;
+}
+/* スマホ: 帯は中身の幅だけにして、押していないボタンの枠と地を消す
+   （スマホは帯が画面の幅いっぱいに伸び、中のボタンの枠と二重に見えた） */
+.online.online-look.online-mobile .online-segments:not(:where(.online-sp *)) {
+  width: fit-content;
+  max-width: 100%;
+  padding: 3px;
+  gap: 3px;
+}
+.online.online-look.online-mobile .online-segments:not(:where(.online-sp *)) button:not([aria-pressed='true']) {
+  border-color: transparent;
+  background: transparent;
+}
+/* カードの見出しの頭に球団色の印 */
+.online.online-look .online-card :is(h2, .online-roster-toolbar h2):not(:where(.online-sp *, .online-paper *))::before {
+  content: '';
+  display: inline-block;
+  width: 4px;
+  height: 0.9em;
+  margin-right: 8px;
+  border-radius: 2px;
+  background: var(--team-c2, var(--accent));
+  vertical-align: -0.05em;
+}
+
+/* ===== 4. 数字の札と棒 ===================================================== */
+/* 成績・能力の数字の前に S〜F の札（`online-rank-chip` は選手詳細と同じもの。`look.css`） */
+.online.online-look .online-roster-values > span:has(> .online-rank-chip) {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 5px;
+}
+.online.online-look .online-roster-values .online-rank-chip {
+  width: 15px;
+  height: 15px;
+}
+.online.online-look .online-roster-values .online-rank-chip > span {
+  font-size: 10px;
+}
+/* PC の選手成績の行: 数字の並びを行の高さいっぱいにする（並べ替えた列の棒を行の下端に置くため） */
+.online.online-look.online-desktop .online-compact-roster .online-roster-row {
+  align-items: stretch;
+}
+.online.online-look.online-desktop .online-compact-roster .online-roster-row > .online-roster-person {
+  align-self: center;
+}
+.online.online-look.online-desktop .online-compact-roster .online-roster-row > .online-roster-values {
+  align-items: center;
+}
+/* 並べ替えた列: セルの下に、いちばん良い人を端までとした棒（順位表の勝率と同じ形） */
+.online.online-look .online-look-bar {
+  /* 行の高さいっぱいに伸ばして、棒を行の下端に置く（字の下に置くと取り消し線に見えた） */
+  align-self: stretch;
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 5px;
+  background-image: linear-gradient(
+    to right,
+    #67e8f9 0 var(--look-bar, 0%),
+    rgba(255, 255, 255, 0.1) var(--look-bar, 0%) 100%
+  );
+  background-repeat: no-repeat;
+  background-size: 100% 3px;
+  background-position: left bottom 5px;
+}
+/* 主要成績の列のまとまり（出場・打撃・指標…）。見出しの上に小さく、まとまりの頭に縦線 */
+.online.online-look .online-look-section {
+  position: relative;
+  display: block;
+  min-width: 0;
+  box-shadow: inset 1px 0 0 rgba(255, 255, 255, 0.14);
+}
+.online.online-look .online-look-section > button {
+  width: 100%;
+}
+.online.online-look .online-look-section::before {
+  content: attr(data-section);
+  position: absolute;
+  top: 1px;
+  left: 6px;
+  font-size: 10px;
+  line-height: 1;
+  letter-spacing: 0.08em;
+  color: #9fb0c4;
+  pointer-events: none;
+}
+.online.online-look .online-roster-values > .online-look-section-start {
+  box-shadow: inset 1px 0 0 rgba(255, 255, 255, 0.08);
+}
+
+/* ===== 5. 地の質感 ========================================================= */
+/* 地（新聞の紙の灰色）はそのまま、上から照明が当たったような明るみと、紙の細かい目を重ねる。
+   ⚠ PC だけ（スマホは地が濃い青で、紙の地は見えない）。地の色そのものは変えない */
+.online.online-look.online-desktop {
+  background-image:
+    radial-gradient(ellipse 70% 420px at 50% -80px, rgba(255, 252, 235, 0.38), transparent 70%),
+    radial-gradient(ellipse 120% 90% at 50% 40%, transparent 55%, rgba(30, 41, 59, 0.22) 100%),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0.15 0 0 0 0 0.17 0 0 0 0 0.2 0 0 0 0.09 0'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E");
+  background-attachment: fixed;
+}
+/* カード: 上の縁に光、影を少し深く（紙の上に置いた板） */
+.online.online-look .online-card:not(:where(.online-sp *, .online-paper *)) {
+  background-image: linear-gradient(180deg, rgba(255, 255, 255, 0.045), transparent 140px);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.07),
+    0 6px 18px rgba(16, 32, 57, 0.22);
+}
+
+/* ===== 動きを減らす設定 =================================================== */
+@media (prefers-reduced-motion: reduce) {
+  .online.online-look *,
+  .online.online-look *::before,
+  .online.online-look dialog[open] {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
+/* ===== 6. どの表でも同じ部品（`look/Parts.jsx`） =========================== */
+/* 守備位置の札（スタメン設定の札と同じ色。`online.css` の `.is-pos-*` が色を決める） */
+.online.online-look .online-pos-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 20px;
+  padding: 0 5px;
+  border: 1px solid var(--pos-line);
+  border-radius: 5px;
+  background: var(--pos-bg);
+  color: var(--pos-ink);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+}
+/* 表の中の成績・能力の数字: 札と数字を横に並べる（選手成績の行は上の 4 で別に決めている） */
+.online.online-look :is(td, th, dd) > .online-stat-graded {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-weight: 700;
+}
+.online.online-look :is(td, th, .online-detail-stats dd) .online-rank-chip {
+  width: 15px;
+  height: 15px;
+  vertical-align: -2px;
+}
+.online.online-look :is(td, th, .online-detail-stats dd) .online-rank-chip > span {
+  font-size: 10px;
+}
+/* 順位の札（順位表の 1〜3 位と同じ色）と「位」 */
+.online.online-look .online-place-chip {
+  display: inline-flex;
+  align-items: center;
+  color: #c4d4e5;
+  font-size: 12px;
+}
+.online.online-look .online-place-chip > .online-rank {
+  margin-right: 3px;
+  font-size: 12px;
+}
+/* 平均との差（+3 緑・-2 赤）。⚠ 幅を決める（差の桁で左の数字の位置がずれないように） */
+.online.online-look .online-delta {
+  display: inline-block;
+  width: 2.4em;
+  margin-left: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  text-align: left;
+  color: #9fb0c4;
+}
+.online.online-look .online-delta.is-up {
+  color: #86efac;
+}
+.online.online-look .online-delta.is-down {
+  color: #fca5a5;
+}
+/* 良し悪しの札 */
+.online.online-look .online-tone-chip {
+  display: inline-block;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.5;
+}
+.online.online-look .online-tone-chip.is-good {
+  background: rgba(134, 239, 172, 0.16);
+  color: #bbf7d0;
+}
+.online.online-look .online-tone-chip.is-warn {
+  background: rgba(250, 204, 21, 0.18);
+  color: #fde68a;
+}
+.online.online-look .online-tone-chip.is-bad {
+  background: rgba(252, 165, 165, 0.2);
+  color: #fecaca;
+}
+/* 表の中の球団マーク・顔 */
+.online.online-look .online-inline-mark {
+  margin: 0 6px 0 0;
+  vertical-align: -4px;
+}
+.online.online-look .online-staff-row-face {
+  float: left;
+  margin: 1px 8px 0 0;
+}
+/* 各球団の指導者: 顔を左に置くので、名前も左寄せにする（中央寄せだと顔と名前が離れる） */
+.online.online-look .online-staff-table :is(td, thead th) {
+  text-align: left;
+}
+
+/* ===== 7. 枠（目次の絵・シーズンの進み具合） ============================== */
+/* 目次の絵（`look/NavIcon.jsx`）。字の色を受け継ぎ、開いているページだけ水色 */
+.online.online-look .online-nav-icon {
+  /* ⚠ Tailwind の初期化が svg を block にするので、字と同じ行に並べ直す */
+  display: inline-block;
+  flex: none;
+  margin-right: 8px;
+  vertical-align: -3px;
+  opacity: 0.8;
+}
+.online.online-look.online-desktop .online-nav-group button {
+  padding-left: 12px;
+}
+.online.online-look .online-page-nav button[aria-current] .online-nav-icon {
+  color: var(--accent);
+  opacity: 1;
+}
+/* シーズンの進み具合（「第Nターン / 160」の箱の上の縁に細い棒）。
+   ⚠ 箱の高さを変えない（背の低い画面で左メニューの一番下が画面の外に出る） */
+.online.online-look .online-nav-clock {
+  position: relative;
+  overflow: hidden;
+}
+.online.online-look .online-season-progress {
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 3px;
+  background: linear-gradient(
+    to right,
+    var(--accent) 0 var(--progress, 0%),
+    rgba(255, 255, 255, 0.14) var(--progress, 0%) 100%
+  );
+}
+/* スマホの下の帯（戻る・ホーム・メニュー）: 絵の下に小さな字。押せないときは薄く */
+.online.online-look .online-mobile-controls {
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 -6px 16px rgba(0, 0, 0, 0.28);
+}
+.online.online-look .online-mobile-controls button {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  background: transparent;
+  color: #dbe4ee;
+}
+.online.online-look .online-mobile-controls button:disabled {
+  opacity: 0.35;
+}
+.online.online-look .online-mobile-controls .online-nav-icon {
+  margin: 0;
+  opacity: 1;
+}
+.online.online-look .online-nav-label {
+  font-size: 10px;
+  line-height: 1;
+  letter-spacing: 0.06em;
+}
+/* スマホのホームの近道: 絵と字を真ん中に並べる */
+.online.online-look .online-home-actions button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* ===== 8. 残ったブラウザの部品 ============================================ */
+/* 折りたたみ: ブラウザの三角を消して、自前の山形に（開くと下を向く） */
+.online.online-look summary:not(:where(.online-sp *, .online-paper *)) {
+  list-style: none;
+  cursor: pointer;
+}
+.online.online-look summary:not(:where(.online-sp *, .online-paper *))::-webkit-details-marker {
+  display: none;
+}
+.online.online-look summary:not(:where(.online-sp *, .online-paper *))::before {
+  content: '';
+  display: inline-block;
+  flex: none;
+  width: 7px;
+  height: 7px;
+  margin: 0 9px 0 2px;
+  border: solid currentColor;
+  border-width: 0 2px 2px 0;
+  transform: rotate(-45deg);
+  transition: transform 0.15s;
+  vertical-align: 1px;
+}
+.online.online-look details[open]:not(:where(.online-sp *, .online-paper *)) > summary::before {
+  transform: rotate(45deg);
+}
+/* チェック・丸ボタン・つまみの色をアクセントの水色に（ブラウザ標準は青） */
+.online.online-look :is(input[type='checkbox'], input[type='radio'], input[type='range'], progress) {
+  accent-color: var(--accent-strong);
+}
+/* 説明のふきだし（`look/tips.js`。ブラウザ標準の黄色い小窓の代わり） */
+.online-look-tip {
+  position: fixed;
+  z-index: 1000;
+  max-width: 300px;
+  margin: 0;
+  padding: 6px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 8px;
+  background: #0f1b2d;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+  color: #e8eef6;
+  font: 12px/1.5 LookNum, LookJP, -apple-system, BlinkMacSystemFont, 'Hiragino Kaku Gothic ProN', sans-serif;
+  white-space: pre-line;
+  pointer-events: none;
+  animation: look-enter 0.12s ease-out backwards;
+}
+@media (prefers-reduced-motion: reduce) {
+  .online-look-tip {
+    animation: none;
+  }
+}
+/* 背の低い画面（1280×800 など）では左メニューの球団マークを小さくする
+   （マークのぶん 8px はみ出して、一番下の「リーグ管理」が欠けていた） */
+@media (max-height: 840px) {
+  .online.online-look.online-desktop .online-nav-mark {
+    width: 34px;
+    height: 34px;
+    margin-bottom: 4px;
+  }
+}
+
+/* ===== 9. 読みやすさ ======================================================= */
+/* 0 は沈ませる（打った・取った数字だけが目に入る）。数える項目だけで、防御率 0.00 などは沈ませない */
+.online.online-look .online-record-table td[data-zero],
+.online.online-look .online-roster-values > .is-zero {
+  color: #8a9cb1;
+  font-weight: 400;
+}
+/* 試合の小窓の切り替え（個人成績・打席速報・観戦リプレイ）もほかの切り替えと同じ形に。
+   ⚠ 観戦リプレイの窓（上に貼りつく帯）は触らない */
+.online.online-look dialog:not(.online-replay-dialog) > .online-replay-launch {
+  gap: 4px;
+  padding: 4px;
+  border-radius: 10px;
+  background: rgba(15, 23, 42, 0.45);
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.25);
+}
+.online.online-look.online-desktop dialog:not(.online-replay-dialog) > .online-replay-launch {
+  width: fit-content;
+  max-width: 100%;
+}
+.online.online-look dialog:not(.online-replay-dialog) > .online-replay-launch button {
+  border-color: transparent;
+  border-radius: 7px;
+  background: transparent;
+  font-weight: 600;
+}
+.online.online-look dialog:not(.online-replay-dialog) > .online-replay-launch button[aria-pressed='true'] {
+  background: var(--accent-strong);
+  color: #06232b;
+  font-weight: 700;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+}

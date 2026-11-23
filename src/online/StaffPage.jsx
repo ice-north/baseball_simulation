@@ -8,7 +8,7 @@ import { teamLabel } from './gameText.js';
 import { COACH_ROLES as ROLE_ORDER, ROLE_LABELS, COACH_ABILITY_ITEMS } from './coaches.js';
 import { useDraftState, STAFF_MODES_DRAFT } from './Drafts.jsx';
 import { delegationSettles } from './notices.js';
-import { CoachFace } from './look/Art.jsx';
+import { CoachFace, TeamMark } from './look/Art.jsx';
 
 // ============================================================
 // 指導者（監督・投手コーチ・野手コーチ）。PC のページとスマホの画面で共用。
@@ -647,11 +647,15 @@ function LeagueStaff({ leagueStaff, view }) {
         <tbody>
           {leagueStaff.teams.map((t) => (
             <tr key={t.team}>
-              <th>{teamLabel(t.team)}</th>
+              <th>
+                <TeamMark team={t.team} size={18} className="online-inline-mark" />
+                {teamLabel(t.team)}
+              </th>
               {ROLE_ORDER.map((role) => (
                 <td key={role}>
                   {t[role] ? (
                     <>
+                      <CoachFace coach={t[role]} team={t.team} size={26} className="online-staff-row-face" />
                       {view && t[role].id ? <LeagueCoachButton view={view} team={t.team} coach={t[role]} /> : t[role].name}
                       <small>{t[role].color}</small>
                     </>

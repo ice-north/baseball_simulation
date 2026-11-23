@@ -236,13 +236,22 @@ export function teamSeasonStats(league, statsOf) {
     Array.isArray(game.teams?.[game.home]) && Array.isArray(game.teams?.[game.away]),
   );
   const totals = Object.fromEntries(
-    names.map((name) => [name, { hits: 0, atBats: 0, earnedRuns: 0, outs: 0 }]),
+    names.map((name) => [
+      name,
+      { hits: 0, atBats: 0, earnedRuns: 0, outs: 0, onBase: 0, onBaseDenom: 0, bases: 0 },
+    ]),
   );
   const add = (total, stats) => {
     total.hits += stats?.batting?.hits || 0;
     total.atBats += stats?.batting?.atBats || 0;
     total.earnedRuns += stats?.pitching?.earnedRuns || 0;
     total.outs += stats?.pitching?.inningsPitched || 0;
+    // 出塁率・長打率（新しい見た目で、選手の成績をリーグ平均と比べる物差し）
+    const b = stats?.batting || {};
+    const free = (b.walks || 0) + (b.hitByPitch || 0);
+    total.onBase += (b.hits || 0) + free;
+    total.onBaseDenom += (b.atBats || 0) + free + (b.sacrificeFlies || 0);
+    total.bases += (b.hits || 0) + (b.doubles || 0) + 2 * (b.triples || 0) + 3 * (b.homeruns || 0);
   };
   if (recorded) {
     for (const game of games)
@@ -256,10 +265,12 @@ export function teamSeasonStats(league, statsOf) {
   }
   const out = {};
   for (const name of names) {
-    const { hits, atBats, earnedRuns, outs } = totals[name];
+    const { hits, atBats, earnedRuns, outs, onBase, onBaseDenom, bases } = totals[name];
     out[name] = {
       average: atBats > 0 ? hits / atBats : null,
       era: outs > 0 ? (earnedRuns * 27) / outs : null,
+      obp: onBaseDenom > 0 ? onBase / onBaseDenom : null,
+      slg: atBats > 0 ? bases / atBats : null,
     };
   }
   return out;

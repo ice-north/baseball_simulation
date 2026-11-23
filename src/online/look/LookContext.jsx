@@ -23,6 +23,9 @@ export function saveLookSetting(on) {
   }
 }
 
-/** `on` 入／切、`ownTeam` 自球団の内部名（顔の帽子に使う）、`setOn` 切り替え */
-export const LookContext = createContext({ on: false, ownTeam: null, setOn: null });
+/**
+ * `on` 入／切、`ownTeam` 自球団の内部名（顔の帽子に使う）、`setOn` 切り替え、
+ * `baselineOf(team)` その球団の部の平均（成績の S〜F の札の物差し。`statGrade.js`）
+ */
+export const LookContext = createContext({ on: false, ownTeam: null, setOn: null, baselineOf: () => null });
 export const useLook = () => useContext(LookContext);

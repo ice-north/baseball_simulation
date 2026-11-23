@@ -7,6 +7,7 @@ import { getAbilityRank, getRankColor } from '../utils/constants.js';
 import { teamLabel } from './gameText.js';
 import { withoutPlaceholderHighSchool } from '../utils/careerHistory.js';
 import { useLook } from './look/LookContext.jsx';
+import { StatWithGrade } from './look/Parts.jsx';
 
 // ============================================================
 // 選手の詳細（1画面）。
@@ -58,17 +59,27 @@ export function CareerLine({ player }) {
   );
 }
 
-/** 成績の1区分（基本＋出場など）を横一列で */
-function StatRow({ player, category, groups }) {
+/**
+ * 成績の1区分（基本＋出場など）を横一列で
+ * @param baseline 部の平均（新しい見た目の成績の札。今季だけ。無ければ数字だけ）
+ */
+function StatRow({ player, category, groups, baseline }) {
   const columns = groups.flatMap((id) => statGroup(category, id).columns);
   return (
     <dl className="online-detail-stats">
-      {columns.map((column) => (
-        <div key={column.id}>
-          <dt>{column.label}</dt>
-          <dd>{formatStat(column, column.get(player), true)}</dd>
-        </div>
-      ))}
+      {columns.map((column) => {
+        const value = column.get(player);
+        return (
+          <div key={column.id}>
+            <dt>{column.label}</dt>
+            <dd>
+              <StatWithGrade column={column} value={value} player={player} baseline={baseline}>
+                {formatStat(column, value, true)}
+              </StatWithGrade>
+            </dd>
+          </div>
+        );
+      })}
     </dl>
   );
 }
@@ -157,6 +168,10 @@ const hasRecord = (player, category) =>
 
 export default function PlayerDetailBody({ player, shown, periodLabel }) {
   const isPitcher = player.position === 'pitcher';
+  // 新しい見た目（試作）: 成績の札（所属の分かる選手の今季だけ。通算・過去の年は平均が違う）
+  const look = useLook();
+  const team = player.tradeTeam || (player.detailAvailable ? look.ownTeam : null);
+  const baseline = look.on && periodLabel === '今季' ? look.baselineOf?.(team) : null;
   const abilities = (group) => abilityRows(player, group);
   // ⚠ **能力は投打の両方をいつも出す**（いしだ指摘: 二刀流が売りなので、投手の打撃・
   //    野手の投球も見たい。誰でも投げる・守る起用ができる）。本職を先に置く。
@@ -182,6 +197,7 @@ export default function PlayerDetailBody({ player, shown, periodLabel }) {
       player={shown}
       category="batting"
       groups={['basic', 'appearances']}
+      baseline={baseline}
     />
   );
   const pitchingStats = showPitching && (
@@ -190,6 +206,7 @@ export default function PlayerDetailBody({ player, shown, periodLabel }) {
       player={shown}
       category="pitching"
       groups={['basic', 'record']}
+      baseline={baseline}
     />
   );
   return (

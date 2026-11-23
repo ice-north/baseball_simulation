@@ -18,6 +18,7 @@ import { FIRST_WEEK_NOTE } from './firstWeek.js';
 import { BoxScore, Panel } from './GameHistory.jsx';
 import { ScoringPlays } from './ScoringPlays.jsx';
 import { lineScoreCells } from './scoreBoard.js';
+import { TeamMark } from './look/Art.jsx';
 
 // ============================================================
 // 人どうしの関わりの画面（PC）。
@@ -237,7 +238,10 @@ export function StarterPicksPage({ view, busy, run, command }) {
               return (
                 <tr key={g.id}>
                   <th>{turnLabel(g.date, view.seasonTurns)}</th>
-                  <td>{teamShort(home ? g.away : g.home)}</td>
+                  <td>
+                    <TeamMark team={home ? g.away : g.home} size={18} className="online-inline-mark" />
+                    {teamShort(home ? g.away : g.home)}
+                  </td>
                   <td>
                     {g[`${foe}Starter`] || '未定'}
                     {g[`${foe}StarterMark`] === 'fixed' ? (
