@@ -76,6 +76,8 @@ const CHECKS = [
   { name: 'online-history-analysis-check', group: 'quick', online: true, slow: 1 },
   // 新しい見た目（試作）: 土地・愛称の表、12球団で色と字が重ならない、年齢で顔が変わらない
   { name: 'online-look-check', group: 'quick', online: true, slow: 1 },
+  // 動きで見る: 走者の行き先の割り当てと軌跡（本物の試合の全打席）
+  { name: 'online-motion-check', group: 'quick', online: true, slow: 19 },
   { name: 'online-migration-check', group: 'check', online: true, slow: 21 },
   { name: 'online-join-check', group: 'check', online: true, slow: 9 },
   { name: 'online-deadline-check', group: 'check', online: true, slow: 85 },

@@ -591,3 +591,56 @@
   box-shadow: 0 3px 0 #b45309;
   cursor: pointer;
 }
+
+/* ---- 動きで見る（`PlayMotion.jsx`。打席速報の球場の図の代わり） ---------------- */
+.online.online-look .online-motion {
+  position: relative;
+}
+.online.online-look .online-motion-canvas {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 640 / 360;
+  background: #040817;
+}
+.online.online-look .online-motion-tools {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  display: flex;
+  gap: 6px;
+}
+.online.online-look .online-motion-tools button {
+  min-height: 0;
+  padding: 3px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 999px;
+  background: rgba(11, 18, 32, 0.75);
+  color: #e2e8f0;
+  font-size: 12px;
+}
+.online.online-look .online-motion-tools button[aria-pressed='true'] {
+  border-color: #fde68a;
+  color: #fde68a;
+}
+.online.online-look .online-live[data-motion] {
+  max-width: 760px;
+  /* 点の帯と絵をつなげる */
+  gap: 0;
+}
+/* 小窓の `header` には下の余白が付いている（`.online-player-dialog header`） */
+.online.online-look .online-live[data-motion] .online-live-bug {
+  margin-bottom: 0;
+}
+.online.online-look .online-live[data-motion] .online-live-telop,
+.online.online-look .online-live[data-motion] .online-live-flow,
+.online.online-look .online-live[data-motion] .online-live-controls {
+  margin-top: 8px;
+}
+/* 結果の行は動きが終わってから足す。下の「次の打席」が上下に動かないよう、4行ぶんの高さを取っておく */
+.online.online-look .online-live[data-motion] .online-live-flow {
+  min-height: 116px;
+}
+.online.online-look .online-live-telop[data-wait] strong {
+  color: #cbd5e1;
+}

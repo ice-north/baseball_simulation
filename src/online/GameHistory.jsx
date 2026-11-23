@@ -572,7 +572,7 @@ export function ScoreBoard({ game, ownTeam, compact = false }) {
 }
 function GameRecord({ id, year, ownTeam, close }) {
   const compact = window.matchMedia('(max-width: 767px)').matches;
-  // 見せ方: 'stats' 個人成績・'watch' 観戦リプレイ・'live' 打席速報
+  // 見せ方: 'stats' 個人成績・'watch' 観戦リプレイ・'live' 打席速報・'motion' 動きで見る（打席速報の動き版）
   const [mode, setMode] = useState('stats');
   // 新しい見た目（試作）段3: 打席速報（入のときだけ。塁と打球の記録がある試合だけ）
   const look = useLook();
@@ -580,12 +580,12 @@ function GameRecord({ id, year, ownTeam, close }) {
     game = result.data;
   const liveReady = look.on && hasLivePlays(game);
   const watch = mode === 'watch';
-  const showLive = mode === 'live' && liveReady;
+  const showLive = (mode === 'live' || mode === 'motion') && liveReady;
   return (
     <Panel
       title="試合成績"
       close={close}
-      wide={watch && !compact}
+      wide={(watch || (showLive && mode === 'motion')) && !compact}
       mobileReplay={watch && compact && !!game}
     >
       <RequestState result={result} />
@@ -597,8 +597,13 @@ function GameRecord({ id, year, ownTeam, close }) {
                 個人成績
               </button>
               {liveReady && (
-                <button aria-pressed={showLive} onClick={() => setMode('live')}>
+                <button aria-pressed={showLive && mode === 'live'} onClick={() => setMode('live')}>
                   打席速報
+                </button>
+              )}
+              {liveReady && (
+                <button aria-pressed={showLive && mode === 'motion'} onClick={() => setMode('motion')}>
+                  動きで見る
                 </button>
               )}
               {game.replay?.frames?.length > 0 && (
@@ -608,7 +613,7 @@ function GameRecord({ id, year, ownTeam, close }) {
               )}
             </nav>
           )}
-          {showLive && <LivePlays game={game} />}
+          {showLive && <LivePlays key={mode} game={game} motion={mode === 'motion'} />}
           {/* ⚠ スマホは小窓を縦に収めるため、点数の大きな1行はスコアボードがあれば出さない（同じ点数が2回並ぶ） */}
           {!watch && !showLive && !(compact && scoreBoard(game)) && (
             <p className="online-game-summary">
