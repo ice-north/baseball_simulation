@@ -25,7 +25,7 @@ import { addToRoster, replaceRoster } from '../state/roster.js';
 import { updateGrowthModifiers, applyFreeAgentGrowth, applyCorporatePlayerGrowth, applyAgeCurveChanges, applyPositionShifts } from './growthSystem.js';
 // CPU並行世界のロスター管理（大学卒業/新入生・社会人/独立の戦力外/補充）は rosterProgression.js に抽出
 import { processUniversityTeamGraduation, releaseCPUCorporatePlayers, replenishCorporateRosters, replenishIndependentLeagueRosters, buildRecruitNorms, abilityZ, markFreshRoute, processLowerTierTurnover } from './rosterProgression.js';
-import { updateAllTeamReputations, updateAllRanks, advanceSponsors, applyReputationDecay, applyUniversityReputationDecay, resetIndependentLeagueSchedules } from '../corporate/corporateInit.js';
+import { updateAllTeamReputations, updateAllRanks, updateAllTournamentBudgetBonuses, advanceSponsors, applyReputationDecay, applyUniversityReputationDecay, resetIndependentLeagueSchedules } from '../corporate/corporateInit.js';
 import { extractTournamentSeeds } from '../corporate/toshitaikou.js';
 import { advanceStaffYear } from '../corporate/staffData.js';
 import { generateRandomPlayerName } from '../data/playerNames.js';
@@ -1111,6 +1111,8 @@ export function advanceToNextYear(seasonData, allTeams, { playedTeamNames = [], 
   let rankChanges = [];
   let staffRetirements = [];
   rankChanges = updateAllRanks(seasonData);
+  // 2.7. その年の全国大会の成績 → 翌年の予算の「大会成績ボーナス」（毎年置き換え。足し込まない）
+  updateAllTournamentBudgetBonuses(seasonData, updatedTeams);
   if (seasonData.settings?.corporateMode) {
     const userTeamName = Object.keys(updatedTeams)[0];
     for (const [teamName, teamData] of Object.entries(updatedTeams)) {

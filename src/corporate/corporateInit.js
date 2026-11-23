@@ -1233,7 +1233,8 @@ export const getManagingBudgetBonus = (managingValue) =>
   Math.round((managingValue || 0) * 20);
 
 // 大会成績 → 予算ボーナス（万円）
-// 都市対抗/日本選手権の成績が翌年の企業からの追加支援に反映
+// 都市対抗/日本選手権（クラブはクラブ選手権）の成績が翌年の企業からの追加支援に反映
+// 年度更新（advanceToNextYear）で updateAllTournamentBudgetBonuses が cd.tournamentBudgetBonus を決める
 const TOURNAMENT_BUDGET_BONUS = {
   champion: 2000,    // 優勝
   runnerUp: 1000,    // 準優勝
@@ -1242,6 +1243,59 @@ const TOURNAMENT_BUDGET_BONUS = {
 };
 
 export const getTournamentBudgetBonus = (cd) => cd?.tournamentBudgetBonus || 0;
+
+// 1つの本戦ブラケットでの成績 → ボーナス額（本戦に出ていなければ0）
+// ⚠ 本戦は「日付で1回戦ずつ」も「まとめて自動」も recordResult / autoPlayBracket で
+//    bracket.champion と各試合の loser を埋める。ここはそれだけを読む
+const bracketBudgetBonus = (bracket, teamName) => {
+  const rounds = bracket?.rounds;
+  if (!rounds?.length) return 0;
+  if (bracket.champion && bracket.champion === teamName) return TOURNAMENT_BUDGET_BONUS.champion;
+  if (bracket.champion && rounds[rounds.length - 1][0]?.loser === teamName) return TOURNAMENT_BUDGET_BONUS.runnerUp;
+  if (rounds.length >= 2 && rounds[rounds.length - 2].some(m => !m.isBye && m.loser === teamName)) return TOURNAMENT_BUDGET_BONUS.semiFinal;
+  if (rounds[0].some(m => m.team1 === teamName || m.team2 === teamName)) return TOURNAMENT_BUDGET_BONUS.entry;
+  return 0;
+};
+
+// その年の全国大会（都市対抗・日本選手権・クラブ選手権の本戦）の成績 → 翌年の予算ボーナス（万円）
+// 複数の大会に出たら**いちばん良い成績の額だけ**（足さない。チーム運営画面の「大会成績ボーナス条件」の注記どおり）
+// 例: 都市対抗優勝＋日本選手権初戦負け = 2000
+export const computeTournamentBudgetBonus = (teamName, { toshitaikou, nihonSenshuken, clubSenshuken } = {}) =>
+  Math.max(0, ...[toshitaikou, nihonSenshuken, clubSenshuken]
+    .map(t => bracketBudgetBonus(t?.mainTournament?.bracket, teamName)));
+
+// 年度更新で1回呼ぶ: 全社会人チームの cd.tournamentBudgetBonus をその年の大会成績で**置き換える**
+// （足し込まないので、同じ年に2回呼んでも二重に入らない。前年の分も残らない）
+// ⚠ 置き場所はモードで変わる（updateAllRanks と同じ）。社会人モードは seasonData、ほかは WORLD_DATA
+export const updateAllTournamentBudgetBonuses = (seasonData, teams = TEAMS_DATA) => {
+  const tournaments = {
+    toshitaikou: seasonData?.toshitaikou || WORLD_DATA.corporateToshitaikou,
+    nihonSenshuken: seasonData?.nihonSenshuken || WORLD_DATA.corporateNihonSenshuken,
+    clubSenshuken: seasonData?.clubSenshuken || WORLD_DATA.corporateClubSenshuken,
+  };
+  for (const [teamName, teamData] of Object.entries(teams)) {
+    const cd = teamData?.corporateData;
+    if (!cd || teamData.independentLeagueId) continue;
+    cd.tournamentBudgetBonus = computeTournamentBudgetBonus(teamName, tournaments);
+  }
+};
+
+// 基本予算（万円）。cd.budget が無い古いデータはランクの表から
+export const getBaseBudget = (cd) => cd?.budget || BUDGET_BY_RANK[cd?.rank] || 12000;
+
+// 予算の内訳（年度末決算・チーム運営・退団画面の3つが同じ式を使う）
+export const budgetBreakdown = (cd, staff = cd?.staff || []) => {
+  const baseBudget = getBaseBudget(cd);
+  const reputationBonus = cd?.yearlyBudgetBonus ?? getReputationBudgetBonus(cd?.reputation || 0);
+  const managingValue = Math.max(...staff.map(s => s.abilities?.managing || 0), 0);
+  const managingBonus = getManagingBudgetBonus(managingValue);
+  const tournamentBonus = getTournamentBudgetBonus(cd);
+  const sponsorIncome = getSponsorIncome(cd);
+  return {
+    baseBudget, reputationBonus, managingValue, managingBonus, tournamentBonus, sponsorIncome,
+    total: baseBudget + reputationBonus + managingBonus + tournamentBonus + sponsorIncome,
+  };
+};
 
 
 // スポンサー契約 → 年間収入（万円）
@@ -1820,7 +1874,7 @@ export const applyBudgetDeficitPenalty = (teamData) => {
   if (!cd || !cd.budgetDeficit || cd.budgetDeficit <= 0) return null;
 
   const deficit = cd.budgetDeficit;
-  const totalBudget = cd.budget || 13000;
+  const totalBudget = getBaseBudget(cd);
   const deficitRate = Math.min(1, deficit / totalBudget);
   const penalties = [];
 
