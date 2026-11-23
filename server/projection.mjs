@@ -472,16 +472,18 @@ const watchMark = (watch, p) => {
  * `projectLeague(…, shared)` に同じものを渡すと、2人目からは順位・リーダー・球団史・12球団の戦力などを
  * 作り直さない（保存のたびに参加者の人数ぶん＝最大12回作っていた。監査 2026-11-23 の整理の候補2）。
  * ⚠ **同じリーグの同じ状態の間だけ**使うこと（作ってからリーグを変えたら新しい入れ物にする）。
- *    中身は版で見張っていない。保存のときのように「命令が済んでから全員ぶん作る」ところで使う
+ *    保存のときのように「命令が済んでから全員ぶん作る」ところで使う。念のため版（`revision`）が
+ *    変わっていたら作り直すが、版を上げずに書く処理（最後に来た時刻など）もあるので頼りにしない
  */
-export const createViewShared = () => ({ league: null, wide: null, items: null });
+export const createViewShared = () => ({ league: null, revision: null, wide: null, items: null });
+const sharedFor = (shared, l) => shared?.league === l && shared.revision === l.revision;
 
 /**
  * リーグ全体で同じ部分（参加者によらない）。`shared` があればそこに置いて使い回す。
  * ⚠ ここに入れるのは**誰が見ても同じもの**だけ。自球団・本人で変わるものを入れると、他の人に漏れる
  */
 function leagueWideOf(l, shared) {
-  if (shared?.league === l && shared.wide) return shared.wide;
+  if (sharedFor(shared, l) && shared.wide) return shared.wide;
   const statistics = statisticsContext(l);
   // ⚠ **表示名は内部名と別に持つ**。参加した人が付けた球団名を画面に出すため。
   //    内部名（`teamName` / 順位表 / 日程）は記録の選手キーまで貫いているので
@@ -523,6 +525,7 @@ function leagueWideOf(l, shared) {
   };
   if (shared) {
     shared.league = l;
+    shared.revision = l.revision;
     shared.wide = wide;
     shared.items = null;
   }
@@ -535,7 +538,7 @@ function leagueWideOf(l, shared) {
  * ⚠ 誰が見ても同じものだけ（自球団・本人で変わるものを入れない）
  */
 function leagueWideItems(l, wide, shared) {
-  if (shared?.league === l && shared.items) return shared.items;
+  if (sharedFor(shared, l) && shared.items) return shared.items;
   const { teamLabels, labelOf, seasonStatsOf } = wide;
   // 球団ごとのレギュラーシーズンの残り試合（ペースとマジックで共用。日程を2回なめない）
   const left = remainingGames(l.season.schedule);
@@ -567,7 +570,7 @@ function leagueWideItems(l, wide, shared) {
       decisions: decisionRefs(g.result.decisions),
     })),
   };
-  if (shared?.league === l) shared.items = items;
+  if (sharedFor(shared, l)) shared.items = items;
   return items;
 }
 

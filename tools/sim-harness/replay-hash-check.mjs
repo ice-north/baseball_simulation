@@ -34,6 +34,9 @@ const YEAR = process.argv.includes('--year') || UPDATE;
 
 /** キーの並びを揃えた JSON（オブジェクトのキーの入る順が変わっただけでハッシュが変わらないように） */
 function stable(value) {
+  // Map・Set は中身を並べる（そのままだと自分のキーが無く、どれも {} になって変化を見落とす）
+  if (value instanceof Map) return `Map${stable([...value].sort((a, b) => (String(a[0]) < String(b[0]) ? -1 : 1)))}`;
+  if (value instanceof Set) return `Set${stable([...value].map(stable).sort())}`;
   if (Array.isArray(value)) return `[${value.map(stable).join(',')}]`;
   if (value && typeof value === 'object') {
     return `{${Object.keys(value)
@@ -86,6 +89,9 @@ const step = (i) => {
   }
   now = new Date(now.getTime() + 4 * 3600000);
   quiet(() => advanceLeagueDay(league, `replay:${i}`, now.toISOString()));
+  // ⚠ 止まったリーグを進め続けても結果は毎回同じになる（壊れたまま記録と一致しうる）ので、ここで落とす
+  if (league.status === 'error' || league.error)
+    throw new Error(`リーグが止まった（${i}回目）: ${league.error?.message || league.error}`);
 };
 const onlineHash = () => {
   const bundle = { league, sessions: { a: {}, b: {} } };
