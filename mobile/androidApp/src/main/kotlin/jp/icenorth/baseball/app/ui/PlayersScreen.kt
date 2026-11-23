@@ -249,6 +249,7 @@ private fun TeamPicker(view: LeagueView, raw: JsonObject, team: String, onPick: 
     val ordered = listOfNotNull(view.teamName) + names.filter { it != view.teamName }
     Box {
         TextButton(onClick = { open = true }) {
+            TeamMark(team, size = 22.dp, modifier = Modifier.padding(end = 6.dp))
             Text(view.teamLabel(team), fontWeight = FontWeight.Bold)
             Icon(Icons.Filled.ArrowDropDown, contentDescription = "球団を選ぶ")
         }

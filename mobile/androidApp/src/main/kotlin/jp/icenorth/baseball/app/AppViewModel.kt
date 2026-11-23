@@ -192,6 +192,15 @@ class AppViewModel internal constructor(
         store.homeStyle = name
     }
 
+    /** 新しい見た目（試作）を出すか（[jp.icenorth.baseball.app.ui.LookState]）。既定は切。端末に覚える */
+    var lookOn by mutableStateOf(store.lookOn)
+        private set
+
+    fun changeLookOn(on: Boolean) {
+        lookOn = on
+        store.lookOn = on
+    }
+
     /** スタメンの行に能力まで出すか（既定は成績だけ）。端末に覚える */
     var lineupDetail by mutableStateOf(store.lineupDetail)
         private set

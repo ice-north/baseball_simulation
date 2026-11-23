@@ -117,7 +117,12 @@ data class ScoringPlay(
 data class GameDate(val year: Int, val month: Int = 1, val day: Int = 1)
 
 @Serializable
-data class TeamLabel(val label: String? = null, val short: String? = null)
+data class TeamLabel(
+    val label: String? = null,
+    val short: String? = null,
+    val city: String? = null,
+    val nickname: String? = null,
+)
 
 @Serializable
 data class Member(

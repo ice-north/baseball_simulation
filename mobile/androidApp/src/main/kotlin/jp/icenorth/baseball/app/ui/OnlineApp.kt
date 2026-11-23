@@ -39,6 +39,7 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.repeatOnLifecycle
 import kotlinx.coroutines.delay
 import jp.icenorth.baseball.shared.situationTips
+import jp.icenorth.baseball.shared.buildTeamLooks
 import jp.icenorth.baseball.shared.tradeNoticeKeys
 import jp.icenorth.baseball.shared.noticeCount
 import jp.icenorth.baseball.shared.pendingProcedure
@@ -136,6 +137,11 @@ fun OnlineApp(model: AppViewModel) {
         // 編成の面の合図は、編成タブで使われなかったら（編成がまだ無い間など）捨てる
         if (tab != Tab.Plan) model.planFaceRequest = null
     }
+    // 新しい見た目（試作）。球団の見た目は球団名が変わったときだけ作り直す
+    val teamLabels = model.view?.teamLabels
+    val looks = remember(teamLabels) { teamLabels?.let { buildTeamLooks(it) }.orEmpty() }
+    val look = remember(model.lookOn, looks, model.view?.teamName) { LookState(model.lookOn, model.view?.teamName, looks) }
+    CompositionLocalProvider(LocalLook provides look) {
     Box(Modifier.fillMaxSize()) {
         if (!joined) {
             // ⚠ 参加前もお知らせ・失敗を出す場所を置く（無いと参加の失敗が見えず、知らせも消えない）
@@ -267,6 +273,7 @@ fun OnlineApp(model: AppViewModel) {
         if (renaming) RenameDialog(model) { renaming = false }
         // ⚠ 保存・提出の間は画面全体を塞ぐ（いちばん上に重ねる）
         if (model.busy) BusyOverlay(model.busyLabel)
+    }
     }
 }
 

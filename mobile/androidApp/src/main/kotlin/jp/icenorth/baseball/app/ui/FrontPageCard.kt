@@ -176,6 +176,7 @@ private fun Masthead(page: FrontPage, nextAdvanceAt: String?, accent: Color, men
             }
             .padding(vertical = 3.dp),
     ) {
+        TeamMark(LocalLook.current.capTeam, size = 22.dp, modifier = Modifier.align(Alignment.CenterVertically).padding(end = 4.dp))
         Text(page.team, fontFamily = FontFamily.Serif, fontWeight = FontWeight.Black, fontSize = 14.sp, color = Ink, maxLines = 1, modifier = Modifier.weight(1f, fill = false).alignByBaseline())
         page.standing?.let { Text("　$it", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Ink, maxLines = 1, modifier = Modifier.alignByBaseline()) }
     }

@@ -191,6 +191,29 @@ class AppUiTest {
         rule.onNodeWithText("5/25").assertIsDisplayed()
     }
 
+    @Test fun newLookDrawsMarksOnlyWhenTurnedOn() {
+        // 新しい見た目（試作）: 既定は切で、絵を1つも描かない。メニューで入にすると順位表に球団マーク、端末に覚える
+        open(
+            """"roster":[],"standings":[{"team":"team","wins":2},{"team":"rival","wins":1}],""" +
+                """"teamLabels":{"team":{"label":"札幌レッドスターズ","short":"札幌","city":"札幌","nickname":"レッドスターズ"},""" +
+                """"rival":{"label":"那覇シーサーズ","short":"那覇","city":"那覇","nickname":"シーサーズ"}}""",
+        )
+        rule.onNodeWithTag("tab-Games").performClick()
+        rule.onNodeWithTag("chip-standings").performClick()
+        rule.onAllNodesWithTag("team-mark", useUnmergedTree = true).assertCountEquals(0)
+        rule.onNodeWithTag("tab-Home").performClick()
+        rule.onAllNodesWithContentDescription("メニュー").onFirst().performClick()
+        rule.onNodeWithText("新しい見た目（試作）", substring = true).performClick()
+        rule.runOnIdle { assertTrue(model.lookOn) }
+        assertTrue(SessionStore(RuntimeEnvironment.getApplication()).lookOn)
+        rule.onNodeWithTag("tab-Games").performClick()
+        rule.onNodeWithTag("chip-standings").performClick()
+        rule.onAllNodesWithTag("team-mark", useUnmergedTree = true).assertCountEquals(2)
+        // 切に戻すと消える
+        rule.runOnIdle { model.changeLookOn(false) }
+        rule.onAllNodesWithTag("team-mark", useUnmergedTree = true).assertCountEquals(0)
+    }
+
     @Test fun backFromTeamPlayersReturnsToTheStandings() {
         open(""""roster":[],"standings":[{"team":"team","wins":2},{"team":"rival","wins":1}]""")
         rule.onNodeWithTag("tab-Games").performClick()

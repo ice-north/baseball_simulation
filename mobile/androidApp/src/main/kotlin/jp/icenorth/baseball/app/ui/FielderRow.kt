@@ -33,7 +33,6 @@ import jp.icenorth.baseball.shared.FIELDER_REST_FATIGUE
 import jp.icenorth.baseball.shared.subPositions
 import jp.icenorth.baseball.shared.Player
 import jp.icenorth.baseball.shared.SUBSTITUTE_MIN_FITNESS
-import jp.icenorth.baseball.shared.conditionIcon
 import jp.icenorth.baseball.shared.fatigueTone
 import jp.icenorth.baseball.shared.positionGroup
 import jp.icenorth.baseball.shared.positionLabel
@@ -172,8 +171,11 @@ fun FielderRow(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(3.dp),
             ) {
+                if (player != null) PlayerFace(player, size = 28.dp)
+                val (nameText, nameInline) = conditionName(player?.condition, player?.name ?: placeholder)
                 Text(
-                    if (player != null) "${conditionIcon(player.condition)} ${player.name}" else placeholder,
+                    nameText,
+                    inlineContent = nameInline,
                     fontWeight = FontWeight.SemiBold,
                     color = if (player != null) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.error,
                     maxLines = 1,

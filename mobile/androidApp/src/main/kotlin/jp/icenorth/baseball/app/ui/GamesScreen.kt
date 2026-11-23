@@ -174,7 +174,11 @@ private fun GameRow(view: LeagueView, g: JsonObject, onOpen: () -> Unit) {
         Text(dateText(g), modifier = Modifier.width(44.dp), color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 13.sp)
         Text(result?.first ?: "", color = result?.second ?: MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.Bold, modifier = Modifier.width(20.dp))
         Column(Modifier.weight(1f)) {
-            Text("${view.teamShort(away)}  ${`as` ?: "-"} - ${hs ?: "-"}  ${view.teamShort(home)}", fontWeight = FontWeight.SemiBold)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                TeamMark(away, size = 20.dp, modifier = Modifier.padding(end = 4.dp))
+                Text("${view.teamShort(away)}  ${`as` ?: "-"} - ${hs ?: "-"}  ${view.teamShort(home)}", fontWeight = FontWeight.SemiBold)
+                TeamMark(home, size = 20.dp, modifier = Modifier.padding(start = 4.dp))
+            }
             val d = g.at("decisions")
             Muted(
                 listOfNotNull(
@@ -213,6 +217,13 @@ private fun GameDetail(model: AppViewModel, view: LeagueView, id: String, year: 
                 val away = g.at("away").str().orEmpty()
                 Section {
                     Muted("${dateText(g)} · ${view.teamLabel(home)}の主催")
+                    // 新しい見た目（試作）では両球団のマークを名前の上に
+                    if (LocalLook.current.on) {
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+                            TeamMark(away, size = 44.dp)
+                            TeamMark(home, size = 44.dp)
+                        }
+                    }
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(view.teamShort(away), style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f), textAlign = TextAlign.End)
                         Text(

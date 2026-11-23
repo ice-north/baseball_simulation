@@ -516,6 +516,12 @@ private fun HomeMenu(model: AppViewModel, style: HomeStyle, onRename: () -> Unit
                 )
             }
             HorizontalDivider()
+            // 新しい見た目（試作）: 球団マーク・選手の顔・調子の顔・段位の字（全部の画面）。切なら今までどおり
+            DropdownMenuItem(
+                text = { Text((if (model.lookOn) "● " else "○ ") + "新しい見た目（試作）") },
+                onClick = { open = false; model.changeLookOn(!model.lookOn) },
+            )
+            HorizontalDivider()
             // 試合結果の通知（裏でおよそ15分ごとに確かめる。ResultNotifier）。端末が許していなければ「○」
             DropdownMenuItem(
                 text = { Text((if (notifyOn) "● " else "○ ") + "通知（試合結果・手続き）") },

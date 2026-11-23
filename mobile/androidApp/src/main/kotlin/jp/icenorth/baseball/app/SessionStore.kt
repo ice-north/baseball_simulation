@@ -57,6 +57,11 @@ class SessionStore(context: Context) {
         get() = prefs.getString("homeStyle", null)
         set(value) = prefs.edit().putString("homeStyle", value).apply()
 
+    /** 新しい見た目（試作。球団マーク・選手の顔など）を出すか。既定は切。端末に覚える */
+    var lookOn: Boolean
+        get() = prefs.getBoolean("lookOn", false)
+        set(value) = prefs.edit().putBoolean("lookOn", value).apply()
+
     /** スタメンの行に能力まで出すか（既定は成績だけ。いしだ 2026-11-13）。端末に覚える */
     var lineupDetail: Boolean
         get() = prefs.getBoolean("lineupDetail", false)

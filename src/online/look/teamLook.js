@@ -9,7 +9,9 @@
 // ⚠ **実在の球団には付けない**。ビューの `teamLabels` に載った球団（リーグの12球団）だけ。
 //    NPB や独立リーグの名前（経歴・ドラフトの行き先）にマークを描くと、実在の球団の
 //    マークに見えてしまう。
-// ⚠ アプリ（`mobile/`）にも同じ表と同じ決め方を写す。変えたら両方を直す。
+// ⚠ アプリ（`mobile/shared/.../Look.kt`）にも同じ表と同じ決め方を写してある。変えたら両方を直し、
+//    `node mobile/tools/expect-look.mjs > mobile/shared/src/jvmTest/resources/look-expected.json`
+//    で期待値を書き出し直す（答え合わせはアプリの `LookTest`）。
 // ============================================================
 import { hash } from './rng.js';
 
