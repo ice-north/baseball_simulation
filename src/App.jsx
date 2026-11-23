@@ -50,7 +50,7 @@ import { CONDITION_LEVELS, CONDITION_COLORS, CONDITION_ICONS, conditionBattingMo
 import { readSaveSlots, readSaveSlotsSync, setCachedSlots, ensureMigration, migrateOldSaveData, saveGameToSlot, loadGameFromSlot, deleteSaveSlot, autoSave, isAutosaveEnabled, AUTOSAVE_KEY, resumeTargetOf } from './game/saveSystem.js';
 
 // Game controls imports
-import { executeResetGame, executeMultiPitch, executeStartSimMode } from './game/gameControls.js';
+import { executeResetGame, executeStartSimMode } from './game/gameControls.js';
 import { executeSetupManagedGame, executeHandleManagedGameEnd } from './game/gameSetup.js';
 
 // AI Manager imports
@@ -73,7 +73,7 @@ import { WORLD_DATA } from './corporate/worldData.js';
 // Component imports
 import ManagementScreen from './components/ManagementScreen.jsx';
 import GameFlowScreens from './components/GameFlowScreens.jsx';
-import { Sidebar, RenderBases, AccordionSection, TeamPitcherPanel, TeamMemberPanel } from './components/GameUIComponents.jsx';
+import { Sidebar, AccordionSection, TeamPitcherPanel, TeamMemberPanel } from './components/GameUIComponents.jsx';
 import { useEscapeToClose } from './components/useEscapeToClose.js';
 
     // ========================================================================
@@ -88,6 +88,10 @@ import { useEscapeToClose } from './components/useEscapeToClose.js';
     //
     // ★ 分割作業は完了しました。今後は通常の開発（機能追加・バグ修正）に集中できます。
     // ========================================================================
+
+    // サイドバーを出さず全画面で開く管理画面のビュー（サイドバーと本文の左の余白の両方がこれを見る）
+    const FULLSCREEN_MANAGEMENT_VIEWS = ['contract', 'tryout', 'offseason', 'camp', 'summer_camp', 'jersey', 'regulations_next', 'sandbox_next_regulations', 'sandbox_setup', 'edit', 'corporate_departure', 'corporate_scout', 'club_recruit', 'budget_settlement'];
+
     const App = () => {
       // チームデータの初期化
       useEffect(() => {
@@ -423,7 +427,7 @@ import { useEscapeToClose } from './components/useEscapeToClose.js';
       };
 
       // 変化球の効果設定（外部ファイルから読み込み）
-      const [ballEffects, setBallEffects] = useState(BALL_EFFECTS);
+      const ballEffects = BALL_EFFECTS;
 
       // 試合状態（先に定義が必要）
       const [isTopInning, setIsTopInning] = useState(true);
@@ -588,12 +592,6 @@ import { useEscapeToClose } from './components/useEscapeToClose.js';
           }
         }
       }, [allTeams]);
-      
-      // 互換性のため players を動的に取得
-      const players = isTopInning ? homeTeam.players : awayTeam.players;  // 守備側
-      const setPlayers = isTopInning 
-        ? (fn) => setHomeTeam(prev => ({...prev, players: typeof fn === 'function' ? fn(prev.players) : fn}))
-        : (fn) => setAwayTeam(prev => ({...prev, players: typeof fn === 'function' ? fn(prev.players) : fn}));
       
       
       // 選手成績更新関数（元の定義を維持）
@@ -919,24 +917,6 @@ import { useEscapeToClose } from './components/useEscapeToClose.js';
         return team.players.find(p => p.isStarter && p.position === 'catcher' && !p._isDH) || team.players[7];
       };
 
-      // ※ formatInnings, getAbilityColor, getAbilityTextColor, getBestFitPosition は
-      //    js/utils/physics.js に移動済み（グローバルスコープで利用可能）
-
-      // 能力値バーを表示するコンポーネント（コンパクト版）
-      const AbilityBar = ({ label, value }) => (
-        <div className="flex items-center gap-1">
-          <span className="text-xs text-gray-300 w-3">{label}</span>
-          <div className="flex-1 bg-gray-700 rounded-full h-1 overflow-hidden">
-            <div
-              className={`h-full ${getAbilityColor(value)} transition-all`}
-              style={{ width: `${value}%` }}
-            />
-          </div>
-          <span className="text-xs text-gray-300 w-4 text-right font-mono">{value}</span>
-        </div>
-      );
-
-
       // 監督AI関数（→ aiManager.js に抽出済み、ラッパーのみ）
       const aiManagerCtx = () => ({
         autoManagerMode, gameStarted, isSubstituting,
@@ -966,57 +946,8 @@ import { useEscapeToClose } from './components/useEscapeToClose.js';
         }
       };
       
-      // 既存のstate（互換性のために残す）
-
-      const [batter, setBatter] = useState({
-        name: '打者A',
-        meet: 60,
-        power: 60,
-        eye: 60,
-        speed: 60,  // 走力（成功率に影響）
-        steal: 50,  // 盗塁スキル（試行率と成功率に影響）
-        bats: 'right'  // 'right', 'left', or 'switch'
-      });
-
-      const [pitcher, setPitcher] = useState({
-        name: '投手B',
-        velocity: 145,
-        control: 60,
-        stamina: 200,  // スタミナ追加
-        throws: 'right',  // 'right' or 'left' を追加
-        pitches: [  // breakingBalls → pitches に変更
-          { id: 1, type: 'straight', level: 100 },  // ストレートは常に習得済み
-          { id: 2, type: 'slider', level: 50 },
-          { id: 3, type: 'curve', level: 50 },
-          { id: 4, type: 'fork', level: 50 }
-        ]
-      });
-
       // 現在のスタミナを管理
       const [currentStamina, setCurrentStamina] = useState(200);
-
-      const [catcher, setCatcher] = useState({
-        name: 'キャッチャーC',
-        lead: 50,
-        arm: 70,
-        throws: 'right'  // 投げる腕
-      });
-      
-      // 守備パラメータ（ポジション別）
-      const [defense, setDefense] = useState({
-        // バッテリー
-        pitcher: { defense: 60, speed: 60, arm: 60, throws: 'right' },    // 投手
-        catcher: { defense: 60, speed: 60, arm: 60, throws: 'right' },    // 捕手
-        // 内野
-        first: { defense: 60, speed: 60, arm: 60, throws: 'right' },      // 一塁手
-        second: { defense: 60, speed: 60, arm: 60, throws: 'right' },     // 二塁手
-        short: { defense: 60, speed: 60, arm: 60, throws: 'right' },      // 遊撃手
-        third: { defense: 60, speed: 60, arm: 60, throws: 'right' },      // 三塁手
-        // 外野
-        left: { defense: 60, speed: 60, arm: 60, throws: 'right' },       // 左翼手
-        center: { defense: 60, speed: 60, arm: 60, throws: 'right' },     // 中堅手
-        right: { defense: 60, speed: 60, arm: 60, throws: 'right' }       // 右翼手
-      });
 
       const [gameLog, setGameLog] = useState([]);
       const [lastResult, setLastResult] = useState(null);
@@ -1042,41 +973,6 @@ import { useEscapeToClose } from './components/useEscapeToClose.js';
       //    復活させるなら**描く場所を先に決めてから**にすること。
 
       // [SECTION: GAME_HANDLERS] 投球生成・接触判定・走者進塁・守備記録・成績更新
-      const addPitch = () => {
-        const newId = pitcher.pitches.length > 0 
-          ? Math.max(...pitcher.pitches.map(b => b.id)) + 1 
-          : 1;
-        setPitcher({
-          ...pitcher,
-          pitches: [...pitcher.pitches, { id: newId, type: 'slider', level: 50 }]
-        });
-      };
-
-      const removePitch = (id) => {
-        // ストレート（id=1）は削除不可
-        if (id === 1) return;
-        setPitcher({
-          ...pitcher,
-          pitches: pitcher.pitches.filter(b => b.id !== id)
-        });
-      };
-
-      const updatePitch = (id, field, value) => {
-        setPitcher({
-          ...pitcher,
-          pitches: pitcher.pitches.map(b => 
-            b.id === id ? { ...b, [field]: value } : b
-          )
-        });
-      };
-
-      const updateBallEffect = (type, field, value) => {
-        setBallEffects({
-          ...ballEffects,
-          [type]: { ...ballEffects[type], [field]: parseFloat(value) }
-        });
-      };
-
       const getCountAdjustment = (balls, strikes) => {
         if (balls === 3 && strikes <= 1) {
           return { strikeZone: 0.7, swingRate: 0.6 };
@@ -1086,9 +982,6 @@ import { useEscapeToClose } from './components/useEscapeToClose.js';
         }
         return { strikeZone: 1.0, swingRate: 1.0 };
       };
-
-      // ※ getStaminaPenalty, getInfielderEffectiveArm, getHandednessEffect は
-      //    js/utils/physics.js に移動済み（グローバルスコープで利用可能）
 
       /**
        * 物理演算ベースのコンタクト結果判定（新エンジン）
@@ -1545,12 +1438,6 @@ import { useEscapeToClose } from './components/useEscapeToClose.js';
         setCurrentStamina(newStamina);
 
         return result;
-      };
-
-      // 旧determineContactResult（互換性のために残す）
-      const determineContactResult = (selectedBall, predictionCorrect, tempoGroundballBonus = 0, handEffect = {}, actualVelocity = 145, batter = null, pitcher = null, defense = null) => {
-        // 新エンジンに転送
-        return determineContactResultPhysics(selectedBall, predictionCorrect, tempoGroundballBonus, handEffect, actualVelocity, batter, pitcher, defense, null);
       };
 
       // 守備成績（守備機会＝刺殺+補殺 / 失策）を記録する。
@@ -2727,7 +2614,6 @@ if (newOuts === 3) {
       };
       // [SECTION: GAME_CONTROLS] → gameControls.js に抽出済み（ラッパーのみ）
       const resetGame = () => executeResetGame(gameControlsCtx);
-      const multiPitch = (pitchCount) => executeMultiPitch(gameControlsCtx, pitchCount);
       const startSimMode = (mode) => executeStartSimMode(gameControlsCtx, mode);
 
       // 残り投球数がある場合は自動的に投球を続ける
@@ -2765,9 +2651,6 @@ if (newOuts === 3) {
         }, 1);
         return () => clearTimeout(timer);
       });
-
-      // renderBases: GameUIComponentsのRenderBasesを使用
-      const renderBases = () => <RenderBases defense={defense} setDefense={setDefense} bases={bases} />;
 
       // AccordionSection, Sidebar: GameUIComponentsからimport済み
 
@@ -2863,7 +2746,7 @@ if (newOuts === 3) {
               💾 オートセーブしました
             </div>
           )}
-          {screenMode === 'management' && !['contract', 'tryout', 'offseason', 'camp', 'summer_camp', 'jersey', 'regulations_next', 'sandbox_next_regulations', 'sandbox_setup', 'edit', 'corporate_departure', 'corporate_scout', 'club_recruit', 'budget_settlement'].includes(managementView) && <Sidebar
+          {screenMode === 'management' && !FULLSCREEN_MANAGEMENT_VIEWS.includes(managementView) && <Sidebar
             gameMode={gameMode}
             userTeamName={userTeamName}
             seasonData={seasonData}
@@ -2874,7 +2757,7 @@ if (newOuts === 3) {
             setManagementView={setManagementView}
           />}
 
-          <div className={screenMode === 'management' && !['contract', 'tryout', 'offseason', 'camp', 'summer_camp', 'jersey', 'regulations_next', 'sandbox_next_regulations', 'sandbox_setup', 'edit', 'corporate_departure', 'corporate_scout', 'club_recruit', 'budget_settlement'].includes(managementView) ? 'md:ml-56 pt-12 md:pt-0' : ''}>
+          <div className={screenMode === 'management' && !FULLSCREEN_MANAGEMENT_VIEWS.includes(managementView) ? 'md:ml-56 pt-12 md:pt-0' : ''}>
             {screenMode === 'game' ? (
               /* data-fit-height: 縦も1画面に収める対象。自動フィットが高さを見る印
                  （縦に読み進める管理画面には付けないこと）

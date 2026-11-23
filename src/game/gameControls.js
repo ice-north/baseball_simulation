@@ -1,5 +1,5 @@
 // ========================================================================
-// gameControls.js - resetGame, multiPitch, startSimMode
+// gameControls.js - resetGame, startSimMode
 // Extracted from App.jsx GAME_CONTROLS section (L2791-2965)
 // ========================================================================
 
@@ -77,18 +77,6 @@ export function executeResetGame(ctx) {
       setCurrentStamina(homePitcher.pitching.stamina);
     }
   }, 100);
-}
-
-/**
- * multiPitch - 指定回数投球を開始
- *
- * ctx に必要なプロパティ:
- *   setRemainingPitches, setIsAutoSimulating
- */
-export function executeMultiPitch(ctx, pitchCount) {
-  const { setRemainingPitches, setIsAutoSimulating } = ctx;
-  setRemainingPitches(pitchCount);
-  setIsAutoSimulating(true);
 }
 
 /**
