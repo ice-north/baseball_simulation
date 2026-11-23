@@ -141,13 +141,16 @@ export const getCurrentPhase = (month, day, options, year) => {
   return SEASON_PHASES.OFF_SEASON;
 };
 
+/** ゲームの年度（1年目=1）の暦年。1年目が2024年 */
+export const calendarYearOf = (gameYear) => 2024 + gameYear - 1;
+
 /**
  * シーズン初期データ作成
  */
 export const createSeasonData = (year = 1) => {
   return {
     year,                           // シーズン年数
-    currentDate: { year: 2024 + (year - 1), month: 1, day: 1 },  // 現在の日付（年数に連動）
+    currentDate: { year: calendarYearOf(year), month: 1, day: 1 },  // 現在の日付（年数に連動）
     phase: SEASON_PHASES.SPRING_CAMP,  // 現在のフェーズ
     schedule: [],                   // 試合スケジュール
     results: [],                    // 試合結果

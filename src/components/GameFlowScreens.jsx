@@ -3,7 +3,7 @@ import { RANK_LABELS, RANK_HEX } from '../utils/constants.js';
 import SelectShell from './select/SelectShell.jsx';
 import TeamSelectCard from './select/TeamSelectCard.jsx';
 import { TEAMS_DATA, initializeAllPitchingRotations } from '../teams-data.js';
-import { SEASON_PHASES, createSeasonData } from '../season/seasonManager.js';
+import { SEASON_PHASES, createSeasonData, calendarYearOf } from '../season/seasonManager.js';
 import { REGULATION_PRESETS } from '../season/regulationSettings.js';
 import { initializeAllPlayersCondition } from '../game/condition.js';
 import { generateAILineup, setRecommendedLineup } from '../game/autoSimulation.js';
@@ -307,7 +307,7 @@ const GameFlowScreens = ({
           generatePitchingRotation, setRecommendedLineup, generateAILineup,
         });
 
-        const calYear = 2024 + (seasonData?.year || 1) - 1;
+        const calYear = calendarYearOf(seasonData?.year || 1);
         // 地域トーナメントをキャンプ終了時に生成（4/1開始時に組み合わせ確定済み）
         const rtSeeds = seasonData?.tournamentSeeds || null;
         const rt = generateRegionalTournament({ userTeamName, calendarYear: calYear, seeds: rtSeeds });
@@ -392,7 +392,7 @@ const GameFlowScreens = ({
           generatePitchingRotation, setRecommendedLineup, generateAILineup,
         });
 
-        const calYear = 2024 + (seasonData?.year || 1) - 1;
+        const calYear = calendarYearOf(seasonData?.year || 1);
         setSeasonData(prev => ({
           ...prev,
           currentDate: { year: calYear, month: 4, day: 1 },
@@ -484,7 +484,7 @@ const GameFlowScreens = ({
           generatePitchingRotation, setRecommendedLineup, generateAILineup,
         });
 
-        const calYear = 2024 + (seasonData?.year || 1) - 1;
+        const calYear = calendarYearOf(seasonData?.year || 1);
         setSeasonData(prev => ({
           ...prev,
           currentDate: { year: calYear, month: 4, day: 1 },
@@ -530,7 +530,7 @@ const GameFlowScreens = ({
           generatePitchingRotation, setRecommendedLineup, generateAILineup,
         });
 
-        const calYear = 2024 + (seasonData?.year || 1) - 1;
+        const calYear = calendarYearOf(seasonData?.year || 1);
         setSeasonData(prev => ({
           ...prev,
           currentDate: { year: calYear, month: 4, day: 1 },

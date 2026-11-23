@@ -32,6 +32,7 @@ import {
   SEASON_PHASES,
   getNPBDraftDay,
   getPlayoffChampion,
+  calendarYearOf,
 } from '../src/season/seasonManager.js';
 import {
   generateFullSeasonSchedule,
@@ -2346,7 +2347,7 @@ function resolvePhase(league, now) {
     for (const name of league.season.settings.teamNames)
       refreshTeamPlan(league, name);
     league.season.currentDate = {
-      year: 2023 + league.season.year,
+      year: calendarYearOf(league.season.year),
       month: 4,
       day: 1,
     };
