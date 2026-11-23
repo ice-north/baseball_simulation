@@ -11,6 +11,9 @@
 //     字（public/fonts/。日本語は1つ約450KB）は配布HTMLに埋め込まず、入にするまで1つも読まない
 //   - 段3: 入のときだけホームの頭に今日の一戦の札、試合の小窓に打席速報（送ると場面が進む）
 //   - 段4: 入のときだけホームに番記者のメモ。優勝などが決まったら球団の出来事の場面を1度だけ出す
+//   - ブラウザっぽさを減らす（`look/feel.css`・`chrome.js`・`motion.js`・`statGrade.js`）: 入のときだけ
+//     アドレスバーの色と「ホーム画面に追加」の印、自前の矢印のプルダウン、選手成績の S〜F の札
+//     （リーグ平均比）・並べ替えた列の棒・列のまとまり。切のときは何も足さない
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { chromium } from 'playwright';
@@ -89,6 +92,8 @@ await withDeadline(
       assert.doesNotMatch(await fontOf(p, '.online h2'), /LookHead/, '切なのに見出しの字が変わっている');
       await p.evaluate(() => document.fonts.ready);
       assert.deepEqual(loadedFonts(), [], '切なのに新しい見た目の字を読んだ');
+      // 切のときはブラウザの枠の印を足さない
+      assert.equal(await p.locator('head [data-look]').count(), 0, '切なのにアドレスバーの色などを足した');
       // 段3: 切のときは今日の一戦の札も打席速報も出さない
       assert.equal(await p.locator('.online-today-game').count(), 0, '切なのに今日の一戦の札が出ている');
       assert.equal(await p.locator('.online-reporter-memo').count(), 0, '切なのに番記者のメモが出ている');
@@ -164,6 +169,34 @@ await withDeadline(
       await p.keyboard.press('Escape');
       await live.waitFor({ state: 'detached' });
 
+      // ブラウザの枠: アドレスバーの色・ホーム画面に追加の印・暗い画面の宣言・自前の矢印
+      assert.equal(await p.locator('head meta[name="theme-color"][data-look]').getAttribute('content'), '#293b4f');
+      assert.equal(await p.locator('head link[rel="manifest"][data-look]').getAttribute('href'), '/online.webmanifest');
+      assert.equal(await p.evaluate(() => getComputedStyle(document.documentElement).colorScheme), 'dark');
+      // 選手成績: 成績の S〜F の札（リーグ平均比）・列のまとまり・並べ替えた列の棒
+      await nav.getByRole('button', { name: 'チーム分析', exact: true }).click();
+      await p.locator('.online-page-tabs').getByRole('button', { name: '選手成績', exact: true }).click();
+      await p.locator('.online-roster-row').first().waitFor();
+      assert.equal(
+        await p.evaluate(() => getComputedStyle(document.querySelector('.online select')).appearance),
+        'none',
+        'プルダウンがブラウザの矢印のまま',
+      );
+      const graded = p.locator('.online-roster-values .online-stat-graded');
+      assert.ok((await graded.count()) >= 3, '成績に S〜F の札が付いていない');
+      assert.match(await graded.first().getAttribute('title'), /リーグ平均と比べて[SABCDEF]/);
+      assert.ok((await graded.first().locator('.online-rank-chip').count()) === 1, '札の字が無い');
+      assert.deepEqual(
+        await p.locator('.online-roster-columns .online-look-section').evaluateAll((els) => els.map((e) => e.dataset.section)),
+        ['出場', '打撃', '指標', '選球'],
+      );
+      assert.equal(await p.locator('.online-look-bar').count(), 0, '並べ替える前から棒が出ている');
+      await p.getByRole('button', { name: 'OPSで並べ替え' }).click();
+      assert.ok((await p.locator('.online-look-bar').count()) >= 9, '並べ替えた列に棒が無い');
+      // 行の高さがそろっている（型の札で2行にならない）
+      const heights = await p.locator('.online-compact-roster .online-roster-rows article').evaluateAll((els) => [...new Set(els.map((e) => e.offsetHeight))]);
+      assert.deepEqual(heights, [44], `選手成績の行の高さがそろっていない: ${heights}`);
+
       // スタメン設定: 顔・調子の顔
       await nav.getByRole('button', { name: 'スタメン設定', exact: true }).click();
       await p.locator('.online-lineup-person').first().waitFor();
@@ -196,6 +229,8 @@ await withDeadline(
       assert.match(emoji, EMOJI);
       assert.equal(await p.evaluate((key) => localStorage.getItem(key), LOOK_KEY), null);
       assert.doesNotMatch(await fontOf(p, '.online h1'), /LookHead/, '切に戻しても見出しの字が残った');
+      assert.equal(await p.locator('head [data-look]').count(), 0, '切に戻してもアドレスバーの色などが残った');
+      assert.equal(await p.evaluate(() => document.documentElement.classList.contains('online-look-root')), false);
       await context.close();
     }
 

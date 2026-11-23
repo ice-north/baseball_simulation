@@ -25,6 +25,8 @@ import { LookToggle } from './look/LookToggle.jsx';
 import { Drafts } from './Drafts.jsx';
 import { staffModesDoneText } from './notices.js';
 import { awaySummary } from './awaySummary.js';
+import { useLookChrome } from './look/chrome.js';
+import { useRowMotion } from './look/motion.js';
 import {
   readAuth,
   sameSession,
@@ -188,6 +190,11 @@ export default function OnlineApp() {
     }),
     [lookOn, view?.teamName],
   );
+  // 新しい見た目（試作）: ブラウザの枠の色・全画面で開く印（`look/chrome.js`）と、表の行が滑って
+  // 並べ替わる動き（`look/motion.js`）。⚠ どちらも入のときだけ
+  const [lookRoot, setLookRoot] = useState(null);
+  useLookChrome(lookOn);
+  useRowMotion(lookOn, lookRoot);
   const locked = useRef(false);
   const viewSequence = useRef(0);
   // 手元のビューの世代。読み直しで `since` に送り、変わっていなければ中身を受け取らない
@@ -618,6 +625,7 @@ export default function OnlineApp() {
   return (
     <LookContext.Provider value={look}>
     <div
+      ref={setLookRoot}
       className={`online ${mobile ? 'online-mobile' : 'online-desktop'} ${compactMobile ? 'online-compact-shell' : ''}${lookOn ? ' online-look' : ''}`}
       style={lookOn ? teamColorVars(view?.teamName) : undefined}
     >

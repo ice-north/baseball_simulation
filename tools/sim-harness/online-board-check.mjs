@@ -535,7 +535,8 @@ try {
       } } } },
     };
     const statsOf = (_name, p) => p.seasonStats;
-    const expected = { 甲: { average: 0.3, era: 2 }, 乙: { average: 0.2, era: 4 } };
+    // 出塁率・長打率も（四死球・長打が無いので打率と同じ）
+    const expected = { 甲: { average: 0.3, era: 2, obp: 0.3, slg: 0.3 }, 乙: { average: 0.2, era: 4, obp: 0.2, slg: 0.2 } };
     assert.deepEqual(teamSeasonStats(fixture, statsOf), expected);
     [fixture.game.teams.甲.players, fixture.game.teams.乙.players] =
       [fixture.game.teams.乙.players, fixture.game.teams.甲.players];
@@ -545,7 +546,7 @@ try {
 
     // 記録の無い試合を0に置き換えない。旧リーグ・部分記録は名簿の既存成績へ戻す。
     fixture.game.teams.甲.players = [{ id: 2, seasonStats: structuredClone(b) }];
-    const fallback = { 甲: { average: 0.2, era: 4 }, 乙: { average: 0.3, era: 2 } };
+    const fallback = { 甲: { average: 0.2, era: 4, obp: 0.2, slg: 0.2 }, 乙: { average: 0.3, era: 2, obp: 0.3, slg: 0.3 } };
     const partial = structuredClone(fixture);
     partial.records.seasons[1].complete = false;
     assert.deepEqual(teamSeasonStats(partial, statsOf), fallback, '部分記録を全試合の成績として出した');
@@ -559,7 +560,7 @@ try {
     empty.season.results = [];
     empty.records.seasons[1].games = {};
     assert.deepEqual(teamSeasonStats(empty, statsOf), {
-      甲: { average: null, era: null }, 乙: { average: null, era: null },
+      甲: { average: null, era: null, obp: null, slg: null }, 乙: { average: null, era: null, obp: null, slg: null },
     }, '開幕前の0打席・0投球回を打率0・防御率0にした');
   }
   {

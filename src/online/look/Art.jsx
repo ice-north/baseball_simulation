@@ -8,6 +8,7 @@ import { stadiumArt, stadiumScene, fieldArt } from './sceneArt.js';
 import { teamLook, NEUTRAL_LOOK } from './teamLook.js';
 import { conditionValue } from '../statsView.js';
 import './look.css';
+import './feel.css';
 
 const FONTS = {
   graduate: 'LookGraduate, "Arial Black", sans-serif',
