@@ -10,6 +10,7 @@
 //   - 字: 入のときだけ見出しが LookHead・本文が LookNum（数字と英字）＋LookJP（日本語）。見出しの中の注記と新聞は今までの字のまま。
 //     字（public/fonts/。日本語は1つ約450KB）は配布HTMLに埋め込まず、入にするまで1つも読まない
 //   - 段3: 入のときだけホームの頭に今日の一戦の札、試合の小窓に打席速報（送ると場面が進む）
+//   - 動きで見る: 入のときだけ試合の小窓に出る。球場と選手を canvas に描き、動きが終わると自動で次の打席へ
 //   - 段4: 入のときだけホームに番記者のメモ。優勝などが決まったら球団の出来事の場面を1度だけ出す
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
@@ -95,6 +96,7 @@ await withDeadline(
       await p.locator('.online-slot-record').first().click();
       await p.locator('.online-scoreboard').first().waitFor();
       assert.equal(await p.getByRole('button', { name: '打席速報' }).count(), 0, '切なのに打席速報が出ている');
+      assert.equal(await p.getByRole('button', { name: '動きで見る' }).count(), 0, '切なのに動きで見るが出ている');
       await p.keyboard.press('Escape');
       await p.locator('.online-scoreboard').first().waitFor({ state: 'detached' });
 
@@ -161,8 +163,30 @@ await withDeadline(
       assert.ok((await live.locator('.online-live-telop strong').textContent()).trim(), '実況の文が無い');
       await live.getByRole('button', { name: '次の打席 ▶' }).click();
       assert.match(await live.locator('.online-live-controls small').textContent(), /^2 \//, '打席が進まない');
+      // 動きで見る: canvas に球場が描かれ、自動にすると動きが終わってから次の打席へ進む
+      await p.getByRole('button', { name: '動きで見る' }).click();
+      const motion = p.locator('.online-live[data-motion]');
+      await motion.waitFor();
+      const canvas = motion.locator('canvas.online-motion-canvas');
+      await canvas.waitFor();
+      await p.waitForTimeout(600);
+      const painted = await canvas.evaluate((c) => {
+        const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
+        const colors = new Set();
+        for (let i = 0; i < d.length; i += 4 * 97) colors.add((d[i] << 16) | (d[i + 1] << 8) | d[i + 2]);
+        return colors.size;
+      });
+      assert.ok(painted > 50, `動きで見るの絵が描かれていない（色${painted}）`);
+      if (process.env.LOOK_SHOTS) await motion.screenshot({ path: `${process.env.LOOK_SHOTS}/motion-pc.png` });
+      await motion.getByRole('button', { name: '×2' }).click();
+      await motion.getByRole('button', { name: '▶ 自動' }).click();
+      await p.waitForFunction(
+        () => /^[2-9]|^\d{2}/.test(document.querySelector('.online-live[data-motion] .online-live-controls small')?.textContent || ''),
+        null,
+        { timeout: 20000 },
+      );
       await p.keyboard.press('Escape');
-      await live.waitFor({ state: 'detached' });
+      await motion.waitFor({ state: 'detached' });
 
       // スタメン設定: 顔・調子の顔
       await nav.getByRole('button', { name: 'スタメン設定', exact: true }).click();

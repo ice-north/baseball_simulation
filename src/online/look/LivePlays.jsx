@@ -4,14 +4,19 @@
 //
 // ⚠ 中身は `playByPlay.js`（試合の `plays` から作る）。1球ごとの観戦記録（1試合約180KB）は使わない。
 // ⚠ 入のときだけ出す（呼ぶ側の `GameRecord` が見る）。版20より前の試合には塁と打球の記録が無いので出さない。
+// ⚠ `motion` のときは球場の図の代わりに「動きで見る」（`PlayMotion.jsx`）。自動は動きが終わってから次へ。
 // ============================================================
 import React, { useEffect, useMemo, useState } from 'react';
 import { PlayField, TeamMark } from './Art.jsx';
 import { liveScenes, highlightIndexes, orderPosition } from './playByPlay.js';
+import PlayMotion from './PlayMotion.jsx';
+import { basesBeforeOf } from './playMotion.js';
 import { playTone } from '../gamePlays.js';
 import { teamShort } from '../gameText.js';
 
 const AUTO_MS = 1800;
+/** 動きで見るとき、動きが終わってから次の打席までの間 */
+const MOTION_GAP_MS = 700;
 
 function Outs({ outs }) {
   return (
@@ -23,12 +28,16 @@ function Outs({ outs }) {
   );
 }
 
-export default function LivePlays({ game }) {
+export default function LivePlays({ game, motion = false }) {
   const scenes = useMemo(() => liveScenes(game, teamShort), [game]);
   const highlights = useMemo(() => highlightIndexes(scenes), [scenes]);
   const [index, setIndex] = useState(0);
   const [auto, setAuto] = useState(false);
   const [only, setOnly] = useState(false);
+  // 動きで見る: 速さ（1・2）、もう一度の鍵、動きが終わった場面
+  const [speed, setSpeed] = useState(1);
+  const [replay, setReplay] = useState(0);
+  const [finished, setFinished] = useState(-1);
   const order = useMemo(
     () => (only && highlights.length ? highlights : scenes.map((_, i) => i)),
     [only, highlights, scenes],
@@ -52,9 +61,11 @@ export default function LivePlays({ game }) {
       setAuto(false);
       return undefined;
     }
-    const timer = setTimeout(() => setIndex(order[at + 1]), AUTO_MS);
+    // 動きで見るときは、いまの場面の動きが終わるまで待つ
+    if (motion && finished !== order[at]) return undefined;
+    const timer = setTimeout(() => setIndex(order[at + 1]), motion ? MOTION_GAP_MS : AUTO_MS);
     return () => clearTimeout(timer);
-  }, [auto, at, order]);
+  }, [auto, at, order, motion, finished]);
   const scene = scenes[order[at]];
   if (!scene) return <p className="online-muted">この試合の打席の記録はありません。</p>;
   // その半回の、いまの打席までの流れ（新しい順に4つ）
@@ -64,7 +75,7 @@ export default function LivePlays({ game }) {
     .slice(-4)
     .reverse();
   return (
-    <section className="online-live" aria-label="打席速報">
+    <section className="online-live" data-motion={motion || undefined} aria-label={motion ? '動きで見る' : '打席速報'}>
       <header className="online-live-bug">
         <span className="online-live-score">
           <TeamMark team={game.away} size={24} />
@@ -78,7 +89,30 @@ export default function LivePlays({ game }) {
           <Outs outs={Math.min(2, scene.outs)} />
         </span>
       </header>
-      <PlayField scene={scene} home={game.home} />
+      {motion ? (
+        <div className="online-motion">
+          <PlayMotion
+            scene={scene}
+            before={basesBeforeOf(scenes, order[at])}
+            home={game.home}
+            offenseTeam={scene.team}
+            defenseTeam={scene.offense === 'home' ? game.away : game.home}
+            speed={speed}
+            replayKey={replay}
+            onDone={() => setFinished(order[at])}
+          />
+          <div className="online-motion-tools">
+            <button type="button" onClick={() => setReplay((n) => n + 1)}>
+              ↻ もう一度
+            </button>
+            <button type="button" aria-pressed={speed === 2} onClick={() => setSpeed(speed === 2 ? 1 : 2)}>
+              ×2
+            </button>
+          </div>
+        </div>
+      ) : (
+        <PlayField scene={scene} home={game.home} />
+      )}
       <div className="online-live-telop" data-tone={playTone(scene.code, scene.runs)}>
         <strong>
           {scene.batter?.name ? `${scene.batter.name}　` : ''}
