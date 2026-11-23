@@ -439,15 +439,21 @@ function awakeningHighStatDamp(currentValue) {
 }
 
 /**
- * 技術系能力(meet/power/eye/defense等)の高能力値成長減衰を適用
- * 70(プロ級)以上で超過1ごとに5%減衰、下限10%（サブ練習用）
+ * 技術系能力（ミート・パワー・選球眼・制球・バントなど）のサブ練習の高能力値成長減衰。
+ * **メイン練習と同じ天井**（50以上で超過1ごとに3%、下限15%）を、確率的に丸めて掛ける。
+ * ⚠ 2026-11-23 まではサブ練習だけ旧式（70から5%・`Math.round`）のままだった。+1 に 0.7 を
+ *    掛けても丸めて+1 なので、能力70台の前半まで減衰が一度も効かず、サブ練習の制球（40%で+1）が
+ *    毎年ほぼそのまま積み上がっていた。10年の長期シミュでリーグの制球が 49→69 と伸び続け、
+ *    四球が半分になった主な出どころ（キャンプの制球の伸びは、同じ能力のミートの1.6倍）。
+ * ⚠ 守備は努力で上がる能力なので別の物差し（`EFFORT_DAMP.defense`。メイン練習と同じ）
  */
-function applyTechStatDecay(currentValue, growth) {
-  if (growth <= 0 || currentValue < 70) return growth;
-  const overAmount = currentValue - 70;
-  const dampFactor = Math.max(0.10, 1.0 - overAmount * 0.05);
-  return Math.max(0, Math.round(growth * dampFactor));
+function applyTechStatDecay(currentValue, growth, curve = TECH_SUB_DAMP) {
+  if (growth <= 0 || currentValue < curve.from) return growth;
+  const dampFactor = Math.max(curve.floor, 1.0 - (currentValue - curve.from) * curve.rate);
+  return Math.max(0, stochasticRound(growth * dampFactor));
 }
+/** サブ練習の技術系の天井（メイン練習の技術系と同じ値） */
+const TECH_SUB_DAMP = { from: 50, rate: 0.03, floor: 0.15 };
 
 /**
  * サブ練習を実行（メイン練習の半分程度の効果）
@@ -591,7 +597,7 @@ export function executeSubTraining(player, subType, options = {}, staffBonus = n
       const defRaw = growthAmount();
       if (defRaw > 0 && player.fielding) {
         const oldDef = player.fielding.defense || 50;
-        const def = applyTechStatDecay(oldDef, defRaw);
+        const def = applyTechStatDecay(oldDef, defRaw, EFFORT_DAMP.defense);
         if (def > 0) {
           player.fielding.defense = Math.min(ABILITY_CAP, oldDef + def);
           growthReport.push({ statName: '守備', before: oldDef, after: player.fielding.defense, growth: def });
@@ -1315,7 +1321,12 @@ export function executeCampTraining(player, trainingType, newPitchType, staffBon
       // という反転が**既存の減衰カーブだけで**成立する（新しい係数を作らない）。
       const rawBase = (Math.floor(Math.random() * 3) + 1) * ageMultiplier * expBonus;
       const rawFocus = (Math.floor(Math.random() * 4) + 1) * ageMultiplier * expBonus;
-      rawGrowth = ((rawBase + rawFocus) * 0.14 * INTENSIVE_FOCUS
+      // ⚠ 制球の集中にも、投げ込みと同じ係数（0.45）を掛ける（`TRAINING_MENUS.control` の注と同じ理由）。
+      //    指導者の「長所を伸ばす」は投手の技術を制球と守備の2つでしか比べないので、ほとんどの投手が
+      //    毎年「制球集中」になる。野手の集中はミート・パワー・選球眼・守備・盗塁に散るので、制球だけが
+      //    積み上がり、10年でリーグの制球が 49→69・四球が半分になった（10年の長期シミュ 2026-11-23）
+      const focusStatMult = targetStat === 'control' ? TRAINING_MENUS.control.growthMultipliers.control : 1.0;
+      rawGrowth = ((rawBase + rawFocus) * 0.14 * INTENSIVE_FOCUS * focusStatMult
         * talentMult * aptitudeFactor * physiqueMult * disciplineMult
         * campPotMult * coachingMult * moodMult * (isPhysical ? fitnessMult : 1.0) * stopAgeGate);
       isAwakening = false;
@@ -1429,8 +1440,11 @@ export function executeCampTraining(player, trainingType, newPitchType, staffBon
       // ⚠ スタミナ・体力だけは最低+1を残す（やれば伸びるもの。いしだ方針）
       if ((targetStat === 'stamina' || targetStat === 'bodyStamina') && totalGrowth < 1) totalGrowth = 1;
       // ⚠ 集中練習で代償（減点）が出たクールは、伸びが0のまま減点だけにしない
+      // ⚠ 最低保証にも高能力値の減衰を掛ける（2026-11-23）。そのままの+1だと、代償の出る半分の
+      //    クールで減衰を素通りして必ず+1入り、集中した能力が天井なく伸び続けた（制球が
+      //    能力62でも1年+1.6。10年でリーグの制球 49→69・四球が半分）。期待値で丸める
       if (menu.intensive && penaltyCount > 0 && totalGrowth < INTENSIVE_PENALTY_FLOOR)
-        totalGrowth = INTENSIVE_PENALTY_FLOOR;
+        totalGrowth = Math.max(totalGrowth, stochasticRound(INTENSIVE_PENALTY_FLOOR * dampFactor));
       const armForCap = getNestedValue(updatedPlayer, getStatPath('arm')) || 50;
       // ⚠ 1〜99 の物差しの能力は ABILITY_CAP で止める（100 で止めていて、98 から練習すると100になった。2026-11-20 監査）
       const maxValue = targetStat === 'velocity' ? getVelocityCap(armForCap) : targetStat === 'stamina' ? 200 : ABILITY_CAP;
