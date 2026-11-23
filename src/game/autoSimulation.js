@@ -24,7 +24,7 @@ import { classifyBuntContact, rollBuntQuality, buntFieldDefense,
          buntThrowOutChance, squeezeHomeThrowChance } from './bunting.js';
 import { effectiveArsenalSize, activeArsenal } from './arsenal.js';
 import { withSeededRandom } from './rng.js';
-import { nextRotationStarterId, bestFieldAssignment } from './lineup.js';
+import { nextRotationStarterId, bestFieldAssignment, applyBattingOrderEntries } from './lineup.js';
 
 // CPU の打順作りで、守備の適性がこれ未満の守備に就けるときの減点の境（オンラインの代役の下限と同じ値）
 const AI_LINEUP_MIN_FITNESS = 60;
@@ -325,18 +325,9 @@ export const generateAILineup = (teamData, teamName) => {
   }
 
   // 打順を選手に適用（DHは打順のみ設定し、選手の守備ポジションは変更しない）
-  battingOrder.forEach(entry => {
-    const player = teamData.players.find(p => p.id === entry.player.id);
-    if (player) {
-      player.battingOrder = entry.battingOrder;
-      if (entry.position === 'dh') {
-        player._isDH = true;
-      } else {
-        player.position = entry.position;
-        delete player._isDH;
-      }
-    }
-  });
+  applyBattingOrderEntries(teamData.players, battingOrder.map(entry => ({
+    playerId: entry.player.id, battingOrder: entry.battingOrder, position: entry.position,
+  })));
 
   // 今日の先発（DH制では打順に入らないので、呼ぶ側はこれで先発を知る。`gameSetup.js`）
   return starter;
@@ -380,7 +371,8 @@ export const setRecommendedLineup = (teamData, teamName) => {
 // ⚠ オンラインは休養日（4ターンに1回）があるので、この式だと疲労が溜まらない（先方指摘 2026-11-15）。
 //    オンラインの1日の処理だけ `withFielderGameFatigue` で式を差し替える（一人用の数字は変えない）。
 // `batting` はその試合の打撃成績（`gameStats.batting`）。溜まらない出場（代打など）は 0 を返す。
-const singleFielderGameFatigue = (bodyStamina, batting) =>
+// 采配した試合（`gameSetup.js`）も同じ式を使う（一人用なので差し替えは見ない）。
+export const singleFielderGameFatigue = (bodyStamina, batting) =>
   batting.atBats >= 3 ? Math.round(15 - (bodyStamina / 100) * 8) : 0;
 let fielderGameFatigue = singleFielderGameFatigue;
 /** `run` の間だけ、野手の1試合の疲労を `gain(体力, その試合の打撃成績)` にする（終われば必ず戻す） */
@@ -496,18 +488,7 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false, observer = 
     teamData.players.forEach(p => { p.battingOrder = 0; delete p._isDH; });
 
     // lineupSettingsから打順と守備位置を適用（DHは打順のみ、ポジション変更しない）
-    settings.battingOrder.forEach(entry => {
-      const player = teamData.players.find(p => p.id === entry.playerId);
-      if (player) {
-        player.battingOrder = entry.battingOrder;
-        if (entry.position === 'dh') {
-          player._isDH = true;
-        } else {
-          player.position = entry.position;
-          delete player._isDH;
-        }
-      }
-    });
+    applyBattingOrderEntries(teamData.players, settings.battingOrder);
   };
 
   applyLineupSettings(homeTeamData, homeTeamName);

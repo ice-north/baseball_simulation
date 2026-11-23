@@ -2,6 +2,7 @@ import { humanTeamNames } from './teamControl.js';
 import { TEAMS_DATA, LEAGUE_SETTINGS } from '../teams-data.js';
 import { autoStarterRole, isPitcherPlayer } from '../utils/constants.js';
 import { lineupConditionMod, batterFatiguePenalty } from './condition.js';
+import { applyBattingOrderEntries } from './lineup.js';
 
 // ポジション別の攻守バランス重み
 const POSITION_WEIGHTS = {
@@ -503,18 +504,7 @@ export const generateOptimalLineup = (teamName, mode = 'standard', given = null,
   // 旧形式の打順も維持（DH の印も外す。打順に入る人だけ付け直す。`generateAILineup` の説明を参照）
   team.players.forEach(p => { p.battingOrder = 0; delete p._isDH; });
 
-  team.lineupSettings.battingOrder.forEach(entry => {
-    const teamPlayer = team.players.find(p => p.id === entry.playerId);
-    if (teamPlayer) {
-      teamPlayer.battingOrder = entry.battingOrder;
-      if (entry.position === 'dh') {
-        teamPlayer._isDH = true;
-      } else if (entry.position !== 'pitcher') {
-        teamPlayer.position = entry.position;
-        delete teamPlayer._isDH;
-      }
-    }
-  });
+  applyBattingOrderEntries(team.players, team.lineupSettings.battingOrder, { keepPitcherPosition: true });
 };
 
 // 全チームのオーダーと投手ローテーションを自動で組む（⚠ 画面の言葉に「AI」は出さない）

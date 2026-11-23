@@ -17,6 +17,28 @@ export function rosterShortage(players = [], useDH = false) {
   return missing;
 }
 
+/**
+ * 打順（`{ playerId, battingOrder, position }` の並び）を選手に当てる。
+ * DH は打順と `_isDH` の印だけ付け、守備位置は変えない（position は本来の守備位置のまま）。
+ * ⚠ 当てる前に全員の打順と `_isDH` を外しておくこと（呼ぶ側の仕事）。印を付け直すのは
+ *    打順に入る人だけなので、外さないと「DH が2人・その守備位置が空」になる。
+ * @param opts.keepPitcherPosition position が 'pitcher' の項目は打順だけ当て、守備位置と印に触らない
+ *   （`generateOptimalLineup` が非DHで9番に足す投手）
+ */
+export function applyBattingOrderEntries(players, entries, { keepPitcherPosition = false } = {}) {
+  for (const entry of entries) {
+    const player = players.find(p => p.id === entry.playerId);
+    if (!player) continue;
+    player.battingOrder = entry.battingOrder;
+    if (entry.position === 'dh') {
+      player._isDH = true;
+    } else if (!(keepPitcherPosition && entry.position === 'pitcher')) {
+      player.position = entry.position;
+      delete player._isDH;
+    }
+  }
+}
+
 // 先発ローテに入れられる選手。投手登録か、投球の能力を持つ選手（オンラインの二刀流で野手もローテに入れられる）。
 // 投手登録の選手はいつも先発できる（投球の能力を持たない古い形でも）
 const canStartPlayer = player => player?.position === 'pitcher' || !!player?.pitching;

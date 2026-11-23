@@ -4,7 +4,8 @@
 // ========================================================================
 
 import { TEAMS_DATA, LEAGUE_SETTINGS } from '../teams-data.js';
-import { generateAILineup } from './autoSimulation.js';
+import { generateAILineup, singleFielderGameFatigue } from './autoSimulation.js';
+import { applyBattingOrderEntries } from './lineup.js';
 import { recordGameResult } from '../season/dateProgression.js';
 import { decidePitchers, recordDecisions } from './pitcherDecisions.js';
 import { adjustGrowthModifier, applyFatigueGrowthPenalty, addFatigue } from '../utils/constants.js';
@@ -54,18 +55,7 @@ export function executeSetupManagedGame(ctx, gameInfo) {
     if (isUserTeam) {
       // DH の印も外す（打順に入る人だけ付け直す。`generateAILineup` の説明を参照）
       players.forEach(p => { p.battingOrder = 0; delete p._isDH; });
-      settings.battingOrder.forEach(entry => {
-        const player = players.find(p => p.id === entry.playerId);
-        if (player) {
-          player.battingOrder = entry.battingOrder;
-          if (entry.position === 'dh') {
-            player._isDH = true;
-          } else {
-            player.position = entry.position;
-            delete player._isDH;
-          }
-        }
-      });
+      applyBattingOrderEntries(players, settings.battingOrder);
     } else {
       const tempTeamData = { ...teamData, players };
       aiStarterId = generateAILineup(tempTeamData, teamName)?.id ?? null;
@@ -354,12 +344,8 @@ export function executeHandleManagedGameEnd(ctx) {
         applyFatigueGrowthPenalty(playerData, isStarterAppearance);
         if (season.games % 10 === 0) adjustGrowthModifier(playerData, 0.01);
 
-        // 野手疲労蓄積: スタメン出場(3打席以上)のみ（代打等は蓄積なし・回復もなし）
-        if (isStarterAppearance) {
-          const bodyStamina = playerData.physical?.bodyStamina || 50;
-          const baseFatigue = Math.round(15 - (bodyStamina / 100) * 8);
-          addFatigue(playerData, baseFatigue);
-        }
+        // 野手疲労蓄積: スタメン出場(3打席以上)のみ（代打等は蓄積なし・回復もなし）。式は自動試合と同じ
+        addFatigue(playerData, singleFielderGameFatigue(playerData.physical?.bodyStamina || 50, gs));
         // 死球の疲労は打席数に関わらず乗る（代打の1打席で当たっても痛い）
         if (gs.hbpFatigue) addFatigue(playerData, gs.hbpFatigue);
       }
