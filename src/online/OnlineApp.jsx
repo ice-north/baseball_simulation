@@ -32,10 +32,10 @@ import {
   persistRefresh,
   clearAuth,
 } from './authState.js';
-// 新しい見た目（試作）で自球団の色を CSS へ渡す（`look/look.css` の `--team-c1` / `--team-c2`）
+// 新しい見た目（試作）で自球団の色を CSS へ渡す（`look/look.css` の `--team-c2`。帯と区切りの色）
 const teamColorVars = (teamName) => {
   const look = teamLook(teamName);
-  return look ? { '--team-c1': look.c1, '--team-c2': look.c2 } : undefined;
+  return look ? { '--team-c2': look.c2 } : undefined;
 };
 // 別アカウントへ切替後も、旧タブの読取り応答で書込み権限を復活させない。
 const viewForSession = (result, current) => {

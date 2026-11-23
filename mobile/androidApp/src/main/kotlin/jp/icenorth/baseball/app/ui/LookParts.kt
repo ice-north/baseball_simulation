@@ -3,6 +3,7 @@ package jp.icenorth.baseball.app.ui
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.InlineTextContent
@@ -30,6 +31,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.graphics.vector.PathParser
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.Placeholder
@@ -46,8 +48,8 @@ import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
-import androidx.compose.ui.unit.sp
 import jp.icenorth.baseball.app.R
+import jp.icenorth.baseball.shared.CONDITION_TEXT
 import jp.icenorth.baseball.shared.CoachCard
 import jp.icenorth.baseball.shared.LookArt
 import jp.icenorth.baseball.shared.LookItem
@@ -63,7 +65,8 @@ import jp.icenorth.baseball.shared.faceArt
 // ============================================================
 // 新しい見た目（試作）: 球団マーク・選手と指導者の顔・調子の顔・段位の字・見出しと本文の字。
 // 描く手順は共通部の `LookArt.kt`（Web 版 `src/online/look/art.js` の写し）。ここは Canvas に描くだけ。
-// ⚠ どの部品も**切のときは何も描かない**（呼ぶ側で入／切を分けない）。入／切は端末に覚える
+// ⚠ どの部品も**切のときは何も描かない**（呼ぶ側で入／切を分けない。調子の顔 [ConditionFace] だけは
+//    [conditionName] の中でしか使わず、入／切はそこで見る）。入／切は端末に覚える
 //    （[jp.icenorth.baseball.app.AppViewModel.lookOn]）。既定は切で、切なら今までと同じ画面。
 // ⚠ 表示専用。保存もサーバーも触らない。
 // ============================================================
@@ -72,7 +75,7 @@ import jp.icenorth.baseball.shared.faceArt
 @Immutable
 data class LookState(
     val on: Boolean = false,
-    /** 帽子の色を決める球団（自球団。他球団の名簿・トレード相手の選手を出す画面では差し替える） */
+    /** 帽子の色を決める球団（自球団）。他球団の選手を出す画面は、部品に `team` を渡して差し替える */
     val capTeam: String? = null,
     val looks: Map<String, TeamLook> = emptyMap(),
 ) {
@@ -127,7 +130,7 @@ fun LookTypography(content: @Composable () -> Unit) {
     val on = LocalLook.current.on
     val look = remember(plain) { lookTypography(plain) }
     CompositionLocalProvider(LocalPlainTypography provides plain) {
-        MaterialTheme(colorScheme = MaterialTheme.colorScheme, shapes = MaterialTheme.shapes, typography = if (on) look else plain, content = content)
+        MaterialTheme(typography = if (on) look else plain, content = content)
     }
 }
 
@@ -135,7 +138,7 @@ fun LookTypography(content: @Composable () -> Unit) {
 @Composable
 fun PlainTypography(content: @Composable () -> Unit) {
     val plain = LocalPlainTypography.current ?: MaterialTheme.typography
-    MaterialTheme(colorScheme = MaterialTheme.colorScheme, shapes = MaterialTheme.shapes, typography = plain, content = content)
+    MaterialTheme(typography = plain, content = content)
 }
 
 private fun fontOf(key: String?): FontFamily = when (key) {
@@ -154,8 +157,21 @@ private fun joinOf(v: String?) = if (v == "round") StrokeJoin.Round else StrokeJ
 /** 描く手順の一覧を正方形に描く */
 @Composable
 fun LookImage(art: LookArt, size: Dp, modifier: Modifier = Modifier) {
-    val measurer = rememberTextMeasurer()
+    // 字を測る道具は字のある絵（マーク）だけ作る（顔・調子の顔は1画面に何十も出る）
+    val measurer = if (art.items.any { it.t == "text" }) rememberTextMeasurer() else null
     val paths = remember(art) { art.items.map { s -> s.d?.let { PathParser().parsePathString(it).toPath() } } }
+    // 丸で切り抜く部品は続けて並ぶので、続きを1回の切り抜きでまとめて描く（顔は約25個が続く）
+    val runs = remember(art) {
+        val out = mutableListOf<IntRange>()
+        var start = 0
+        for (i in 1..art.items.size) {
+            if (i == art.items.size || art.items[i].c != art.items[start].c) {
+                out += start until i
+                start = i
+            }
+        }
+        out
+    }
     val clip = remember(art) {
         art.clip?.let { c ->
             Path().apply { addOval(androidx.compose.ui.geometry.Rect(Offset(c.cx.toFloat(), c.cy.toFloat()), c.r.toFloat())) }
@@ -168,14 +184,15 @@ fun LookImage(art: LookArt, size: Dp, modifier: Modifier = Modifier) {
             scale(k, k, pivot = Offset.Zero)
             translate(-bx.toFloat(), -by.toFloat())
         }) {
-            art.items.forEachIndexed { i, s ->
-                if (s.c && clip != null) clipPath(clip) { drawItem(s, paths[i], measurer) } else drawItem(s, paths[i], measurer)
+            for (run in runs) {
+                val draw: DrawScope.() -> Unit = { for (i in run) drawItem(art.items[i], paths[i], measurer) }
+                if (art.items[run.first].c && clip != null) clipPath(clip, block = draw) else draw()
             }
         }
     }
 }
 
-private fun DrawScope.drawItem(s: LookItem, path: Path?, measurer: TextMeasurer) {
+private fun DrawScope.drawItem(s: LookItem, path: Path?, measurer: TextMeasurer?) {
     val alpha = (s.op ?: 1.0).toFloat()
     val fill = lookColor(s.fill)
     val stroke = lookColor(s.stroke)
@@ -194,6 +211,7 @@ private fun DrawScope.drawItem(s: LookItem, path: Path?, measurer: TextMeasurer)
         "rect" -> paint { c, st -> drawRect(c, topLeft = Offset(s.x!!.toFloat(), s.y!!.toFloat()), size = Size(s.w!!.toFloat(), s.h!!.toFloat()), alpha = alpha, style = st) }
         "text" -> {
             val text = s.text ?: return
+            val textMeasurer = measurer ?: return
             // ⚠ 大きさは絵の座標（1 = 絵の1目盛り）。下の拡大で画面の大きさになるので、ここは px で渡す
             val style = TextStyle(
                 fontFamily = fontOf(s.font),
@@ -201,7 +219,7 @@ private fun DrawScope.drawItem(s: LookItem, path: Path?, measurer: TextMeasurer)
                 fontSize = (s.size ?: 10.0).toFloat().toSp(),
                 letterSpacing = (s.ls ?: 0.0).toFloat().toSp(),
             )
-            val layout = measurer.measure(text, style)
+            val layout = textMeasurer.measure(text, style)
             val topLeft = Offset(s.x!!.toFloat() - layout.size.width / 2f, s.y!!.toFloat() - layout.firstBaseline)
             stroke?.let { drawText(layout, it, topLeft, alpha = alpha, drawStyle = line) }
             fill?.let { drawText(layout, it, topLeft, alpha = alpha) }
@@ -244,32 +262,34 @@ fun StaffFace(coach: CoachCard, size: Dp = 44.dp, modifier: Modifier = Modifier)
     LookImage(art, size, modifier.testTag("coach-face"))
 }
 
-/** 調子の顔（絵文字の代わり） */
+/** 調子の顔（絵文字の代わり）。⚠ 入／切は呼ぶ側（[conditionName]）が見る。大きさは字の置き場（1.15字）に合わせて広がる */
 @Composable
-fun ConditionFace(level: Int?, size: Dp = 16.dp, modifier: Modifier = Modifier) {
+private fun ConditionFace(level: Int?) {
     val art = remember(level) { conditionArt(level) }
-    LookImage(art, size, modifier.testTag("condition-face"))
+    LookImage(art, 16.dp, Modifier.fillMaxSize().testTag("condition-face"))
 }
 
 /**
  * 「調子＋名前」の字。入なら調子を顔の絵で、切なら今までの絵文字で頭に付ける。
- * `Text(text, inlineContent = inline)` で使う。調子が分からなければ名前だけ。
+ * `Text(text, inlineContent = inline)` で使う。
+ * ⚠ 切は今までと1字も変えない（調子が分からなくても `"$絵文字$gap$名前"`。頭に空白が残るのも今まで通り）。
+ *    入で調子が分からなければ名前だけ。
  */
 @Composable
 fun conditionName(condition: Int?, name: String, gap: String = " "): Pair<AnnotatedString, Map<String, InlineTextContent>> {
     val on = LocalLook.current.on
-    if (!on || condition == null || conditionIcon(condition).isEmpty()) {
-        val icon = conditionIcon(condition)
-        return AnnotatedString(if (icon.isEmpty()) name else "$icon$gap$name") to emptyMap()
-    }
+    if (!on) return AnnotatedString("${conditionIcon(condition)}$gap$name") to emptyMap()
+    val label = condition?.let { CONDITION_TEXT.getOrNull(it) }
+    if (label == null || conditionIcon(condition).isEmpty()) return AnnotatedString(name) to emptyMap()
     val text = buildAnnotatedString {
-        appendInlineContent("cond", "[調子]")
+        // 読み上げは調子の言葉（絵文字のときは絵文字が読まれていた）
+        appendInlineContent("cond", label)
         append(gap)
         append(name)
     }
     val inline = mapOf(
         "cond" to InlineTextContent(Placeholder(1.15.em, 1.15.em, PlaceholderVerticalAlign.TextCenter)) {
-            ConditionFace(condition, 18.dp)
+            ConditionFace(condition)
         },
     )
     return text to inline
@@ -284,6 +304,8 @@ fun RankChip(value: Int, velocity: Boolean = false, stamina: Boolean = false, mo
         modifier.size(16.dp).background(rankColor(rank), RoundedCornerShape(3.dp)).testTag("rank-chip"),
         contentAlignment = Alignment.Center,
     ) {
-        Text(rank.toString(), color = Color(0xFF0F172A), fontFamily = LookGraduate, fontSize = 11.sp, lineHeight = 11.sp)
+        // ⚠ 札は 16dp の固定なので、字も dp で決める（端末の文字の大きさの設定で札からはみ出さない）
+        val fontSize = with(LocalDensity.current) { 11.dp.toSp() }
+        Text(rank.toString(), color = Color(0xFF0F172A), fontFamily = LookGraduate, fontSize = fontSize, lineHeight = fontSize)
     }
 }

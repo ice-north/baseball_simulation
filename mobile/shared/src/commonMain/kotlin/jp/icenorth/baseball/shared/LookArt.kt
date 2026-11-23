@@ -64,7 +64,6 @@ internal fun jsNum(v: Double): String {
     }
 }
 
-
 /** 色を暗く（k<0）・明るく（k>0）する。Web 版 `shade` */
 fun lookShade(hex: String, k: Double): String {
     val n = hex.substring(1).toInt(16)
@@ -75,15 +74,7 @@ fun lookShade(hex: String, k: Double): String {
     }
 }
 
-private fun String.cpCount(): Int {
-    var n = 0
-    var i = 0
-    while (i < length) {
-        i += if (this[i].isHighSurrogate() && i + 1 < length && this[i + 1].isLowSurrogate()) 2 else 1
-        n++
-    }
-    return n
-}
+private fun String.cpCount(): Int = codePointStrings().size
 
 // ---- 球団マーク（帽子のマーク） -----------------------------------------
 private fun monoText(look: TeamLook, size: Double, fill: String, stroke: String, sw: Double, dy: Double = 0.0): LookItem {
@@ -320,11 +311,11 @@ fun faceArt(seed: String, look: TeamLook, age: Int = 25, level: Int? = null): Lo
 
 // ---- 調子の顔（絵文字の代わり。24×24） --------------------------------------
 /** 調子の色（ゲームの段: 0 絶不調 … 4 絶好調） */
-val CONDITION_COLORS = listOf("#8a6fd1", "#5d9cec", "#f2d54b", "#ffa93a", "#ff5a3c")
+val CONDITION_FACE_COLORS = listOf("#8a6fd1", "#5d9cec", "#f2d54b", "#ffa93a", "#ff5a3c")
 
 /** 調子の顔。Web 版 `conditionArt` */
 fun conditionArt(level: Int?): LookArt {
-    val c = CONDITION_COLORS.getOrNull(level ?: -1) ?: "#94a3b8"
+    val c = CONDITION_FACE_COLORS.getOrNull(level ?: -1) ?: "#94a3b8"
     val ink = "#2a1d14"
     val items = mutableListOf<LookItem>()
     if (level == 4) {

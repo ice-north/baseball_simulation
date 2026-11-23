@@ -244,10 +244,10 @@ export function faceArt({ seed, look, age = 25, level = null }) {
 
 // ---- 調子の顔（絵文字の代わり。24×24） --------------------------------------
 /** 調子の色（ゲームの段: 0 絶不調 … 4 絶好調） */
-export const CONDITION_COLORS = ['#8a6fd1', '#5d9cec', '#f2d54b', '#ffa93a', '#ff5a3c'];
+export const CONDITION_FACE_COLORS = ['#8a6fd1', '#5d9cec', '#f2d54b', '#ffa93a', '#ff5a3c'];
 
 export function conditionArt(level) {
-  const c = CONDITION_COLORS[level] || '#94a3b8';
+  const c = CONDITION_FACE_COLORS[level] || '#94a3b8';
   const ink = '#2a1d14';
   const items = [];
   if (level === 4)

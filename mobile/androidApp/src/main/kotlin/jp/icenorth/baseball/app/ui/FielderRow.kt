@@ -25,6 +25,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -172,7 +173,9 @@ fun FielderRow(
                 horizontalArrangement = Arrangement.spacedBy(3.dp),
             ) {
                 if (player != null) PlayerFace(player, size = 28.dp)
-                val (nameText, nameInline) = conditionName(player?.condition, player?.name ?: placeholder)
+                // ⚠ 空き枠は今まで通り置き字だけ（調子の絵文字も空白も付けない）
+                val (nameText, nameInline) =
+                    if (player != null) conditionName(player.condition, player.name) else AnnotatedString(placeholder) to emptyMap()
                 Text(
                     nameText,
                     inlineContent = nameInline,

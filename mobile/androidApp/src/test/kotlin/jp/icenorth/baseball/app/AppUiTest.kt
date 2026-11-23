@@ -48,6 +48,18 @@ import org.robolectric.RuntimeEnvironment
 import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.LooperMode
+import androidx.compose.foundation.clickable
+import androidx.compose.material3.Text
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
+import jp.icenorth.baseball.app.ui.LocalLook
+import jp.icenorth.baseball.app.ui.LookState
+import jp.icenorth.baseball.app.ui.LookTypography
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [35])
@@ -215,14 +227,32 @@ class AppUiTest {
         rule.onNodeWithTag("tab-Games").performClick()
         rule.onNodeWithTag("chip-standings").performClick()
         rule.onAllNodesWithTag("team-mark", useUnmergedTree = true).assertCountEquals(2)
-        // 切に戻すと消える。⚠ 入／切で字の表を差しかえても、開いている面（順位表）は保つ
+        // 切に戻すと消える
         rule.runOnIdle { model.changeLookOn(false) }
         rule.onAllNodesWithTag("team-mark", useUnmergedTree = true).assertCountEquals(0)
-        rule.onNodeWithTag("chip-standings").assertIsSelected()
+    }
+
+    @Test fun turningTheNewLookOnKeepsTheScreenState() {
+        // ⚠ 入／切で字の表を差しかえても、中の画面の状態（remember）は消えない（部品の並びを変えないため）
+        var on by mutableStateOf(false)
+        rule.setContent {
+            CompositionLocalProvider(LocalLook provides LookState(on = on)) {
+                LookTypography {
+                    var count by remember { mutableIntStateOf(0) }
+                    Text("押した回数 $count", Modifier.clickable { count++ })
+                }
+            }
+        }
+        rule.onNodeWithText("押した回数 0").performClick()
+        rule.onNodeWithText("押した回数 1").assertIsDisplayed()
+        rule.runOnIdle { on = true }
+        rule.onNodeWithText("押した回数 1").assertIsDisplayed()
+        rule.runOnIdle { on = false }
+        rule.onNodeWithText("押した回数 1").assertIsDisplayed()
     }
 
     @Test fun newLookChangesOnlyTheFonts() {
-        // 入のときの字: 見出しの型は見出しのフォント（太字を作らせない）、本文と札は数字のフォント。大きさは変えない
+        // 入のときの字: 見出しの型は見出しのフォント（太字を作らせない）、本文と札は本文のフォント（日本語＋数字）。大きさは変えない
         val base = Typography()
         val look = lookTypography(base)
         for ((b, l) in listOf(base.titleLarge to look.titleLarge, base.titleSmall to look.titleSmall, base.headlineSmall to look.headlineSmall)) {
@@ -235,7 +265,8 @@ class AppUiTest {
         assertNotEquals(look.titleLarge.fontFamily, look.bodyMedium.fontFamily)
         assertEquals(look.bodyMedium.fontFamily, look.labelLarge.fontFamily)
         assertEquals(base.bodyMedium.fontSize, look.bodyMedium.fontSize)
-        assertNull(base.titleLarge.fontFamily)
+        assertNotEquals(base.titleLarge.fontFamily, look.titleLarge.fontFamily)
+        assertNotEquals(base.bodyMedium.fontFamily, look.bodyMedium.fontFamily)
     }
 
     @Test fun backFromTeamPlayersReturnsToTheStandings() {

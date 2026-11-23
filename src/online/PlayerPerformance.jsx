@@ -376,7 +376,7 @@ function ConvertPosition({ player }) {
   );
 }
 
-function Detail({ player, close }) {
+function Detail({ player, close, lookTeam }) {
   const dialog = useRef(null);
   const [periodId, setPeriodId] = useState('current');
   const [splits, setSplits] = useState(false);
@@ -450,7 +450,7 @@ function Detail({ player, close }) {
     >
       <header>
         {/* 新しい見た目（試作）: 顔（切のときは何も出ない） */}
-        <PlayerFace player={player} size={64} className="online-detail-face" />
+        <PlayerFace player={player} team={lookTeam} size={64} className="online-detail-face" />
         <div>
           <h2 id="online-player-title">
             {player.name}
@@ -597,6 +597,8 @@ export function PlayerStatsButton({
   children,
   className = '',
   onOpen,
+  // 新しい見た目（試作）: 小窓の顔の帽子の球団（名簿の行の顔と合わせる）。省くと選手に付いた所属か自球団
+  lookTeam,
 }) {
   const [open, setOpen] = useState(false);
   if (!player) return null;
@@ -618,6 +620,7 @@ export function PlayerStatsButton({
           initialCategory={category}
           initialGroup={group}
           initialPane={panel}
+          lookTeam={lookTeam}
           close={() => setOpen(false)}
         />
       )}
@@ -965,6 +968,7 @@ export function CompactRoster({
               group={group.id}
               className="online-roster-row"
               onOpen={onOpen}
+              lookTeam={view.teamName}
             >
               <span className="online-roster-person">
                 <span className="online-roster-name">

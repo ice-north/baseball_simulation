@@ -1,35 +1,37 @@
 /* 新しい見た目（試作）。⚠ 切のときに当たる指定を書かない: 絵の部品は切のとき描かれず、
    見た目の差しかえは `.online.online-look` の下にだけ書く（`LookContext.jsx`）。 */
+/* 字はどれも `tools/look-fonts.py` で書き出したもの。⚠ 配布 HTML に埋め込まず `public/fonts/` に置く
+   （入にした人だけが読む。日本語は1つ約450KB ある）。ライセンスも同じ場所にある */
+/* 球団マークの字（Graduate・Alfa Slab One・Yellowtail） */
 @font-face {
   font-family: LookGraduate;
-  src: url('./fonts/graduate.woff2') format('woff2');
+  src: url('/fonts/look-graduate.woff2') format('woff2');
   font-display: swap;
 }
 @font-face {
   font-family: LookAlfaSlab;
-  src: url('./fonts/alfaslab.woff2') format('woff2');
+  src: url('/fonts/look-alfaslab.woff2') format('woff2');
   font-display: swap;
 }
 @font-face {
   font-family: LookYellowtail;
-  src: url('./fonts/yellowtail.woff2') format('woff2');
+  src: url('/fonts/look-yellowtail.woff2') format('woff2');
   font-display: swap;
 }
-/* 数字と英字（Barlow Semi Condensed。英数記号だけに絞ったもの。`tools/look-fonts.py`） */
+/* 数字と英字（Barlow Semi Condensed。英数記号だけに絞ったもの） */
 @font-face {
   font-family: LookNum;
-  src: url('./fonts/barlow-regular.woff2') format('woff2');
+  src: url('/fonts/look-num-regular.woff2') format('woff2');
   font-weight: 100 500;
   font-display: swap;
 }
 @font-face {
   font-family: LookNum;
-  src: url('./fonts/barlow-semibold.woff2') format('woff2');
+  src: url('/fonts/look-num-bold.woff2') format('woff2');
   font-weight: 600 900;
   font-display: swap;
 }
-/* 見出し（Dela Gothic One）と本文の日本語（Zen Kaku Gothic New）。JIS 第1水準＋ソースに出てくる字に絞ったもの
-   （`tools/look-fonts.py`）。⚠ 1つ約450KB あるので配布 HTML に埋め込まず `public/fonts/` に置く。入にした人だけが読む */
+/* 見出し（Dela Gothic One）と本文の日本語（Zen Kaku Gothic New）。JIS 第1水準＋ソースに出てくる字に絞ったもの */
 @font-face {
   font-family: LookHead;
   src: url('/fonts/look-head.woff2') format('woff2');
@@ -90,7 +92,7 @@
 }
 
 /* 自球団の色。⚠ 地の色は変えない（`online.css` に色が約680か所あり、入れかえると直しが倍になる）。
-   見出しの下の帯と左メニューの区切りだけを球団の色にする（`--team-c1` / `--team-c2` は `OnlineApp`） */
+   見出しの下の帯と左メニューの区切りだけを球団の色にする（`--team-c2` は `OnlineApp`） */
 .online.online-look .online-header {
   box-shadow: inset 0 -3px 0 var(--team-c2, transparent);
 }
@@ -119,7 +121,7 @@
 }
 
 /* 能力の段位の字（S〜F）。数字とバーはそのまま、札を足すだけ */
-.online-rank-chip {
+.online.online-look .online-rank-chip {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -129,22 +131,22 @@
   border-radius: 4px;
   background: currentColor;
 }
-.online-rank-chip > span {
+.online.online-look .online-rank-chip > span {
   color: #0f172a;
   font: 11px/1 LookGraduate, 'Arial Black', sans-serif;
 }
 
-/* 指導者のカード: 顔を左に、名前などを右に */
-.online.online-look .online-staff-card header {
+/* 指導者のカード: 顔を左に、名前などを右に（空席のカードは顔が無いのでそのまま） */
+.online.online-look .online-staff-card:not(.is-empty) header {
   display: grid;
   grid-template-columns: 60px 1fr;
   column-gap: 12px;
   align-items: start;
 }
-.online.online-look .online-staff-card header > * {
+.online.online-look .online-staff-card:not(.is-empty) header > * {
   grid-column: 2;
 }
-.online.online-look .online-staff-card header > .online-staff-face {
+.online.online-look .online-staff-card:not(.is-empty) header > .online-staff-face {
   grid-column: 1;
   grid-row: 1 / span 4;
   margin: 0;

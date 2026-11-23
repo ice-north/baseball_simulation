@@ -100,13 +100,18 @@ export const PALETTES = [
 
 /** マークの形。script は筆記体の1字だけ（2字の筆記体は読めない） */
 export const STYLES = ['circle', 'shield', 'diamond', 'script', 'block', 'slab'];
-const LATIN_ONLY = new Set(['script', 'block', 'slab']);
 /** 漢字・かなの字に替える形（筆記体・縫い字は英字のための形） */
 const JP_STYLE = { script: 'circle', block: 'shield', slab: 'diamond' };
 
 /** 帽子のマークの書体（`Art.jsx` が CSS の書体名へ直す） */
-export const fontOf = (style, latin) =>
+const fontOf = (style, latin) =>
   !latin ? 'jp' : style === 'script' ? 'yellowtail' : style === 'slab' ? 'alfa' : 'graduate';
+
+// ⚠ 表は名前で引くので、`constructor` のような Object の持ち物の名前に当たらないよう自分の項目だけを見る
+//    （球団名は人が付ける。当たると関数が返って字を作るところで落ちる）
+const own = (table, key) => (Object.hasOwn(table, key) ? table[key] : undefined);
+// 空白（半角・全角とタブだけ。アプリの `lookNameSource` と同じ。JS の \s は広すぎて合わない）
+const SPACES = /[ \u3000\t]+/g;
 
 // 長い名前から先に当てる（「東大阪」を「大阪」より先に。いまは無いが足したとき用）
 const CITY_KEYS = Object.keys(CITY_EN).sort((a, b) => b.length - a.length);
@@ -123,17 +128,22 @@ export function nameSource(name, labels = {}) {
   const nickname =
     labels.nickname || (city && label.startsWith(city) ? label.slice(city.length) : '');
   const latinWord = (s) => (/^[A-Za-z]/.test(s) ? s.replace(/[^A-Za-z]/g, '') : '');
-  const cityEn = CITY_EN[city] || latinWord(city);
-  const nickEn = NICK_EN[nickname] || latinWord(nickname);
+  // 英字の名前に付け替えた古い球団（`city` が空の「Tokyo Stars」）: 最初の語を土地、残りを愛称と見る
+  if (!city && /^[A-Za-z]/.test(label)) {
+    const [head, ...rest] = label.split(SPACES);
+    return { latin: true, city: latinWord(head).toUpperCase(), nick: latinWord(rest.join('')).toUpperCase() };
+  }
+  const cityEn = own(CITY_EN, city) || latinWord(city);
+  const nickEn = own(NICK_EN, nickname) || latinWord(nickname);
   if (cityEn) return { latin: true, city: cityEn.toUpperCase(), nick: nickEn.toUpperCase() };
-  return { latin: false, city: (city || label).replace(/\s/g, ''), nick: nickname.replace(/\s/g, '') };
+  return { latin: false, city: (city || label).replace(SPACES, ''), nick: nickname.replace(SPACES, '') };
 }
 
 /**
  * 字の候補（短い順）。重なったら次の候補へ進む。
  * 頭文字 → 土地＋愛称の頭文字（SA）→ 土地の頭と終わり（SU）→ 土地の頭2字（SA）→ 土地の頭＋ほかの字 → 頭＋愛称の字
  */
-export function monoCandidates(source) {
+function monoCandidates(source) {
   const list = [];
   const add = (m) => m && !list.includes(m) && list.push(m);
   if (source.latin) {
@@ -190,7 +200,6 @@ export function buildTeamLooks(teamLabels = {}) {
     t.mono = monoOf(t);
     // 筆記体は1字だけ。2字になった球団は丸に替える
     if (t.style === 'script' && t.mono.length > 1) t.style = 'circle';
-    if (!t.latin && LATIN_ONLY.has(t.style)) t.style = JP_STYLE[t.style];
     t.font = fontOf(t.style, t.latin);
     delete t.candidates;
     delete t.level;
@@ -209,7 +218,7 @@ export function setTeamLooks(teamLabels) {
   LOOKS = buildTeamLooks(teamLabels || {});
 }
 /** 球団の見た目。リーグの球団でなければ null（マークを描かない） */
-export const teamLook = (name) => (name && LOOKS[name]) || null;
+export const teamLook = (name) => (name && own(LOOKS, name)) || null;
 
 /** 所属の分からない人（候補・指導者の市場）の帽子。字は入れない */
 export const NEUTRAL_LOOK = Object.freeze({

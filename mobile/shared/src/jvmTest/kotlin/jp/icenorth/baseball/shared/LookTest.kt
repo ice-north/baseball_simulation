@@ -37,7 +37,7 @@ class LookTest {
     private fun labelsOf(e: JsonElement?): Map<String, TeamLabel> =
         OnlineJson.decodeFromJsonElement(MapSerializer(String.serializer(), TeamLabel.serializer()), e!!)
 
-    /** JSON の形を比べる（数は値で、無い項目と null は同じ） */
+    /** JSON の形を比べる（数は値で、無い項目と null は同じ。絵の `c` は無いと false も同じ） */
     private fun same(want: JsonElement?, got: JsonElement?, where: String) {
         val w = want ?: JsonNull
         val g = got ?: JsonNull
@@ -54,10 +54,9 @@ class LookTest {
                 for (i in wa.indices) same(wa[i], ga[i], "$where[$i]")
             }
             w is JsonNull || g is JsonNull -> {
-                // `c` は Web では無い・アプリでは false
-                val bothEmpty = (w is JsonNull || (w as JsonPrimitive).booleanOrNull == false) &&
-                    (g is JsonNull || (g as JsonPrimitive).booleanOrNull == false)
-                assertTrue(bothEmpty, "$where: 期待は ${w}、実際は ${g}")
+                // 絵の `c`（丸い線の端）だけは、Web では無い・アプリでは false
+                val off = { e: JsonElement -> e is JsonNull || (where.endsWith(".c") && (e as JsonPrimitive).booleanOrNull == false) }
+                assertTrue(off(w) && off(g), "$where: 期待は ${w}、実際は ${g}")
             }
             else -> {
                 val wp = w as JsonPrimitive
@@ -79,6 +78,8 @@ class LookTest {
         assertEquals(t.at("nickEn").obj()!!.mapValues { it.value.str() }.toList(), NICK_EN.toList())
         assertEquals(t.at("palettes").list().map { p -> p.list().map { it.str() } }, LOOK_PALETTES)
         assertEquals(t.at("styles").list().map { it.str() }, LOOK_STYLES)
+        // 所属の分からない人の帽子（顔の期待値は JSON の見た目から作るので、表そのものもここで比べる）
+        assertEquals(lookOf(t.at("neutral")), NEUTRAL_LOOK)
     }
 
     @Test
@@ -98,7 +99,7 @@ class LookTest {
     @Test
     fun teamLooksMatchWeb() {
         val leagues = expected.at("teams").list()
-        assertEquals(11, leagues.size)
+        assertEquals(12, leagues.size)
         for (league in leagues) {
             val got = buildTeamLooks(labelsOf(league.at("labels")))
             val want = league.at("looks").obj()!!

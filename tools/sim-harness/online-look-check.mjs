@@ -19,7 +19,7 @@ import {
   teamLook,
   NEUTRAL_LOOK,
 } from '../../src/online/look/teamLook.js';
-import { emblemArt, faceArt, conditionArt, CONDITION_COLORS } from '../../src/online/look/art.js';
+import { emblemArt, faceArt, conditionArt, CONDITION_FACE_COLORS } from '../../src/online/look/art.js';
 
 // --- 表 ---------------------------------------------------------------
 for (const city of CITIES) assert.ok(CITY_EN[city], `土地のローマ字が無い: ${city}`);
@@ -96,7 +96,7 @@ for (const l of Object.values(a)) finite(emblemArt(l), `マーク ${l.name}`);
 for (const l of Object.values(r)) finite(emblemArt(l), `マーク ${l.name}`);
 for (let level = 0; level <= 4; level++) {
   finite(conditionArt(level), `調子 ${level}`);
-  assert.equal(conditionArt(level).items.find((s) => s.t === 'circle' && s.r === 10).fill, CONDITION_COLORS[level]);
+  assert.equal(conditionArt(level).items.find((s) => s.t === 'circle' && s.r === 10).fill, CONDITION_FACE_COLORS[level]);
 }
 
 // 同じ選手は年齢・調子が変わっても同じ顔（肌・顎・目の形）。

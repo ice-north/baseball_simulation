@@ -12,17 +12,10 @@ package jp.icenorth.baseball.shared
 /** 文字列 → 32 ビットの符号なし整数（FNV-1a。字のコードポイントごと）。Web 版 `hash` */
 fun lookHash(s: String): Long {
     var h = -2128831035 // 2166136261
-    var i = 0
-    while (i < s.length) {
-        val c = s[i]
-        val cp = if (c.isHighSurrogate() && i + 1 < s.length && s[i + 1].isLowSurrogate()) {
-            val code = ((c.code - 0xD800) shl 10) + (s[i + 1].code - 0xDC00) + 0x10000
-            i++
-            code
-        } else c.code
+    for (c in s.codePointStrings()) {
+        val cp = if (c.length == 2) ((c[0].code - 0xD800) shl 10) + (c[1].code - 0xDC00) + 0x10000 else c[0].code
         h = h xor cp
         h *= 16777619
-        i++
     }
     return h.toLong() and 0xFFFFFFFFL
 }
@@ -121,7 +114,6 @@ val LOOK_PALETTES: List<List<String>> = listOf(
 
 /** マークの形。script は筆記体の1字だけ */
 val LOOK_STYLES = listOf("circle", "shield", "diamond", "script", "block", "slab")
-private val LATIN_ONLY = setOf("script", "block", "slab")
 private val JP_STYLE = mapOf("script" to "circle", "block" to "shield", "slab" to "diamond")
 
 /** 帽子のマークの書体（graduate / alfa / yellowtail / jp） */
@@ -152,10 +144,12 @@ private val CITY_KEYS = CITY_EN.keys.sortedByDescending { it.length }
 private fun latinWord(s: String): String =
     if (s.isNotEmpty() && s[0].let { it in 'A'..'Z' || it in 'a'..'z' }) s.filter { it in 'A'..'Z' || it in 'a'..'z' } else ""
 
-private fun String.noSpace(): String = filterNot { it.isWhitespace() }
+/** 空白（半角・全角とタブだけ。Web 版の `SPACES` と同じ。`isWhitespace` は広すぎて合わない） */
+private const val SPACES = " \u3000\t"
+private fun String.noSpace(): String = filterNot { it in SPACES }
 
-/** 文字列をコードポイントごとに分ける（漢字・かなの字を割らない） */
-private fun String.codePointStrings(): List<String> {
+/** 文字列をコードポイントごとに分ける（漢字・かなの字を割らない。JS の `[...s]` と同じ） */
+internal fun String.codePointStrings(): List<String> {
     val out = mutableListOf<String>()
     var i = 0
     while (i < length) {
@@ -172,6 +166,11 @@ fun lookNameSource(name: String, labels: TeamLabel?): LookNameSource {
     val city = labels?.city?.takeIf { it.isNotEmpty() } ?: CITY_KEYS.firstOrNull { label.startsWith(it) } ?: ""
     val nickname = labels?.nickname?.takeIf { it.isNotEmpty() }
         ?: if (city.isNotEmpty() && label.startsWith(city)) label.substring(city.length) else ""
+    // 英字の名前に付け替えた古い球団（`city` が空の「Tokyo Stars」）: 最初の語を土地、残りを愛称と見る（Web 版と同じ区切り）
+    if (city.isEmpty() && label.firstOrNull()?.let { it in 'A'..'Z' || it in 'a'..'z' } == true) {
+        val words = label.split(Regex("[$SPACES]+"))
+        return LookNameSource(true, latinWord(words[0]).uppercase(), latinWord(words.drop(1).joinToString("")).uppercase())
+    }
     val cityEn = CITY_EN[city] ?: latinWord(city)
     val nickEn = NICK_EN[nickname] ?: latinWord(nickname)
     if (cityEn.isNotEmpty()) return LookNameSource(true, cityEn.uppercase(), nickEn.uppercase())
@@ -210,7 +209,7 @@ fun buildTeamLooks(teamLabels: Map<String, TeamLabel>): Map<String, TeamLook> {
         val d = lookHash(a).compareTo(lookHash(b))
         if (d != 0) d else if (a < b) -1 else 1
     }
-    class Draft(val name: String, val palette: List<String>, var style: String, val latin: Boolean, val candidates: List<String>, var level: Int = 0) {
+    class Draft(val name: String, val palette: List<String>, val style: String, val latin: Boolean, val candidates: List<String>, var level: Int = 0) {
         fun mono() = candidates[minOf(level, candidates.size - 1)]
     }
     val used = mutableSetOf<Int>()
@@ -243,7 +242,6 @@ fun buildTeamLooks(teamLabels: Map<String, TeamLabel>): Map<String, TeamLook> {
         val mono = t.mono()
         var style = t.style
         if (style == "script" && mono.length > 1) style = "circle"
-        if (!t.latin && style in LATIN_ONLY) style = JP_STYLE[style] ?: style
         t.name to TeamLook(t.name, t.palette[0], t.palette[1], t.palette[2], style, t.latin, mono, lookFontOf(style, t.latin))
     }
 }

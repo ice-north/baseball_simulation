@@ -129,8 +129,9 @@ private fun PlayerDetail(model: AppViewModel, p: JsonObject) {
                 // 新しい見た目（試作）: 帽子はその選手の球団（他球団の選手なら他球団の帽子）
                 PlayerFace(
                     p.idKey(), p.at("age").int(), p.at("condition").int(), size = 64.dp,
-                    // 自球団の選手は自球団、読み込んだ他球団の選手はその球団、候補（トライアウト・ドラフト）は所属なし
-                    team = id?.let { model.rosterTeams[it] } ?: model.view?.teamName?.takeIf { ownRoster.any { it.at("id").num()?.toLong() == id } },
+                    // 自球団の選手は自球団、読み込んだ他球団の選手はその球団、候補（トライアウト・ドラフト）は所属なし。
+                    // ⚠ 自球団を先に見る（トレードで来たばかりの選手は、読み込んだ名簿の前の球団が残っていることがある）
+                    team = model.view?.teamName?.takeIf { id != null && ownRoster.any { it.at("id").num()?.toLong() == id } } ?: id?.let { model.rosterTeams[it] },
                     modifier = Modifier.padding(end = 10.dp),
                 )
                 Text(p.at("name").str().orEmpty(), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)

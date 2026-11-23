@@ -8,7 +8,7 @@
 //   - 入／切は端末に覚える（開き直しても入のまま）。リーグの球団でない名前にはマークを描かない
 //   - スマホはメニュー（☰）から切り替えられる
 //   - 字: 入のときだけ見出しが LookHead・本文が LookNum（数字と英字）＋LookJP（日本語）。見出しの中の注記と新聞は今までの字のまま。
-//     日本語のフォント（public/fonts/、1つ約450KB）は入にするまで読まない
+//     字（public/fonts/。日本語は1つ約450KB）は配布HTMLに埋め込まず、入にするまで1つも読まない
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { chromium } from 'playwright';
@@ -23,11 +23,23 @@ const browser = await chromium.launch({
   headless: true,
 });
 const errors = [];
-// 日本語のフォント（public/fonts/）。読んだ回数を名前ごとに数える
+// 新しい見た目の字（public/fonts/）。読んだ回数を名前ごとに数える
 const fontLoads = {};
 const loadedFonts = () => Object.keys(fontLoads).sort();
 const fontOf = (p, selector) => p.evaluate((sel) => getComputedStyle(document.querySelector(sel)).fontFamily, selector);
 const EMOJI = /[🔥😊😐😞😰]/u;
+const LOOK_FONTS = [
+  'look-alfaslab.woff2',
+  'look-body-bold.woff2',
+  'look-body-regular.woff2',
+  'look-graduate.woff2',
+  'look-head.woff2',
+  'look-num-bold.woff2',
+  'look-num-regular.woff2',
+  'look-yellowtail.woff2',
+];
+// ⚠ 字を配布HTMLに埋め込むと、切の人まで重くなる
+assert.doesNotMatch(html, /font\/woff2;base64|LookGraduate[^}]*data:/, '新しい見た目の字が配布HTMLに埋め込まれた');
 
 async function open(contextOptions) {
   const fixture = await seasonService({ days: 6 });
@@ -65,7 +77,7 @@ await withDeadline(
       assert.doesNotMatch(await fontOf(p, '.online'), /LookNum/, '切なのに数字の字が変わっている');
       assert.doesNotMatch(await fontOf(p, '.online h2'), /LookHead/, '切なのに見出しの字が変わっている');
       await p.evaluate(() => document.fonts.ready);
-      assert.deepEqual(loadedFonts(), [], '切なのに日本語のフォントを読んだ');
+      assert.deepEqual(loadedFonts(), [], '切なのに新しい見た目の字を読んだ');
 
       // 入にする
       await toggle.click();
@@ -92,8 +104,16 @@ await withDeadline(
       assert.match(await fontOf(p, '.online'), /^LookNum,/);
       assert.match(await fontOf(p, '.online h2'), /^LookHead,/);
       assert.match(await fontOf(p, '.online h2 small'), /^LookNum,/, '見出しの中の注記まで見出しの字になった');
-      await p.waitForFunction(() => ['16px LookHead', '16px LookJP', 'bold 16px LookJP'].every((f) => document.fonts.check(f)));
-      assert.deepEqual(loadedFonts(), ['look-body-bold.woff2', 'look-body-regular.woff2', 'look-head.woff2']);
+      // 球団マークの字（Graduate・Alfa Slab・Yellowtail のどれか）も、描いたものは読む
+      const markFonts = await p
+        .locator('.online-standings .online-team-mark text')
+        .evaluateAll((els) => [...new Set(els.map((e) => e.getAttribute('font-family').split(',')[0]))]);
+      const wanted = ['16px LookHead', '16px LookJP', 'bold 16px LookJP', '16px LookNum'];
+      for (const f of markFonts) if (f.startsWith('Look')) wanted.push(`16px ${f}`);
+      await p.waitForFunction((list) => list.every((f) => document.fonts.check(f)), wanted);
+      for (const name of ['look-body-bold.woff2', 'look-body-regular.woff2', 'look-head.woff2', 'look-num-regular.woff2'])
+        assert.ok(loadedFonts().includes(name), `入なのに ${name} を読んでいない`);
+      for (const name of loadedFonts()) assert.ok(LOOK_FONTS.includes(name), `知らない字を読んだ: ${name}`);
       // 新聞は新聞の字のまま
       await p.locator('.online-paper-open').click();
       await p.locator('.online-paper h2').first().waitFor();

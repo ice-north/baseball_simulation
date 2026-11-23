@@ -368,7 +368,7 @@ function MobileMenu({ close, loading, local, reloadView, showTimes, logout, rena
             初期メンバーの選択で名前の欄を開かずに決定すると、スマホだけの人は名前を変えられなかった */}
         <button onClick={() => act(rename)}>名前を変える</button>
         {/* 新しい見た目（試作）の入／切（この端末だけ。`look/LookContext.jsx`） */}
-        <LookToggle className="" onDone={() => act()} />
+        <LookToggle onDone={() => act()} />
         <a href="/">一人用</a>
         <button disabled={loading} onClick={() => act(logout)}>
           ログアウト

@@ -37,15 +37,29 @@ renamed[names[3]] = { label: 'ほげ 球団', city: '', nickname: '' };
 renamed[names[4]] = { label: '美唄ファイターズ', city: '美唄', nickname: 'ファイターズ' };
 renamed[names[5]] = { label: '美作ホークス', city: '美作', nickname: 'ホークス' };
 renamed[names[6]] = { label: '能登ドルフィンズ', city: '能登', nickname: 'ドルフィンズ' };
+renamed[names[7]] = { label: 'Sapporo Bears', city: '', nickname: '' }; // 英字に付け替えた古い球団
+renamed[names[8]] = { label: 'Kobe\u3000Whales Club', city: '', nickname: '' }; // 全角の空白で区切った英字
+renamed[names[9]] = { label: '札幌constructor', city: '札幌', nickname: 'constructor' }; // Object の持ち物の名前
+renamed[names[10]] = { label: 'toString球団', city: 'toString', nickname: '' };
+renamed[names[11]] = { label: 'ほげ\u00a0球団\tB', city: '', nickname: '' }; // 消さない空白（NBSP）と消すタブ
 leagues.push({ seed: 'renamed', labels: renamed });
+// 全部を表に無い漢字・かなに付け替えたリーグ（筆記体・縫い字の形が丸・盾・菱に替わるところ）
+const kana = { ...leagues[3].labels };
+Object.keys(kana).forEach((name, i) => {
+  kana[name] = { label: `${'あ伊う江お河き区け湖さ志'[i]}${'すせそ'[i % 3]}団`, city: '', nickname: '' };
+});
+leagues.push({ seed: 'kana', labels: kana });
 const teams = leagues.map(({ seed, labels }) => ({ seed, labels, looks: buildTeamLooks(labels) }));
-const sources = Object.entries(renamed).map(([name, labels]) => ({ name, labels, source: nameSource(name, labels) }));
+const sources = [renamed, kana].flatMap((labels) =>
+  Object.entries(labels).map(([name, l]) => ({ name, labels: l, source: nameSource(name, l) })),
+);
 
 // 絵: マーク（全部の形と漢字）・顔（年齢・調子・帽子の違い）・調子の顔
 const allLooks = teams.flatMap((t) => Object.values(t.looks));
 const byKind = new Map();
 for (const l of allLooks) {
-  const key = `${l.style}:${l.font}:${[...l.mono].length}`;
+  // 縁の色が白かどうかでも分ける（縫い字・角字は白いと縁を差し色にする）
+  const key = `${l.style}:${l.font}:${[...l.mono].length}:${l.c3 === '#ffffff'}`;
   if (!byKind.has(key)) byKind.set(key, l);
 }
 const emblems = [...byKind.values()].map((look) => ({ look, art: emblemArt(look) }));
@@ -65,7 +79,7 @@ for (let i = 0; i < 60; i++) {
 const conditions = [null, 0, 1, 2, 3, 4].map((level) => ({ level, art: conditionArt(level) }));
 
 const text = JSON.stringify({
-  tables: { cityEn: CITY_EN, nickEn: NICK_EN, palettes: PALETTES, styles: STYLES },
+  tables: { cityEn: CITY_EN, nickEn: NICK_EN, palettes: PALETTES, styles: STYLES, neutral: NEUTRAL_LOOK },
   hashes,
   rngs,
   shades,
