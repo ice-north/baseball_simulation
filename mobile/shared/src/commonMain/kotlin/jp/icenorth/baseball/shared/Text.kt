@@ -45,7 +45,7 @@ fun abilityRank(value: Int, velocity: Boolean = false, stamina: Boolean = false)
     }
 }
 
-private fun daysFromCivil(y: Int, m: Int, d: Int): Long {
+internal fun daysFromCivil(y: Int, m: Int, d: Int): Long {
     val yy = if (m <= 2) y - 1 else y
     val era = (if (yy >= 0) yy else yy - 399) / 400
     val yoe = yy - era * 400

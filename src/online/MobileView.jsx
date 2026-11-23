@@ -28,6 +28,7 @@ import TryoutResult from './TryoutResult.jsx';
 import SeasonFlow, { stageLines } from './SeasonFlow.jsx';
 import YearSummary from './YearSummary.jsx';
 import ProDraftResult from './ProDraftResult.jsx';
+import { ReporterMemo, EventScene } from './look/Story.jsx';
 import { StaffBody } from './StaffPage.jsx';
 import { MobileTradeReplies } from './TradeScreen.jsx';
 import { RenameDialog } from './DesktopView.jsx';
@@ -146,6 +147,9 @@ export default function MobileView(props) {
           {!view.phase && <YearSummary view={view} />}
           {/* キャンプが終わった直後の結果（閉じるまで。PC版と同じ） */}
           {!view.phase && <CompletedCamp key={view.lastCamp?.year} view={view} onHome />}
+          {/* 新しい見た目（試作）段4: 番記者のメモと球団の出来事の場面（切のときは出さない） */}
+          <ReporterMemo view={view} />
+          <EventScene view={view} />
           <TeamBrief view={view} />
           <InboxCard view={view} limit={3} />
           <nav className="online-home-actions" aria-label="オンラインの画面">

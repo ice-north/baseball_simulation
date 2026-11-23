@@ -12,6 +12,9 @@ import { ScoringPlays } from './ScoringPlays.jsx';
 import { scoreBoard } from './scoreBoard.js';
 import { hasInningPlays, inningPlays } from './gamePlays.js';
 import { TeamMark } from './look/Art.jsx';
+import { useLook } from './look/LookContext.jsx';
+import { hasLivePlays } from './look/playByPlay.js';
+import LivePlays from './look/LivePlays.jsx';
 const GROUPS = {
   batting: [
     [
@@ -567,8 +570,13 @@ export function ScoreBoard({ game, ownTeam, compact = false }) {
 function GameRecord({ id, year, ownTeam, close }) {
   const compact = window.matchMedia('(max-width: 767px)').matches;
   const [watch, setWatch] = useState(false);
+  // 新しい見た目（試作）段3: 打席速報（入のときだけ。塁と打球の記録がある試合だけ）
+  const look = useLook();
+  const [live, setLive] = useState(false);
   const result = useRead('game', { id, year }),
     game = result.data;
+  const liveReady = look.on && hasLivePlays(game);
+  const showLive = live && liveReady;
   return (
     <Panel
       title="試合成績"
@@ -579,18 +587,44 @@ function GameRecord({ id, year, ownTeam, close }) {
       <RequestState result={result} />
       {game && (
         <>
-          {game.replay?.frames?.length > 0 && (
+          {(game.replay?.frames?.length > 0 || liveReady) && (
             <nav className="online-replay-launch" aria-label="試合の表示">
-              <button aria-pressed={!watch} onClick={() => setWatch(false)}>
+              <button
+                aria-pressed={!watch && !showLive}
+                onClick={() => {
+                  setWatch(false);
+                  setLive(false);
+                }}
+              >
                 個人成績
               </button>
-              <button aria-pressed={watch} onClick={() => setWatch(true)}>
-                {compact ? '試合経過' : '観戦リプレイ'}
-              </button>
+              {liveReady && (
+                <button
+                  aria-pressed={showLive}
+                  onClick={() => {
+                    setWatch(false);
+                    setLive(true);
+                  }}
+                >
+                  打席速報
+                </button>
+              )}
+              {game.replay?.frames?.length > 0 && (
+                <button
+                  aria-pressed={watch}
+                  onClick={() => {
+                    setLive(false);
+                    setWatch(true);
+                  }}
+                >
+                  {compact ? '試合経過' : '観戦リプレイ'}
+                </button>
+              )}
             </nav>
           )}
+          {showLive && <LivePlays game={game} />}
           {/* ⚠ スマホは小窓を縦に収めるため、点数の大きな1行はスコアボードがあれば出さない（同じ点数が2回並ぶ） */}
-          {!watch && !(compact && scoreBoard(game)) && (
+          {!watch && !showLive && !(compact && scoreBoard(game)) && (
             <p className="online-game-summary">
               <small>{turnLabel(game.date)}</small>
               <strong>
@@ -606,8 +640,8 @@ function GameRecord({ id, year, ownTeam, close }) {
               </strong>
             </p>
           )}
-          {!watch && <ScoreBoard game={game} ownTeam={ownTeam} compact={compact} />}
-          {watch ? (
+          {!watch && !showLive && <ScoreBoard game={game} ownTeam={ownTeam} compact={compact} />}
+          {showLive ? null : watch ? (
             compact ? (
               <MobileReplay game={game} close={close} />
             ) : (

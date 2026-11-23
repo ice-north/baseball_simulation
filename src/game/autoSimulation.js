@@ -1058,9 +1058,14 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false, observer = 
 
       // 守備判定
       const fieldResult = judgeFielderReach(battedBall, defense, effBatter);
+      // 打球の向き・飛距離・角度と処理した野手（オンラインの打席速報が読む。表示専用で、判定には使わない）
+      const batted = {
+        direction: battedBall.direction, distance: battedBall.distance, launchAngle: battedBall.launchAngle,
+        fielder: fieldResult.fieldingPosition || null,
+      };
 
       if (fieldResult.result === 'homerun') {
-        return { type: 'homerun' };
+        return { type: 'homerun', batted };
       } else if (fieldResult.result === 'out') {
         // 2アウトからは併殺が成立しない（打者アウトで3アウト目）。
         // outs のチェックが無かったため、2アウトから「4アウト目」が記録され
@@ -1077,7 +1082,7 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false, observer = 
           const runnerSpeed = bases[0]?.physical?.speed ?? 55;
           const dpBase = DP_BASE + (ifAvg - 50) * 0.35 - (runnerSpeed - 55) * 0.30;
           if (Math.random() * 100 < dpBase) {
-            return { type: 'double_play' };
+            return { type: 'double_play', batted };
           }
         }
         return {
@@ -1086,12 +1091,13 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false, observer = 
           // 内野ゴロは走者を進める（ゴロGO・進塁打）。フライ・ライナーは進まない
           isGroundOut: battedBall.launchAngle < 10 && !fieldResult.isOutfieldFly,
           tagupThrowbackChance: fieldResult.tagupThrowbackChance || 0,
-          fieldingPosition: fieldResult.fieldingPosition
+          fieldingPosition: fieldResult.fieldingPosition,
+          batted,
         };
       } else if (fieldResult.result === 'triple') {
-        return { type: 'triple', fieldingPosition: fieldResult.fieldingPosition };
+        return { type: 'triple', fieldingPosition: fieldResult.fieldingPosition, batted };
       } else if (fieldResult.result === 'double') {
-        return { type: 'double', fieldingPosition: fieldResult.fieldingPosition };
+        return { type: 'double', fieldingPosition: fieldResult.fieldingPosition, batted };
       } else {
         return {
           type: 'single',
@@ -1101,6 +1107,7 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false, observer = 
           fieldingPosition: fieldResult.fieldingPosition,
           // 悪送球・中継ミスは走者が余分に1つ進む
           extraAdvance: !!fieldResult.extraAdvance || !!fieldResult.isThrowingError,
+          batted,
         };
       }
     };
@@ -2051,6 +2058,8 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false, observer = 
       // 最後の1球の前の得点（その打席の途中に暴投などで入った点を、打者の点と分けるため。
       // オンラインの「回の攻撃」が読む。⚠ 2026-11-20 監査「三振 1点」）
       observed.resultScore = { ...gameState.score };
+      // 最後の1球の前の塁（一塁＝1・二塁＝2・三塁＝4 の和）。オンラインの打席速報が読む
+      observed.resultBases = gameState.bases.reduce((n, r, i) => (r ? n | (1 << i) : n), 0);
     };
 
     let atBatOver = false;

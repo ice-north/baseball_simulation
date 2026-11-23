@@ -20,6 +20,8 @@ import {
   LINEUP_ORDER_DRAFT,
 } from './Drafts.jsx';
 import LeagueBoard from './LeagueBoard.jsx';
+import TodayGame from './look/TodayGame.jsx';
+import { ReporterMemo, EventScene } from './look/Story.jsx';
 import TradeScreen from './TradeScreen.jsx';
 import CampPlanner, { CompletedCamp } from './CampPlanner.jsx';
 import TryoutResult from './TryoutResult.jsx';
@@ -717,6 +719,11 @@ export default function DesktopView(props) {
                   キャンプの画面と手続きの画面には残してある（年が替わった直後に見る場所） */}
               {/* キャンプが終わった直後の結果（閉じるまで。先方指摘「キャンプ直後に」） */}
               <CompletedCamp key={view.lastCamp?.year} view={view} onHome />
+              {/* 新しい見た目（試作）段3: 今日の一戦の札（切のときは出さない） */}
+              <TodayGame view={view} onLineup={() => setTab('lineup')} />
+              {/* 段4: 番記者のメモと、優勝・昇格などが決まったときの場面（どちらも切のときは出さない） */}
+              <ReporterMemo view={view} />
+              <EventScene view={view} />
               <LeagueBoard view={view} />
             </>
           )}

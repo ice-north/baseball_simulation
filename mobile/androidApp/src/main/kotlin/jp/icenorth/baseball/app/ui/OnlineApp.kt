@@ -227,7 +227,7 @@ fun OnlineApp(model: AppViewModel) {
                         }
                         // ⚠ 引っ張って更新はホームだけだった。試合・選手・手続きでも同じ操作で読み直せるようにする
                         Tab.Games -> Refreshable(model) {
-                            GamesScreen(model, gamesSection, { gamesSection = it }, onOpenTeam = { model.showTeamPlayers(it); fromStandings = true; tab = Tab.Players })
+                            GamesScreen(model, gamesSection, { gamesSection = it }, onOpenTeam = { model.showTeamPlayers(it); fromStandings = true; tab = Tab.Players }, onOpenLineup = { tab = Tab.Plan })
                         }
                         // チーム診断の「スタメン設定へ」などは編成のその面へ、「トレードへ」は手続きのトレードへ
                         Tab.Players -> Refreshable(model) {

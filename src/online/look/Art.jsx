@@ -4,6 +4,7 @@
 import React, { useId, useMemo } from 'react';
 import { useLook } from './LookContext.jsx';
 import { emblemArt, faceArt, conditionArt } from './art.js';
+import { stadiumArt, stadiumScene, fieldArt } from './sceneArt.js';
 import { teamLook, NEUTRAL_LOOK } from './teamLook.js';
 import { conditionValue } from '../statsView.js';
 import './look.css';
@@ -54,8 +55,11 @@ function Shape({ s }) {
   }
 }
 
-/** 描く手順の一覧（`art.js`）を SVG にする */
-function ArtSvg({ art, size, className = '', label }) {
+/**
+ * 描く手順の一覧（`art.js`）を SVG にする。ふつうは正方形（`size`）。
+ * `fill` なら入れ物いっぱいに広げ、はみ出すぶんは切る（今日の一戦の札の背景）
+ */
+function ArtSvg({ art, size, className = '', label, fill = false }) {
   const id = `lk${useId().replace(/[^a-zA-Z0-9_-]/g, '')}`;
   const [x, y, w, h] = art.box;
   // `c` の付いた図形を続けて1つの切り抜きにまとめる
@@ -77,8 +81,9 @@ function ArtSvg({ art, size, className = '', label }) {
     <svg
       className={`online-look-art ${className}`}
       viewBox={`${x} ${y} ${w} ${h}`}
-      width={size}
-      height={size}
+      width={fill ? '100%' : size}
+      height={fill ? '100%' : size}
+      preserveAspectRatio={fill ? 'xMidYMid slice' : undefined}
       role={label ? 'img' : undefined}
       aria-label={label}
       aria-hidden={label ? undefined : true}
@@ -118,11 +123,11 @@ const teamOfPlayer = (player, team, ownTeam) =>
   team !== undefined ? team : player?.tradeTeam || (player?.detailAvailable ? ownTeam : null);
 
 /** 顔（選手・指導者で同じ作り）。`seed` が空なら描かない */
-function Face({ seed, look, age, level, size, className }) {
+function Face({ seed, look, age, level, size, className, suit = false }) {
   const { on } = useLook();
   const art = useMemo(
-    () => (on && seed ? faceArt({ seed, look, age, level }) : null),
-    [on, seed, look, age, level],
+    () => (on && seed ? faceArt({ seed, look, age, level, suit }) : null),
+    [on, seed, look, age, level, suit],
   );
   if (!art) return null;
   return <ArtSvg art={art} size={size} className={`online-face ${className}`} />;
@@ -161,4 +166,46 @@ export function CoachFace({ coach, team = null, size = 40, className = '' }) {
 export function ConditionFace({ level, size = 14 }) {
   const art = useMemo(() => conditionArt(level), [level]);
   return <ArtSvg art={art} size={size} className="online-condition-face" />;
+}
+
+/** 今日の一戦の札の背景（本拠地の球場の夜景）。`team` は本拠地の球団、`city` はその土地の名前 */
+export function StadiumBackdrop({ team, city, crowd }) {
+  const { on } = useLook();
+  const look = teamLook(team) || NEUTRAL_LOOK;
+  const art = useMemo(
+    () => (on ? stadiumArt({ look, scene: stadiumScene(city), crowd, seed: team }) : null),
+    [on, look, city, crowd, team],
+  );
+  if (!art) return null;
+  return <ArtSvg art={art} fill className="online-stadium-art" />;
+}
+
+/** 打席速報の球場の図（走者・打球）。`scene` は `playByPlay.js` の場面、`home` は本拠地の球団 */
+export function FieldDiagram({ scene, home }) {
+  const fence = teamLook(home) || NEUTRAL_LOOK;
+  const offense = teamLook(scene.team) || NEUTRAL_LOOK;
+  const bases = scene.basesAfter ?? scene.bases ?? 0;
+  const art = useMemo(
+    () => fieldArt({ fence, offense, bases, batted: scene.batted, code: scene.code, runs: scene.runs }),
+    [fence, offense, bases, scene],
+  );
+  return <ArtSvg art={art} fill className="online-field-art" label="球場の図（走者と打球）" />;
+}
+
+/**
+ * 段4の番記者と場面の顔（種・年齢をそのまま渡す。`story.js` の `reporterOf`・`eventScene` が作る）。
+ * `suit` なら背広（番記者。ネクタイは球団の色）
+ */
+export function StoryFace({ seed, team, age, level = null, suit = false, size = 56, className = '' }) {
+  return (
+    <Face
+      seed={seed}
+      look={teamLook(team) || NEUTRAL_LOOK}
+      age={Number.isFinite(age) ? age : 30}
+      level={level}
+      suit={suit}
+      size={size}
+      className={className}
+    />
+  );
 }

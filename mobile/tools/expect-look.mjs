@@ -1,4 +1,4 @@
-// アプリの共通部（Kotlin の Look.kt・LookArt.kt）に写した「新しい見た目（試作）」の表と描く手順が
+// アプリの共通部（Kotlin の Look.kt・LookArt.kt・LookScene.kt・LookPlay.kt・TodayGame.kt・LookStory.kt）に写した「新しい見た目（試作）」の表と描く手順が
 // Web 版（src/online/look/）と同じ答えを出すかの検査用に、期待値を書き出す。
 //   node mobile/tools/expect-look.mjs > mobile/shared/src/jvmTest/resources/look-expected.json
 // CI は `--check`（Web 版だけ直したときに気づく）。答え合わせは `LookTest`。
@@ -7,6 +7,10 @@ import { hash, rng } from '../../src/online/look/rng.js';
 import { CITY_EN, NICK_EN, PALETTES, STYLES, buildTeamLooks, nameSource, NEUTRAL_LOOK } from '../../src/online/look/teamLook.js';
 import { emblemArt, faceArt, conditionArt, shade } from '../../src/online/look/art.js';
 import { generatePyramidTeams } from '../../src/online/pyramidLeague.js';
+import { stadiumArt, fieldArt, crowdLevel, stadiumScene } from '../../src/online/look/sceneArt.js';
+import { liveScenes, highlightIndexes, playPhrase, basesText, hasLivePlays } from '../../src/online/look/playByPlay.js';
+import { todayGameCard } from '../../src/online/look/todayGame.js';
+import { reporterOf, reporterChat, eventScene } from '../../src/online/look/story.js';
 
 const labelsOf = (teams) =>
   Object.fromEntries(
@@ -78,6 +82,164 @@ for (let i = 0; i < 60; i++) {
 }
 const conditions = [null, 0, 1, 2, 3, 4].map((level) => ({ level, art: conditionArt(level) }));
 
+
+// ---- 段3: 球場の絵・打席速報の図と文・今日の一戦の札 -----------------------
+const [lookA, lookB, lookC] = [...byKind.values()];
+const crowds = [];
+for (const rank of [null, 0, 1, 2, 6, 12])
+  for (const n of [null, 0, 6, 12]) for (const streak of [-5, -3, 0, 2, 5, 9]) crowds.push({ rank, teams: n, streak, out: crowdLevel(rank, n, streak) });
+const scenes = ['旭川', '札幌', '東大阪', '霧島', '那覇', '', null].map((city) => ({ city, scene: stadiumScene(city) }));
+const stadiums = [
+  { look: lookA, scene: 'sea', crowd: 0.35, seed: '' },
+  { look: lookB, scene: 'mountain', crowd: 1, seed: 'game42' },
+].map((args) => ({ ...args, art: stadiumArt(args) }));
+const fields = [
+  { bases: 0, batted: null, code: '振', runs: 0 },
+  { bases: 7, batted: { pos: 8, dir: 3, dist: 131, la: 31 }, code: '本', runs: 4 },
+  { bases: 1, batted: { pos: 6, dir: -14, dist: 35, la: -3 }, code: '併', runs: 0 },
+  { bases: 6, batted: { pos: 9, dir: 38, dist: 72, la: 18 }, code: '安', runs: 2 },
+  { bases: 2, batted: { pos: 7, dir: -44, dist: 140, la: 40 }, code: '二', runs: 1 },
+  { bases: 5, batted: { pos: 1, dir: 0, dist: 3, la: 5 }, code: '凡', runs: 0 },
+  { bases: 3, batted: { pos: 9, dir: 27, dist: 98, la: 26 }, code: '凡', runs: 1 },
+].map((args) => ({ ...args, art: fieldArt({ fence: lookA, offense: lookC, ...args }) }));
+const BATS = [null, { pos: 7, dir: -30, dist: 110, la: 30 }, { pos: 9, dir: 20, dist: 60, la: 12 }, { pos: 8, dir: 0, dist: 95, la: 22 },
+  { pos: 6, dir: -15, dist: 30, la: 3 }, { pos: 4, dir: 9, dist: 28, la: -4 }, { pos: 1, dir: 30, dist: 20, la: 50 }, { pos: 3, dir: 44, dist: 100, la: 9 }];
+const phrases = [];
+for (const code of ['本', '三', '二', '安', '四', '死', '振', '犠', '併', '失', '走', '刺', '凡', '飛', ''])
+  for (const runs of [0, 1, 2, 4]) for (const batted of BATS) phrases.push({ code, runs, batted, out: playPhrase({ code, runs, batted }) });
+const bases = [0, 1, 2, 3, 4, 5, 6, 7].map((b) => basesText(b));
+// 試合。1つ目は少ない打席で数え方、2つ目は延長のサヨナラ・同点・打席の外の行、3つ目は版20より前の行
+const games = [
+  {
+    away: 'A',
+    home: 'H',
+    teams: { A: [{ id: 1, name: 'あ' }, { id: 2, name: 'い' }], H: [{ id: 9, name: 'き' }] },
+    plays: {
+      '1t': [[0, '安', 0, 0, 0, 7, -20, 60, 12], [1, '本', 2, 0, 1, 7, -30, 110, 30], [0, '振', 0, 1, 0], [1, '凡', 0, 2, 0, 6, -10, 30, 2]],
+      '1b': [[0, '振', 0, 3, 0]],
+      '2t': [[0, '振', 0, 3, 0]],
+      '2b': [[0, '四', 0, 0, 0], [null, '走', 1, 0], [0, '本', 2, 0, 1, 8, 5, 120, 28], [0, '振', 0, 3, 0]],
+    },
+  },
+  {
+    away: '三陸ドルフィンズ',
+    home: '奈良ディアーズ',
+    teams: {
+      三陸ドルフィンズ: [{ id: 11, name: '岩手 一郎' }, { id: 12, name: '宮古 次郎' }, { id: 13, name: '大槌 三郎' }],
+      奈良ディアーズ: [{ id: 21, name: '春日 四郎' }, { id: 22 }, { id: 23, name: '飛鳥 六郎' }],
+    },
+    plays: {
+      '10b': [[0, '死', 0, 0, 0], [1, '犠', 0, 1, 1, 1, 2, 8, -10], [2, '二', 1, 0, 2, 7, -27, 104, 21]],
+      '1t': [[0, '三', 1, 0, 1, 9, 30, 112, 17], [1, '失', 1, 0, 4, 5, -35, 26, 1], [2, '併', 0, 2, 1, 6, -12, 31, -2], [null, '刺', 0, 1]],
+      '1b': [[0, '安', 1, 0, 2, 4, 6, 29, 4], [1, '凡', 1, 1, 4, 8, 2, 101, 33], [2, '四', 0, 0, 0], [0, '凡', 0, 1, 1, 3, 40, 22, 14], [1, '振', 0, 1, 1]],
+      '9t': [[0, '振', 0, 1, 0], [1, '振', 0, 1, 0], [2, '振', 0, 1, 0]],
+      '9b': [[0, '安', 0, 0, 0, 8, -2, 70, 15], [1, '本', 2, 0, 1, 9, 16, 118, 29]],
+      x: [[0, '安', 0, 0, 0]],
+      '10t': [[0, '振', 0, 1, 0], [1, 'x', 0, 2, 0]],
+    },
+  },
+  { away: 'A', home: 'H', teams: {}, plays: { '1t': [[0, '安', 0, 0], [1, '振', 0, 1]], '1b': [[0, '本', 1, 0]] } },
+];
+const short = (t) => t.slice(0, 2);
+const live = games.map((game) => {
+  const list = liveScenes(game, short);
+  return {
+    game,
+    ready: hasLivePlays(game),
+    highlights: highlightIndexes(list),
+    scenes: list.map((s) => ({
+      ...s,
+      batter: undefined,
+      batterId: s.batter?.id ?? null,
+      batterName: s.batter ? s.batter.name : null,
+      scoreBefore: [s.scoreBefore.away, s.scoreBefore.home],
+      score: [s.score.away, s.score.home],
+    })),
+  };
+});
+// 今日の一戦。作ったリーグのビューから、自球団・日付・成績を変えて
+const pyramid = generatePyramidTeams(5);
+const pyramidLabels = labelsOf(pyramid);
+const [own, foe, third] = pyramid.map((t) => t.name);
+const day = (d) => ({ year: 2026, month: 4, day: d });
+const baseView = {
+  teamName: own,
+  currentDate: day(7),
+  seasonTurns: 160,
+  teamLabels: pyramidLabels,
+  teamLeagues: Object.fromEntries(pyramid.map((t, i) => [t.name, i < 6 ? 'A' : 'B'])),
+  standings: pyramid.map((t, i) => ({ team: t.name, wins: 10 - i, losses: i, draws: i === 2 ? 1 : 0, winRate: (10 - i) / 10 })),
+  teamStreaks: { [own]: { kind: 'W', count: 3 }, [foe]: { kind: 'L', count: 4 } },
+  nextGames: [
+    {
+      id: 7,
+      date: day(7),
+      home: foe,
+      away: own,
+      homeStarterInfo: { id: 3, name: '先発い', wins: 0, losses: 1, era: 23.625, age: 31, condition: 1 },
+      awayStarterInfo: { id: 2, name: '先発あ', wins: 1, losses: 0, era: null },
+      awayStarterMark: 'fixed',
+    },
+    { id: 8, date: day(9), home: third, away: foe, homeStarter: '名前だけ', awayStarterInfo: { id: 5, name: '先発え', wins: 3, losses: 2, era: 2.5, age: 22, condition: 4 } },
+  ],
+};
+const tied = baseView.standings.map((s, i) => (i === 1 ? { ...s, wins: 10, losses: 0, winRate: 1 } : s));
+const today = [
+  {},
+  { currentDate: day(6) },
+  { currentDate: day(30), seasonTurns: 20 },
+  { teamName: foe },
+  { teamName: third },
+  { teamName: pyramid[8].name },
+  { teamName: foe, standings: tied },
+  { standings: tied },
+  { teamLeagues: {} },
+  { teamLabels: {} },
+  { teamStreaks: { [own]: { kind: 'L', count: 2 }, [foe]: { kind: 'W', count: 9 } } },
+  { teamName: third, standings: baseView.standings.filter((s) => s.team !== third) },
+  { nextGames: [] },
+].map((patch) => {
+  const card = todayGameCard({ ...baseView, ...patch });
+  if (!card) return { patch, card: null };
+  const side = ({ team, record, standing, starter }) => ({ team, record, rank: standing.rank, teams: standing.teams, starter });
+  return { patch, card: { ...card, own: side(card.own), foe: side(card.foe) } };
+});
+const stage3 = { crowds, scenes, stadiums, fieldLooks: { fence: lookA, offense: lookC }, fields, phrases, bases, live, todayView: baseView, today };
+
+// ---- 段4: 番記者と球団の出来事 ------------------------------------------
+const reporters = [...pyramid.map((t) => t.name), '名前の無い球団'].map((team) => ({ team, reporter: reporterOf(team, pyramidLabels) }));
+reporters.push({ team: own, labels: null, reporter: reporterOf(own) });
+const reporterFaces = reporters.slice(0, 8).map(({ team, reporter }, i) => {
+  const look = [...byKind.values()][i % byKind.size];
+  const args = { seed: reporter.seed, look, age: reporter.age, level: [null, 3, 4, 1][i % 4], suit: true };
+  return { ...args, art: faceArt(args) };
+});
+const race = (kind, extra = {}) => ({ league: kind === 'promotion' ? 'B' : 'A', leagueName: kind === 'promotion' ? '2部' : '1部', kind, team: own, magic: 0, clinched: true, rival: null, left: 0, ...extra });
+const storyRoster = [
+  { id: 101, name: '小塩 紀洋', age: 22, position: 'center', condition: 4, seasonStats: { batting: { rbis: 40, homeruns: 12 } } },
+  { id: 102, name: '中里 亘輝', age: 29, position: 'pitcher', condition: 2, seasonStats: { pitching: { wins: 12, saves: 0 } } },
+  { id: 103, name: '控え', age: 31, position: 'first' },
+];
+const manager = { role: 'manager', roleLabel: '監督', coach: { id: 'c25', name: '川口 誠一', age: 52 } };
+const storyBase = { ...baseView, year: 3, races: [], roster: [], staff: null };
+const stories = [
+  {},
+  { races: [race('first', { clinched: false, magic: 5, rival: foe })] },
+  { races: [race('survive', { clinched: false, magic: 3, rival: third })] },
+  { races: [race('survive', { clinched: false, magic: 2 })] },
+  { races: [race('first')], roster: storyRoster, staff: { seats: [manager] } },
+  { races: [race('promotion')], roster: storyRoster.slice(1), staff: { seats: [manager] } },
+  { races: [race('survive')], roster: storyRoster },
+  { races: [race('relegated')], roster: [], staff: { seats: [manager] } },
+  { races: [race('relegated')], roster: [] },
+  { races: [race('promotion', { team: foe })] },
+  { teamStreaks: { [own]: { kind: 'L', count: 5 } }, nextGames: [] },
+  { teamStreaks: { [own]: { kind: 'W', count: 2 } }, currentDate: day(6) },
+  { teamName: third, teamStreaks: {} },
+  { currentDate: { year: 2026, month: 9, day: 20 }, races: [race('promotion')], staff: { seats: [{ role: 'manager', coach: { name: '名無し' } }] }, roster: storyRoster },
+].map((patch) => ({ patch, chat: reporterChat({ ...storyBase, ...patch }), scene: eventScene({ ...storyBase, ...patch }) }));
+const stage4 = { reporters, reporterFaces, storyView: storyBase, stories };
+
 const text = JSON.stringify({
   tables: { cityEn: CITY_EN, nickEn: NICK_EN, palettes: PALETTES, styles: STYLES, neutral: NEUTRAL_LOOK },
   hashes,
@@ -88,6 +250,8 @@ const text = JSON.stringify({
   emblems,
   faces,
   conditions,
+  stage3,
+  stage4,
 });
 if (process.argv.includes('--check')) {
   const file = new URL('../shared/src/jvmTest/resources/look-expected.json', import.meta.url);

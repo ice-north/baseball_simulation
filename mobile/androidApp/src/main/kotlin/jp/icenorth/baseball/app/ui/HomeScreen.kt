@@ -226,6 +226,9 @@ fun HomeScreen(
         if (showChronicle) ChronicleDialog(model, team, view.teamShort(team)) { showChronicle = false }
         var showInbox by remember { mutableStateOf(false) }
         if (showInbox) InboxDialog(view) { showInbox = false }
+        // 新しい見た目（試作）段4: 優勝・昇格などが決まったときの場面（1度だけ）と、社告の代わりの番記者のメモ
+        EventSceneDialog(model, view)
+        val reporterNote = rememberReporterNote(view)
         val style = homeStyleOf(model.homeStyle)
         val uriHandler = LocalUriHandler.current
         val names = remember(model.raw, team, lastGame, opponent, oppName) {
@@ -280,7 +283,7 @@ fun HomeScreen(
                 // 記事の中の選手名を押すと、その選手の詳細を開く（手元で分かる選手だけ）
                 // ⚠ 共有の画像は、この紙面の描画を層に写したもの（[sharePaper]）
                 Box(Modifier.drawWithContent { shareLayer.record { this@drawWithContent.drawContent() }; drawLayer(shareLayer) }) {
-                CompositionLocalProvider(LocalPaperLinks provides paperLinks) {
+                CompositionLocalProvider(LocalPaperLinks provides paperLinks, LocalReporterNote provides reporterNote) {
                 HomePage(
                     style = style,
                     page = page,

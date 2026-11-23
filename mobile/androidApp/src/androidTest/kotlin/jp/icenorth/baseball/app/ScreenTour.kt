@@ -385,7 +385,7 @@ class ScreenTour {
             shot("home-chronicle")
             back()
         }
-        // 新しい見た目（試作）: 球団マーク・選手と指導者の顔・調子の顔・段位の字。入にして主な画面を撮り、切に戻す
+        // 新しい見た目（試作）: 球団マーク・選手と指導者の顔・調子の顔・段位の字・今日の一戦・打席速報。入にして主な画面を撮り、切に戻す
         if (stage == "running") step("look") {
             rule.runOnUiThread { model.changeLookOn(true); model.changeHomeStyle("Paper") }
             tab("Home")
@@ -398,6 +398,14 @@ class ScreenTour {
                 rule.onAllNodesWithTag("game-row").onFirst().performScrollTo().performClick()
                 pause(2500)
                 shot("look-game-detail")
+                // 打席速報（版20からの試合だけ）。3打席送って撮る
+                step("look game live") {
+                    click("打席速報")
+                    pause(1500)
+                    repeat(3) { rule.onAllNodesWithText("次の打席 ▶").onFirst().performScrollTo().performClick(); pause(400) }
+                    toTop()
+                    page("look-game-live", scrolls = 1)
+                }
                 back()
             }
             step("look standings") { toTop(); click("順位表"); shot("look-standings") }

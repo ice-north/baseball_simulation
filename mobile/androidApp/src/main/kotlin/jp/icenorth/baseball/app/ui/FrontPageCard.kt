@@ -251,9 +251,14 @@ private fun FrontView(page: FrontPage, accent: Color, onLink: (String) -> Unit, 
     }
 }
 
-/** 手続きのお知らせ（社告） */
+/** 手続きのお知らせ（社告）。新しい見た目（試作）では番記者のメモ（[ReporterMemo]）に替える */
 @Composable
 private fun Shako(alerts: List<String>, onOpenProcedures: () -> Unit) {
+    val note = LocalReporterNote.current
+    if (note != null && LocalLook.current.on) {
+        ReporterMemo(note, alerts, onOpenProcedures)
+        return
+    }
     if (alerts.isEmpty()) return
     Column(Modifier.padding(top = 6.dp).fillMaxWidth().border(2.dp, Red).clickable(onClick = onOpenProcedures).padding(horizontal = 8.dp, vertical = 5.dp)) {
         alerts.forEachIndexed { i, a ->

@@ -201,6 +201,9 @@ data class OwnHomerun(val name: String? = null, val team: String? = null, val nu
 data class StarterInfo(
     val id: Long? = null,
     val name: String? = null,
+    /** 年齢と調子（新しい見た目の試作で、今日の一戦の札に顔を描く）。古いサーバーには無い */
+    val age: Int? = null,
+    val condition: Int? = null,
     val throws: String? = null,
     val wins: Int = 0,
     val losses: Int = 0,
@@ -214,6 +217,9 @@ data class ScheduledGame(
     val number: Int? = null,
     val home: String,
     val away: String,
+    /** 先発予定の名前（成績のつかない古いビューでは名前だけ） */
+    val homeStarter: String? = null,
+    val awayStarter: String? = null,
     val homeStarterInfo: StarterInfo? = null,
     val awayStarterInfo: StarterInfo? = null,
     /** 予告先発の印（pick: 自分が指名・確定前、fixed: 確定した予告先発） */

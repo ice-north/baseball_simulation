@@ -19,6 +19,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
@@ -85,7 +86,7 @@ data class LookState(
 
 val LocalLook = compositionLocalOf { LookState() }
 
-private val LookGraduate = FontFamily(Font(R.font.look_graduate))
+internal val LookGraduate = FontFamily(Font(R.font.look_graduate))
 private val LookAlfa = FontFamily(Font(R.font.look_alfaslab))
 private val LookYellowtail = FontFamily(Font(R.font.look_yellowtail))
 
@@ -148,7 +149,7 @@ private fun fontOf(key: String?): FontFamily = when (key) {
     else -> LookGraduate
 }
 
-private fun lookColor(hex: String?): Color? =
+internal fun lookColor(hex: String?): Color? =
     hex?.removePrefix("#")?.takeIf { it.length == 6 }?.toLongOrNull(16)?.let { Color(0xFF000000 or it) }
 
 private fun capOf(v: String?) = if (v == "round") StrokeCap.Round else StrokeCap.Butt
@@ -156,7 +157,14 @@ private fun joinOf(v: String?) = if (v == "round") StrokeJoin.Round else StrokeJ
 
 /** 描く手順の一覧を正方形に描く */
 @Composable
-fun LookImage(art: LookArt, size: Dp, modifier: Modifier = Modifier) {
+fun LookImage(art: LookArt, size: Dp, modifier: Modifier = Modifier) = LookCanvas(art, modifier.size(size))
+
+/**
+ * 描く手順の一覧を [modifier] の大きさに描く。絵の縦横の比は変えない。
+ * @param crop 枠を埋める（はみ出たところは切る。SVG の `xMidYMid slice`）。false なら枠に収める（`meet`）
+ */
+@Composable
+fun LookCanvas(art: LookArt, modifier: Modifier, crop: Boolean = false) {
     // 字を測る道具は字のある絵（マーク）だけ作る（顔・調子の顔は1画面に何十も出る）
     val measurer = if (art.items.any { it.t == "text" }) rememberTextMeasurer() else null
     val paths = remember(art) { art.items.map { s -> s.d?.let { PathParser().parsePathString(it).toPath() } } }
@@ -177,12 +185,16 @@ fun LookImage(art: LookArt, size: Dp, modifier: Modifier = Modifier) {
             Path().apply { addOval(androidx.compose.ui.geometry.Rect(Offset(c.cx.toFloat(), c.cy.toFloat()), c.r.toFloat())) }
         }
     }
-    Canvas(modifier.size(size)) {
-        val (bx, by, bw) = art.box
-        val k = this.size.width / bw.toFloat()
+    Canvas(if (crop) modifier.clipToBounds() else modifier) {
+        val (bx, by, bw, bh) = art.box.map { it.toFloat() }
+        val k = if (crop) maxOf(this.size.width / bw, this.size.height / bh) else minOf(this.size.width / bw, this.size.height / bh)
+        // 真ん中に寄せる（正方形の絵を正方形に描くときは0）
+        val dx = (this.size.width - bw * k) / 2
+        val dy = (this.size.height - bh * k) / 2
         withTransform({
+            translate(dx, dy)
             scale(k, k, pivot = Offset.Zero)
-            translate(-bx.toFloat(), -by.toFloat())
+            translate(-bx, -by)
         }) {
             for (run in runs) {
                 val draw: DrawScope.() -> Unit = { for (i in run) drawItem(art.items[i], paths[i], measurer) }
@@ -250,6 +262,19 @@ fun PlayerFace(id: String?, age: Int?, condition: Int?, size: Dp = 26.dp, modifi
 @Composable
 fun PlayerFace(player: Player, size: Dp = 26.dp, modifier: Modifier = Modifier, team: String? = LocalLook.current.capTeam) =
     PlayerFace(player.id.toString(), player.age, player.condition, size, modifier, team)
+
+/**
+ * 段4の番記者と場面の顔（種・年齢をそのまま渡す。共通部の `LookStory.kt` が作る）。
+ * [suit] なら背広（番記者。ネクタイは球団の色）
+ */
+@Composable
+fun StoryFace(seed: String, team: String?, age: Int?, level: Int?, suit: Boolean = false, size: Dp = 56.dp, modifier: Modifier = Modifier) {
+    val look = LocalLook.current
+    if (!look.on) return
+    val cap = look.teamLook(team) ?: NEUTRAL_LOOK
+    val art = remember(seed, cap, age, level, suit) { faceArt(seed, cap, age ?: 30, level, suit) }
+    LookImage(art, size, modifier.testTag(if (suit) "reporter-face" else "story-face"))
+}
 
 /** 指導者の顔（選手と同じ作り。表情はいつも穏やか） */
 @Composable

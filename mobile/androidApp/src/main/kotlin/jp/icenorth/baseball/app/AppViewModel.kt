@@ -179,6 +179,15 @@ class AppViewModel internal constructor(
         store.campSeen = key
     }
 
+    /** 新しい見た目（試作）段4: 見た球団の出来事の場面（同じ場面を2度出さない。Web 版の `baseball-online-look-seen-v1` と同じ） */
+    var lookSeen by mutableStateOf(store.lookSeen)
+        private set
+
+    fun markLookSeen(key: String) {
+        lookSeen = (listOf(key) + lookSeen.filter { it != key }).take(20)
+        store.lookSeen = lookSeen
+    }
+
     /** トライアウトの評価値の重み（端末に覚える。サーバーには送らない） */
     var tryoutWeights by mutableStateOf(sanitizeWeights(store.tryoutWeights))
         private set

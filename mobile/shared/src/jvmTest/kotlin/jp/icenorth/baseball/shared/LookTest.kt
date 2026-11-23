@@ -9,6 +9,8 @@ import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.booleanOrNull
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import kotlinx.serialization.json.doubleOrNull
 import kotlinx.serialization.json.jsonObject
 import kotlin.test.Test
@@ -136,6 +138,150 @@ class LookTest {
         for (c in expected.at("conditions").list()) {
             val level = c.at("level").int()
             sameArt(c.at("art"), conditionArt(level), "調子の顔 $level")
+        }
+    }
+
+    private fun battedOf(e: JsonElement?): LookBatted? =
+        e.obj()?.let { LookBatted(it.at("pos").int()!!, it.at("dir").num()!!, it.at("dist").num()!!, it.at("la").num()!!) }
+
+    @Test
+    fun stage3ArtMatchesWeb() {
+        val s3 = expected.at("stage3")
+        for (c in s3.at("crowds").list()) {
+            val got = crowdLevel(c.at("rank").int(), c.at("teams").int(), c.at("streak").int()!!)
+            assertEquals(c.at("out").num(), got, "客の入り ${c.at("rank")} ${c.at("teams")} ${c.at("streak")}")
+        }
+        for (c in s3.at("scenes").list()) assertEquals(c.at("scene").str(), stadiumScene(c.at("city").str()), "景色 ${c.at("city")}")
+        val stadiums = s3.at("stadiums").list()
+        assertEquals(2, stadiums.size)
+        for (c in stadiums) {
+            val look = lookOf(c.at("look"))
+            val art = stadiumArt(look, c.at("scene").str()!!, c.at("crowd").num()!!, c.at("seed").str()!!)
+            sameArt(c.at("art"), art, "球場 ${look.name}（${c.at("scene").str()}）")
+        }
+        val fence = lookOf(s3.at("fieldLooks", "fence"))
+        val offense = lookOf(s3.at("fieldLooks", "offense"))
+        for (c in s3.at("fields").list()) {
+            val art = fieldArt(fence, offense, c.at("bases").int()!!, battedOf(c.at("batted")), c.at("code").str()!!, c.at("runs").int()!!)
+            sameArt(c.at("art"), art, "打席速報の図 ${c.at("code").str()} 塁${c.at("bases")}")
+        }
+    }
+
+    @Test
+    fun livePlaysMatchWeb() {
+        val s3 = expected.at("stage3")
+        for (c in s3.at("phrases").list()) {
+            val code = c.at("code").str()!!
+            assertEquals(c.at("out").str(), playPhrase(code, c.at("runs").int()!!, battedOf(c.at("batted"))), "実況 $code ${c.at("runs")} ${c.at("batted")}")
+        }
+        assertEquals(s3.at("bases").list().map { it.str() }, (0..7).map(::basesText))
+        val games = s3.at("live").list()
+        assertEquals(3, games.size)
+        for ((g, c) in games.withIndex()) {
+            val game = c.at("game")
+            val scenes = liveScenes(game) { it.take(2) }
+            assertEquals((c.at("ready") as JsonPrimitive).booleanOrNull, hasLivePlays(game), "試合$g の打席速報")
+            assertEquals(c.at("highlights").list().map { it.int() }, highlightIndexes(scenes), "試合$g の見どころ")
+            val want = c.at("scenes").list()
+            assertEquals(want.size, scenes.size, "試合$g の場面の数")
+            for ((i, s) in scenes.withIndex()) {
+                val got = buildJsonObject {
+                    put("inning", s.inning); put("half", s.half); put("team", s.team); put("offense", s.offense)
+                    put("batterId", s.batterId); put("batterName", s.batterName); put("code", s.code); put("runs", s.runs)
+                    put("outsBefore", s.outsBefore); put("outs", s.outs); put("bases", s.bases); put("basesAfter", s.basesAfter)
+                    put("batted", s.batted?.let { b -> buildJsonObject { put("pos", b.pos); put("dir", b.dir); put("dist", b.dist); put("la", b.la) } } ?: JsonNull)
+                    put("scoreBefore", JsonArray(listOf(JsonPrimitive(s.scoreBefore.first), JsonPrimitive(s.scoreBefore.second))))
+                    put("score", JsonArray(listOf(JsonPrimitive(s.score.first), JsonPrimitive(s.score.second))))
+                    put("phrase", s.phrase); put("situation", s.situation)
+                }
+                // ⚠ Web の場面の記号は行に無ければ undefined（JSON に出ない）、アプリは空の字
+                val w = want[i].obj()!!.let { o -> if (o["code"] == null) JsonObject(o + ("code" to JsonPrimitive(""))) else o }
+                same(w, got, "試合$g の場面$i")
+            }
+        }
+    }
+
+    @Test
+    fun todayGameMatchesWeb() {
+        val s3 = expected.at("stage3")
+        val base = s3.at("todayView").obj()!!
+        val cases = s3.at("today").list()
+        assertTrue(cases.size >= 10)
+        for ((i, c) in cases.withIndex()) {
+            val view = OnlineJson.decodeFromJsonElement(LeagueView.serializer(), JsonObject(base + c.at("patch").obj()!!))
+            val card = todayGameCard(view)
+            val want = c.at("card")
+            if (want is JsonNull || want == null) {
+                assertEquals(null, card, "札$i")
+                continue
+            }
+            assertTrue(card != null, "札$i が出ない")
+            fun side(s: TodaySide) = buildJsonObject {
+                put("team", s.team); put("record", s.record); put("rank", s.rank); put("teams", s.teams)
+                put(
+                    "starter",
+                    s.starter?.let { p ->
+                        buildJsonObject {
+                            put("id", p.id); put("name", p.name); put("age", p.age); put("condition", p.condition)
+                            put("mark", p.mark); put("line", p.line)
+                        }
+                    } ?: JsonNull,
+                )
+            }
+            val got = buildJsonObject {
+                put("title", card.title); put("when", card.whenText); put("place", card.place); put("home", card.home)
+                put("city", card.city); put("crowd", card.crowd); put("note", card.note)
+                put("own", side(card.own)); put("foe", side(card.foe))
+            }
+            same(want, got, "札$i ${c.at("patch")}")
+        }
+    }
+
+    @Test
+    fun storyMatchesWeb() {
+        val s4 = expected.at("stage4")
+        for (c in s4.at("reporters").list()) {
+            val team = c.at("team").str()!!
+            val labels = if (c.obj()!!.containsKey("labels")) emptyMap() else labelsOf(expected.at("stage3", "todayView", "teamLabels"))
+            val r = c.at("reporter")
+            assertEquals(Reporter(r.at("seed").str()!!, r.at("name").str()!!, r.at("age").int()!!, r.at("title").str()!!), reporterOf(team, labels), "番記者 $team")
+        }
+        val faces = s4.at("reporterFaces").list()
+        assertEquals(8, faces.size)
+        for (c in faces) {
+            val seed = c.at("seed").str()!!
+            val art = faceArt(seed, lookOf(c.at("look")), c.at("age").int()!!, c.at("level").int(), suit = true)
+            sameArt(c.at("art"), art, "番記者の顔 $seed")
+        }
+        val base = s4.at("storyView").obj()!!
+        val stories = s4.at("stories").list()
+        assertTrue(stories.size >= 10)
+        for ((i, c) in stories.withIndex()) {
+            val view = OnlineJson.decodeFromJsonElement(LeagueView.serializer(), JsonObject(base + c.at("patch").obj()!!))
+            assertEquals(c.at("chat").list().map { it.str() }, reporterChat(view), "ひとこと$i ${c.at("patch")}")
+            val scene = eventScene(view)
+            val want = c.at("scene")
+            if (want == null || want is JsonNull) {
+                assertEquals(null, scene, "場面$i")
+                continue
+            }
+            assertTrue(scene != null, "場面$i が出ない")
+            val got = buildJsonObject {
+                put("key", scene.key); put("kind", scene.kind); put("good", scene.good); put("title", scene.title)
+                put("heading", scene.heading); put("line", scene.line)
+                put(
+                    "speaker",
+                    buildJsonObject {
+                        val p = scene.speaker
+                        put("kind", p.kind); put("id", p.id); put("seed", p.seed); put("name", p.name); put("label", p.label); put("age", p.age)
+                    },
+                )
+                put(
+                    "star",
+                    scene.star?.let { p -> buildJsonObject { put("id", p.id); put("name", p.name); put("age", p.age); put("condition", p.condition) } } ?: JsonNull,
+                )
+            }
+            same(want, got, "場面$i ${c.at("patch")}")
         }
     }
 }

@@ -79,6 +79,9 @@ export function withStarters(games, teams, statsOf = null, picks = null) {
     return {
       id: player.id,
       name: player.name,
+      // 年齢と調子（新しい見た目の試作で、今日の一戦の札に顔を描く。顔はほかの画面と同じ作り）
+      age: Number.isFinite(player.age) ? player.age : null,
+      condition: Number.isInteger(player.condition) ? player.condition : null,
       // ⚠ 投げる手は `physical.throws`（選手直下ではない）。選手直下を見ると
       //    全員 undefined になり、**全員が右投げ**として出る。
       // ⚠ 既定は右。未設定の選手を「左」に倒すと、左投手が実際より多く見える
