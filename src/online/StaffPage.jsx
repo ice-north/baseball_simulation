@@ -8,6 +8,7 @@ import { teamLabel } from './gameText.js';
 import { COACH_ROLES as ROLE_ORDER, ROLE_LABELS, COACH_ABILITY_ITEMS } from './coaches.js';
 import { useDraftState, STAFF_MODES_DRAFT } from './Drafts.jsx';
 import { delegationSettles } from './notices.js';
+import { CoachFace } from './look/Art.jsx';
 
 // ============================================================
 // 指導者（監督・投手コーチ・野手コーチ）。PC のページとスマホの画面で共用。
@@ -70,6 +71,8 @@ export function CoachCard({ coach, roleLabel, actions = null }) {
   return (
     <article className="online-staff-card">
       <header>
+        {/* 新しい見た目（試作）: 顔（帽子は所属球団。浪人中は無地） */}
+        <CoachFace coach={coach} size={60} className="online-staff-face" />
         <span className="online-eyebrow">{roleLabel || coach.roleLabel}</span>
         <strong>
           <CoachNameButton coach={coach} />
@@ -183,6 +186,7 @@ function CoachDialog({ coach, close }) {
       }}
     >
       <header>
+        <CoachFace coach={coach} size={64} className="online-detail-face" />
         <div>
           <h2 id="online-coach-title">{coach.name}</h2>
           <small>

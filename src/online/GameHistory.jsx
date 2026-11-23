@@ -11,6 +11,7 @@ import { inOnlineRoot } from './dialogPortal.js';
 import { ScoringPlays } from './ScoringPlays.jsx';
 import { scoreBoard } from './scoreBoard.js';
 import { hasInningPlays, inningPlays } from './gamePlays.js';
+import { TeamMark } from './look/Art.jsx';
 const GROUPS = {
   batting: [
     [
@@ -273,6 +274,7 @@ export function BoxScore({ game, ownTeam, knownOnly = false }) {
                 setPage(0);
               }}
             >
+              <TeamMark team={name} size={16} />
               {teamShort(name)}
             </button>
           ))}
@@ -509,6 +511,7 @@ export function ScoreBoard({ game, ownTeam, compact = false }) {
           {board.rows.map((row) => (
             <tr key={row.team} data-own={row.team === ownTeam || undefined}>
               <th scope="row" className="online-scoreboard-team" title={teamLabel(row.team)}>
+                <TeamMark team={row.team} size={16} />
                 {teamShort(row.team)}
               </th>
               {row.cells.map((cell, i) => {
@@ -591,9 +594,15 @@ function GameRecord({ id, year, ownTeam, close }) {
             <p className="online-game-summary">
               <small>{turnLabel(game.date)}</small>
               <strong>
-                <span title={teamLabel(game.away)}>{teamShort(game.away)}</span>{' '}
+                <span title={teamLabel(game.away)}>
+                  <TeamMark team={game.away} size={22} />
+                  {teamShort(game.away)}
+                </span>{' '}
                 {game.awayScore} – {game.homeScore}{' '}
-                <span title={teamLabel(game.home)}>{teamShort(game.home)}</span>
+                <span title={teamLabel(game.home)}>
+                  {teamShort(game.home)}
+                  <TeamMark team={game.home} size={22} />
+                </span>
               </strong>
             </p>
           )}
@@ -714,11 +723,17 @@ function History({ view, close }) {
                     {outcome?.mark || ''}
                   </span>
                   <span className="online-game-line">
-                    <span title={teamLabel(g.away)}>{teamShort(g.away)}</span>{' '}
+                    <span title={teamLabel(g.away)}>
+                      <TeamMark team={g.away} size={16} />
+                      {teamShort(g.away)}
+                    </span>{' '}
                     <b>
                       {g.awayScore} – {g.homeScore}
                     </b>{' '}
-                    <span title={teamLabel(g.home)}>{teamShort(g.home)}</span>
+                    <span title={teamLabel(g.home)}>
+                      {teamShort(g.home)}
+                      <TeamMark team={g.home} size={16} />
+                    </span>
                   </span>
                   <GameRecordButton
                     game={g}

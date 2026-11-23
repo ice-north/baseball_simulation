@@ -6,6 +6,7 @@ import { getZoneProfile, zoneHeatmap } from '../game/batterZone.js';
 import { getAbilityRank, getRankColor } from '../utils/constants.js';
 import { teamLabel } from './gameText.js';
 import { withoutPlaceholderHighSchool } from '../utils/careerHistory.js';
+import { useLook } from './look/LookContext.jsx';
 
 // ============================================================
 // 選手の詳細（1画面）。
@@ -79,6 +80,7 @@ function StatRow({ player, category, groups }) {
  * ⚠ 色だけに頼らない——数字そのものを出しているので、色は補助。
  */
 function AbilityBlock({ title, note, rows, help }) {
+  const look = useLook();
   // 説明を開いている項目（押すと出す。もう一度押すと閉じる）。
   // ⚠ 触れると出る（title）だけにしないこと。スマホのブラウザでは触れても出ない
   const [open, setOpen] = useState(null);
@@ -119,6 +121,15 @@ function AbilityBlock({ title, note, rows, help }) {
             {/* ⚠ 数字にデータバーを添える（先方指摘 2026-11-16: 数字だけで見づらい）。
                 長さは段位と同じ物差し（球速・スタミナは0〜100に直す。`abilityBarPercent`）、
                 色は数字と同じ段位の色（`currentColor`） */}
+            {/* 新しい見た目（試作）: 段位の字を札で添える（数字・バーはそのまま） */}
+            {look.on && typeof value === 'number' && (
+              <b
+                className={`online-rank-chip ${getRankColor(getAbilityRank(value, label === '球速', label === 'スタミナ'))}`}
+                aria-hidden="true"
+              >
+                <span>{getAbilityRank(value, label === '球速', label === 'スタミナ')}</span>
+              </b>
+            )}
             {typeof value === 'number' && (
               <span
                 className={`online-ability-bar ${getRankColor(getAbilityRank(value, label === '球速', label === 'スタミナ'))}`}

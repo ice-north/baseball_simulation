@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { POS, POS_FULL } from './api.js';
+import { POS, POS_FULL, posGroup } from './api.js';
 import {
   useDraftState,
   useDraftMemoryStore,
@@ -44,6 +44,7 @@ import {
   tapLineup,
   lineupNotes,
 } from './tapLineup.js';
+import { PlayerFace } from './look/Art.jsx';
 
 // ============================================================
 // スマホの打順・守備・控え（767px以下）。**2回のタップで入れ替える縦の表**。
@@ -275,6 +276,7 @@ function NameLine({ player }) {
     <span
       className={`online-tap-line1 online-fatigue-${getFatigueTone(player.fatigue) || 'none'}`}
     >
+      <PlayerFace player={player} size={22} />
       <ConditionMark player={player} />
       <span className="online-tap-name">{player.name}</span>
       {/* 投手登録の選手が野手の枠に居る・控えに居る（二刀流） */}
@@ -456,7 +458,7 @@ export default function TapLineup({
           <ul>
             {notes.map((note) => (
               <li key={`${note.index}:${note.kind}`} className={`is-${note.kind}`}>
-                <span className="online-tap-pos is-note">
+                <span className="online-tap-pos is-note" data-pos={posGroup(order[note.index]?.position)}>
                   {POS[order[note.index]?.position] || '?'}
                 </span>
                 {note.text}
@@ -511,6 +513,7 @@ export default function TapLineup({
                 <button
                   type="button"
                   className={`online-tap-pos ${posSelected ? 'is-selected' : ''}`}
+                  data-pos={posGroup(slot.position)}
                   aria-pressed={posSelected}
                   aria-label={
                     posSelected
@@ -638,7 +641,7 @@ export default function TapLineup({
                       }
                     >
                       <span className="online-tap-order" aria-hidden="true" />
-                      <span className="online-tap-pos is-bench">
+                      <span className="online-tap-pos is-bench" data-pos={posGroup(player.position)}>
                         {POS[player.position] || '?'}
                       </span>
                       <button

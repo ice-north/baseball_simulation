@@ -59,6 +59,7 @@ import {
 } from './SocialPages.jsx';
 import { rosterGroup } from '../utils/constants.js';
 import { InvitesAdmin } from './Invites.jsx';
+import { TeamMark } from './look/Art.jsx';
 // ============================================================
 // PC版の画面。**どのページも同じ形にする**:
 //
@@ -182,6 +183,7 @@ function NavStatus({ view, busy, run, reload, showTimes, onRename }) {
   const waiting = packWaiting(view);
   return (
     <div className="online-nav-context">
+      <TeamMark team={view.teamName} size={48} className="online-nav-mark" />
       <strong>{teamLabel(view.teamName)}</strong>
       {/* ⚠ 順位と勝敗は**出さない**（ホームの順位表に自球団を黄色で出している）。
           代わりに、この遊び方の骨格——1週間で1シーズン——をここに書く。

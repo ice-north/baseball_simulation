@@ -1,5 +1,5 @@
 import React, { useCallback, useState } from 'react';
-import { POS, POS_FULL } from './api.js';
+import { POS, POS_FULL, posGroup } from './api.js';
 import { turnOfDate, restFatigueOf } from './shared.js';
 import { BoardPage, Fatigue } from './BoardParts.jsx';
 import FieldDiagram from './FieldDiagram.jsx';
@@ -29,6 +29,7 @@ import {
   REST_TEXT,
   LOW_FITNESS,
 } from './lineupEdit.js';
+import { PlayerFace, TeamMark } from './look/Art.jsx';
 
 // ============================================================
 // PC版のスタメン設定。**スタメンを決めるときに比べたいものを、1つの表で比べる**。
@@ -107,7 +108,10 @@ function NextOpponents({ view }) {
                 ? `第${turnOfDate(game.date, view.seasonTurns)}ターン`
                 : ''}
             </small>
-            <strong>{teamShort(opponent)}</strong>
+            <strong>
+              <TeamMark team={opponent} size={18} />
+              {teamShort(opponent)}
+            </strong>
             {name ? (
               <span>
                 {name}
@@ -151,6 +155,7 @@ function PlayerCells({ player, fitness, fitnessPosition, restAt = REST_FATIGUE }
         className={`online-lineup-person online-fatigue-${getFatigueTone(player.fatigue) || 'none'}`}
         title={FATIGUE_TONE_TEXT[getFatigueTone(player.fatigue)]}
       >
+        <PlayerFace player={player} size={26} />
         <span onClick={(e) => e.stopPropagation()}>
           <PlayerStatsButton player={player} category="batting" group="basic" />
         </span>
@@ -517,6 +522,7 @@ export default function LineupBoard({
                           <button
                             type="button"
                             className={`online-lineup-pos ${selectedPos === index ? 'is-selected' : ''}`}
+                            data-pos={posGroup(entry.position)}
                             aria-pressed={selectedPos === index}
                             aria-label={`${index + 1}番の守備位置（${POS[entry.position]}）を入れ替える`}
                             draggable={!busy}
@@ -537,7 +543,7 @@ export default function LineupBoard({
                               .filter((e) => e.position !== entry.position)
                               .slice(0, 2)
                               .map((e) => (
-                                <span key={e.position}>{POS[e.position]}</span>
+                                <span key={e.position} data-pos={posGroup(e.position)}>{POS[e.position]}</span>
                               ))}
                         </span>
                       </td>
@@ -707,14 +713,14 @@ export default function LineupBoard({
                             title={`本職と、ほかに守れる位置（適性${LOW_FITNESS}%以上、高い順）`}
                           >
                             <span className="online-lineup-playable">
-                              <span className="online-lineup-pos is-bench">
+                              <span className="online-lineup-pos is-bench" data-pos={posGroup(player.position)}>
                                 {POS[player.position] || '?'}
                               </span>
                               {playablePositions(player)
                                 .filter((e) => e.position !== player.position)
                                 .slice(0, 2)
                                 .map((e) => (
-                                  <span key={e.position}>
+                                  <span key={e.position} data-pos={posGroup(e.position)}>
                                     {POS[e.position]}
                                   </span>
                                 ))}

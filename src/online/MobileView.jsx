@@ -1,5 +1,6 @@
 import { LeagueTopics, SeasonReview } from './Chronicle.jsx';
 import React, { useEffect, useRef, useState } from 'react';
+import { LookToggle } from './look/LookToggle.jsx';
 import {
   useDraftMemoryPeek,
   useDraftState,
@@ -33,6 +34,7 @@ import { RenameDialog } from './DesktopView.jsx';
 import { AwaySummaryBanner, FirstWeekBanner, InboxCard, MobileExhibitionReplies } from './SocialPages.jsx';
 import { useFirstWeek } from './useFirstWeek.js';
 import TeamDiagnosis from './TeamDiagnosis.jsx';
+import { TeamMark } from './look/Art.jsx';
 export default function MobileView(props) {
   const { view, local, loading, reloadView, logout, showTimes, tab, setTab, away, dismissAway } =
     props;
@@ -123,7 +125,10 @@ export default function MobileView(props) {
       {tab === 'today' && (
         <>
           <section className="online-mobile-overview">
-            <strong>{teamLabel(view.teamName)}</strong>
+            <strong>
+              <TeamMark team={view.teamName} size={26} />
+              {teamLabel(view.teamName)}
+            </strong>
             <span>
               {/* ⚠ 総数はビューの値で出す（PC版と同じ理由） */}
               {view.stage && !['season', 'pack_select'].includes(view.stage.key)
@@ -362,6 +367,8 @@ function MobileMenu({ close, loading, local, reloadView, showTimes, logout, rena
         {/* ⚠ **スマホにも名前を変える入口を置く**（再監査 B5）。以前はPCの左メニューにしか無く、
             初期メンバーの選択で名前の欄を開かずに決定すると、スマホだけの人は名前を変えられなかった */}
         <button onClick={() => act(rename)}>名前を変える</button>
+        {/* 新しい見た目（試作）の入／切（この端末だけ。`look/LookContext.jsx`） */}
+        <LookToggle className="" onDone={() => act()} />
         <a href="/">一人用</a>
         <button disabled={loading} onClick={() => act(logout)}>
           ログアウト

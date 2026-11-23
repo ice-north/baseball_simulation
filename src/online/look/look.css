@@ -1,0 +1,143 @@
+/* 新しい見た目（試作）。⚠ 切のときに当たる指定を書かない: 絵の部品は切のとき描かれず、
+   見た目の差しかえは `.online.online-look` の下にだけ書く（`LookContext.jsx`）。 */
+@font-face {
+  font-family: LookGraduate;
+  src: url('./fonts/graduate.woff2') format('woff2');
+  font-display: swap;
+}
+@font-face {
+  font-family: LookAlfaSlab;
+  src: url('./fonts/alfaslab.woff2') format('woff2');
+  font-display: swap;
+}
+@font-face {
+  font-family: LookYellowtail;
+  src: url('./fonts/yellowtail.woff2') format('woff2');
+  font-display: swap;
+}
+.online-look-art {
+  display: inline-block;
+  vertical-align: middle;
+  flex: none;
+  overflow: visible;
+}
+
+/* ---- 入のときだけ当てる差しかえ ------------------------------------------ */
+/* 球団マーク・顔と、隣の字との間 */
+.online.online-look .online-team-mark {
+  margin: 0 4px;
+}
+.online.online-look .online-face {
+  margin-right: 6px;
+}
+.online.online-look .online-condition-face {
+  vertical-align: -2px;
+}
+.online.online-look .online-condition {
+  width: 16px;
+}
+
+/* 自球団の色。⚠ 地の色は変えない（`online.css` に色が約680か所あり、入れかえると直しが倍になる）。
+   見出しの下の帯と左メニューの区切りだけを球団の色にする（`--team-c1` / `--team-c2` は `OnlineApp`） */
+.online.online-look .online-header {
+  box-shadow: inset 0 -3px 0 var(--team-c2, transparent);
+}
+.online.online-look .online-nav-context {
+  border-bottom: 3px solid var(--team-c2, #536b85);
+}
+.online.online-look .online-nav-mark {
+  display: block;
+  margin: 0 0 8px;
+}
+.online.online-look .online-mobile-overview > strong {
+  display: inline-flex;
+  align-items: center;
+}
+
+/* 守備位置の札: 塗らずに枠と字を位置の色に（アプリの `PosBadge` と同じ。投=赤ピンク・捕=水色・内野=黄・外野=緑） */
+.online.online-look [data-pos='p'] {
+  --pos: #f0629a;
+}
+.online.online-look [data-pos='c'] {
+  --pos: #38bdf8;
+}
+.online.online-look [data-pos='if'] {
+  --pos: #facc15;
+}
+.online.online-look [data-pos='of'] {
+  --pos: #4ade80;
+}
+.online.online-look .online-lineup-pos[data-pos],
+.online.online-look button.online-tap-pos[data-pos]:not(.is-selected),
+.online.online-look .online-tap-pos[data-pos] {
+  color: var(--pos);
+  background: transparent;
+  border: 2px solid var(--pos);
+}
+.online.online-look .online-lineup-pos[data-pos].is-selected,
+.online.online-look .online-lineup-pos[data-pos]:hover:enabled {
+  background: color-mix(in srgb, var(--pos) 28%, transparent);
+  color: #f8fafc;
+}
+.online.online-look .online-lineup-playable > span[data-pos]:not(.online-lineup-pos) {
+  color: color-mix(in srgb, var(--pos) 80%, #94a3b8);
+}
+
+/* 選手・指導者の詳細: 顔を名前の左に（閉じるは右端のまま） */
+.online.online-look .online-player-dialog header {
+  justify-content: flex-start;
+  align-items: center;
+}
+.online.online-look .online-player-dialog header > button {
+  margin-left: auto;
+}
+.online.online-look .online-detail-face {
+  margin-right: 4px;
+}
+
+/* 能力の段位の字（S〜F）。数字とバーはそのまま、札を足すだけ */
+.online-rank-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 4px;
+  background: currentColor;
+}
+.online-rank-chip > span {
+  color: #0f172a;
+  font: 11px/1 LookGraduate, 'Arial Black', sans-serif;
+}
+
+/* 指導者のカード: 顔を左に、名前などを右に */
+.online.online-look .online-staff-card header {
+  display: grid;
+  grid-template-columns: 60px 1fr;
+  column-gap: 12px;
+  align-items: start;
+}
+.online.online-look .online-staff-card header > * {
+  grid-column: 2;
+}
+.online.online-look .online-staff-card header > .online-staff-face {
+  grid-column: 1;
+  grid-row: 1 / span 4;
+  margin: 0;
+}
+
+/* スマホの順位表は球団名の欄が狭く、マークを足すと長い名前（鳥取ヴォヤージャーズ）が2行に割れる。
+   スマホの順位表だけはマークを出さない（PC・試合の一覧・スコアボードには出す） */
+.online-mobile.online-look .online-standings-mark {
+  display: none;
+}
+
+/* 試合のカード: 球団名は2行に折れることがあるので、マークは名前の上に置く（ホームは右寄せ） */
+.online.online-look .online-score > div > span > .online-team-mark {
+  display: block;
+  margin: 0 0 3px;
+}
+.online.online-look .online-score > div > span:last-child > .online-team-mark {
+  margin-left: auto;
+}
