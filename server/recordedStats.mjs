@@ -224,11 +224,9 @@ export function createRecorder(league, teams, { replay: keepReplay = false } = {
         }
         const line = addCounts(zeroLine(), e.delta);
         Object.assign(line, extra);
-        // 元の自動試合では犠飛を打数に含めるため、観測集計の打数だけを補正する。
-        if (e.result?.isOutfieldFly && e.delta.rbis > 0) {
-          line.sacrificeFlies = 1;
-          line.atBats--;
-        }
+        // ⚠ 犠飛は自動試合が打数から外して `sacrificeFlies` に数える（監査 2026-11-23）。
+        //    以前は自動試合が打数に入れていたので、ここで打数を1引いて直していた
+        if (e.result?.isOutfieldFly && e.delta.rbis > 0) line.sacrificeFlies = 1;
         line.pa = 1;
         line.outs = e.outs || 0;
         line.fouls = e.fouls;
@@ -317,6 +315,7 @@ export function createRecorder(league, teams, { replay: keepReplay = false } = {
               gb.walks ||
               gb.hitByPitch ||
               gb.sacrificeBunts ||
+              gb.sacrificeFlies ||
               gp.pitches ||
               gp.outs ||
               p.battingOrder ||
