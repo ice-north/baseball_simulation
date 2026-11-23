@@ -17,9 +17,9 @@ import { advanceQualifierWithResult, autoPlayBracket, isBracketComplete, getBrac
  * ctx に必要なプロパティ:
  *   setCount, setBases, setOuts, setInning, setScore, setGameOver,
  *   setGameStarted, setRemainingPitches, setSimMode, outOccurredRef,
- *   setInningScores, setExtraInningScores, setCurrentInningScore,
- *   setTeamHits, setTeamErrors, setTeamRBIs, setIsTopInning,
- *   setGameLog, setLastResult, setStatistics, setRecentVelocities,
+ *   setInningScores, setExtraInningScores,
+ *   setTeamHits, setTeamErrors, setIsTopInning,
+ *   setGameLog, setLastResult,
  *   setHomeTeam, setAwayTeam, setCurrentStamina,
  *   setManagedGameInfo, managedGameInfoRef, setScreenMode
  */
@@ -27,9 +27,9 @@ export function executeSetupManagedGame(ctx, gameInfo) {
   const {
     setCount, setBases, setOuts, setInning, setScore, setGameOver,
     setGameStarted, setRemainingPitches, setSimMode, outOccurredRef,
-    setInningScores, setExtraInningScores, setCurrentInningScore,
-    setTeamHits, setTeamErrors, setTeamRBIs, setIsTopInning,
-    setGameLog, setLastResult, setStatistics, setRecentVelocities,
+    setInningScores, setExtraInningScores,
+    setTeamHits, setTeamErrors, setIsTopInning,
+    setGameLog, setLastResult,
     setHomeTeam, setAwayTeam, setCurrentStamina,
     setManagedGameInfo, managedGameInfoRef, setScreenMode
   } = ctx;
@@ -182,15 +182,11 @@ export function executeSetupManagedGame(ctx, gameInfo) {
     home: [null, null, null, null, null, null, null, null, null]
   });
   setExtraInningScores({ away: [], home: [] });
-  setCurrentInningScore({ away: 0, home: 0 });
   setTeamHits({ home: 0, away: 0 });
   setTeamErrors({ home: 0, away: 0 });
-  setTeamRBIs({ home: 0, away: 0 });
   setIsTopInning(true);
   setGameLog([]);
   setLastResult(null);
-  setStatistics(null);
-  setRecentVelocities([]);
 
   setHomeTeam({
     name: htn,

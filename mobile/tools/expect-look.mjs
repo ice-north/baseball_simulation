@@ -12,6 +12,7 @@ import { liveScenes, highlightIndexes, playPhrase, basesText, hasLivePlays, orde
 import { playTone } from '../../src/online/gamePlays.js';
 import { todayGameCard } from '../../src/online/look/todayGame.js';
 import { reporterOf, reporterChat, eventScene } from '../../src/online/look/story.js';
+import { leagueBaseline, statGrade } from '../../src/online/look/statGrade.js';
 
 const labelsOf = (teams) =>
   Object.fromEntries(
@@ -259,6 +260,57 @@ const stories = [
 ].map((patch) => ({ patch, chat: reporterChat({ ...storyBase, ...patch }), scene: eventScene({ ...storyBase, ...patch }) }));
 const stage4 = { reporters, reporterFaces, storyView: storyBase, stories };
 
+// 成績の札（リーグ平均比）。部の分け方・開幕前・出場の少ない人・自責0
+const gradeViews = [
+  {
+    teamName: '甲',
+    teamLeagues: { 甲: 'A', 乙: 'A', 丙: 'B', 丁: 'B' },
+    teamStats: {
+      甲: { average: 0.25, era: 3.1, obp: 0.32, slg: 0.38 },
+      乙: { average: 0.23, era: 2.7, obp: 0.3, slg: 0.33 },
+      丙: { average: 0.3, era: 5, obp: 0.4, slg: 0.5 },
+      丁: { average: null, era: null, obp: null, slg: null },
+    },
+    standings: [{ team: '甲', gamesPlayed: 20 }, { team: '乙', gamesPlayed: 20 }],
+  },
+  // 部の分けが無い古いビュー（全球団の平均）・出塁率と長打率が無い古いサーバー
+  {
+    teamName: '丙',
+    teamStats: { 甲: { average: 0.2, era: 2 }, 丙: { average: 0.26, era: 3.5 } },
+    standings: [{ team: '丙', gamesPlayed: 8 }],
+  },
+  // 開幕前
+  { teamName: '甲', teamStats: { 甲: { average: null, era: null, obp: null, slg: null } }, standings: [{ team: '甲', gamesPlayed: 0 }] },
+  // チーム成績の無いビュー
+  { teamName: '甲', standings: [] },
+];
+const gradePlayers = [
+  { seasonStats: { batting: { atBats: 60, walks: 6, hitByPitch: 1, sacrificeFlies: 1, sacrificeBunts: 2 }, pitching: { inningsPitched: 60 } } },
+  { seasonStats: { batting: { atBats: 5, walks: 1 }, pitching: { inningsPitched: 7 } } },
+  { seasonStats: { batting: { atBats: 18, walks: 2 }, pitching: { inningsPitched: 20 } } },
+  {},
+];
+const gradeValues = {
+  avg: [0, 0.1, 0.18, 0.2, 0.22, 0.24, 0.27, 0.3, 0.35, 0.5, null],
+  obp: [0.2, 0.26, 0.3, 0.33, 0.37, 0.42, 0.5],
+  slg: [0.2, 0.3, 0.36, 0.4, 0.45, 0.6],
+  ops: [0.4, 0.55, 0.62, 0.7, 0.8, 1.1],
+  era: [0, 0.5, 1.2, 1.8, 2.4, 2.9, 3.6, 4.5, 6, 12, null],
+  hr: [10],
+};
+const grades = gradeViews.map((view) => {
+  const baseline = leagueBaseline(view);
+  return {
+    view,
+    baseline,
+    cells: gradePlayers.flatMap((player, pi) =>
+      Object.entries(gradeValues).flatMap(([id, values]) =>
+        values.map((value) => ({ player: pi, id, value, grade: statGrade({ id }, value, player, baseline) })),
+      ),
+    ),
+  };
+});
+
 const text = JSON.stringify({
   tables: { cityEn: CITY_EN, nickEn: NICK_EN, palettes: PALETTES, styles: STYLES, neutral: NEUTRAL_LOOK },
   hashes,
@@ -271,6 +323,7 @@ const text = JSON.stringify({
   conditions,
   stage3,
   stage4,
+  grades: { players: gradePlayers, views: grades },
 });
 if (process.argv.includes('--check')) {
   const file = new URL('../shared/src/jvmTest/resources/look-expected.json', import.meta.url);

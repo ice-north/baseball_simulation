@@ -36,6 +36,7 @@ import { AwaySummaryBanner, FirstWeekBanner, InboxCard, MobileExhibitionReplies 
 import { useFirstWeek } from './useFirstWeek.js';
 import TeamDiagnosis from './TeamDiagnosis.jsx';
 import { TeamMark } from './look/Art.jsx';
+import { NavGlyph, NavIcon } from './look/NavIcon.jsx';
 export default function MobileView(props) {
   const { view, local, loading, reloadView, logout, showTimes, tab, setTab, away, dismissAway } =
     props;
@@ -157,6 +158,7 @@ export default function MobileView(props) {
               .filter(([id]) => id !== 'today')
               .map(([id, label]) => (
                 <button key={id} aria-label={label} onClick={() => setTab(id)}>
+                  <NavIcon id={id} />
                   {label}
                   {/* ⚠ 印は数で出す（PC版の左メニューと同じ数え方。`notices.js`） */}
                   {id === 'decisions' && counts.procedure > 0 && (
@@ -172,10 +174,14 @@ export default function MobileView(props) {
                 setTab('players');
               }}
             >
+              <NavIcon id="players" />
               選手成績
             </button>
             {/* 監督・コーチと任せ方（PCの「指導者」ページと同じ中身） */}
-            <button onClick={() => setTab('staff')}>指導者</button>
+            <button onClick={() => setTab('staff')}>
+              <NavIcon id="staff" />
+              指導者
+            </button>
           </nav>
           <Standings view={view} />
           {/* ⚠ **行った先の見出しの名前で書く**（「リーグの話題」と「リーグ便り」）。以前は
@@ -195,6 +201,7 @@ export default function MobileView(props) {
                 key={shown.teamName}
                 view={shown}
                 teamSelector={selector}
+                league={view}
               />
               {/* 自球団だけ: チーム診断（PC と同じ文。スマホWeb は投手起用も打順のタブ。トレードの提案はPC・アプリだけなので飛ばない） */}
               {shown.teamName === view.teamName && (
@@ -303,13 +310,13 @@ export default function MobileView(props) {
           disabled={tab === 'today'}
           onClick={() => setTab(tab === 'players' ? playersFrom : 'today')}
         >
-          ←
+          <NavGlyph id="back" glyph="←" label="戻る" />
         </button>
         <button aria-label="ホーム" onClick={() => setTab('today')}>
-          ⌂
+          <NavGlyph id="today" glyph="⌂" label="ホーム" />
         </button>
         <button aria-label="メニュー" onClick={() => setMenuOpen(true)}>
-          ☰
+          <NavGlyph id="menu" glyph="☰" label="メニュー" />
         </button>
       </nav>
       {menuOpen && (

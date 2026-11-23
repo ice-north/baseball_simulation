@@ -3,7 +3,7 @@
 //    `online-records-check` 側で明示的に記録を有効にして作っている。
 //    ここで `process.env` を立てても **ESM の import が先に走るので間に合わない**。
 import assert from 'node:assert/strict';
-import { recordedFixture } from './online-records-check.mjs';
+import { buildRecordedFixture } from './lib/recordedFixture.mjs';
 import {
   projectLeague,
   projectGameInfo,
@@ -17,7 +17,9 @@ import { launchBrowser, distHtml } from './lib/browser.mjs';
 import { shortLastLines, midWordBreaks } from './lib/textWrap.mjs';
 import { setTeamLabels, teamNameParts } from '../../src/online/gameText.js';
 import { failureShots } from './lib/failureShots.mjs';
-const league = structuredClone(recordedFixture);
+let fixture = null;
+const recordedFixture = () => (fixture ??= buildRecordedFixture());
+const league = structuredClone(recordedFixture());
 const html = await distHtml();
 const base = 'http://localhost:3000',
   authKey = 'baseball-online-auth-v1';

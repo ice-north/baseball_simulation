@@ -383,7 +383,10 @@ export function BoxScore({ game, ownTeam, knownOnly = false }) {
             <tr key={p.key || p.id}>
               <th title={p.name}>{p.name}</th>
               {group[2].map(([key, , format = 'count']) => (
-                <td key={key}>{formatStat({ format }, p[category]?.[key])}</td>
+                // `data-zero`: 新しい見た目（試作）で 0 を沈ませる（数える項目だけ。防御率 0.00 は沈ませない）
+                <td key={key} data-zero={format === 'count' && p[category]?.[key] === 0 ? '' : undefined}>
+                  {formatStat({ format }, p[category]?.[key])}
+                </td>
               ))}
             </tr>
           ))}

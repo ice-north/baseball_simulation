@@ -483,12 +483,9 @@ import { useEscapeToClose } from './components/useEscapeToClose.js';
         away: [],
         home: []
       });
-      // 現在のイニングの得点（イニング終了時にinningScoresに反映）
-      const [currentInningScore, setCurrentInningScore] = useState({ away: 0, home: 0 });
-      // チーム別安打・エラー・打点
+      // チーム別安打・エラー
       const [teamHits, setTeamHits] = useState({ home: 0, away: 0 });
       const [teamErrors, setTeamErrors] = useState({ home: 0, away: 0 });
-      const [teamRBIs, setTeamRBIs] = useState({ home: 0, away: 0 });
       const [count, setCount] = useState({ balls: 0, strikes: 0 });
       const [bases, setBases] = useState([false, false, false]);
       const [outs, setOuts] = useState(0);
@@ -952,10 +949,7 @@ import { useEscapeToClose } from './components/useEscapeToClose.js';
       const [gameLog, setGameLog] = useState([]);
       const [lastResult, setLastResult] = useState(null);
       const [isAutoSimulating, setIsAutoSimulating] = useState(false);
-      const [statistics, setStatistics] = useState(null);
       
-      // 直近の投球履歴（球速）
-      const [recentVelocities, setRecentVelocities] = useState([]);
       
       // ⚠ ここに **打者・投手・捕手の成績3種**（batterStats / pitcherStats /
       //    catcherStats）の useState が31行あったが、**書き込み52箇所・読み出し0**で
@@ -1524,12 +1518,9 @@ import { useEscapeToClose } from './components/useEscapeToClose.js';
           }
         }
         
-        if (advancement < 3) {
-          newBases[advancement - 1] = batterAsRunner(isError);
-        } else {
-          runsScored++;
-          if (isError) unearnedScored++;
-        }
+        // 打者自身を塁に置く（三塁打は三塁に残る。本塁打は別の道で処理する。
+        // 以前は `advancement < 3` で分けていたので、三塁打の打者が必ず生還していた）
+        newBases[advancement - 1] = batterAsRunner(isError);
 
         // setBases(newBases); ← 削除
         return { bases: newBases, runsScored, unearnedScored, outsMade: outsFromThrow };
@@ -1625,11 +1616,6 @@ import { useEscapeToClose } from './components/useEscapeToClose.js';
         // 【守備シフトは廃止】打球方向モデル（段階5）を作った後も、シフトは
         // 「単打の35%をアウトに書き換える」後付け処理のままで整合していなかった。
         // 守備は全て基本配置とする。
-        // 球速履歴を更新（最新2球分のみ保持）
-        setRecentVelocities(prev => {
-          const updated = [...prev, result.velocity];
-          return updated.slice(-2); // 最新2球のみ
-        });
         
         // 投手成績の更新
         
@@ -1828,14 +1814,12 @@ import { useEscapeToClose } from './components/useEscapeToClose.js';
         // ⚠ 失策での出塁は安打ではない（チームの安打数にも数えない）
         if (isTopInning) {
           if (!reachedOnError) setTeamHits(prev => ({ ...prev, away: prev.away + 1 }));
-          setTeamRBIs(prev => ({ ...prev, away: prev.away + runs }));
           if (result.isError) {
             setTeamErrors(prev => ({ ...prev, home: prev.home + 1 }));
             recordFielding(result.errorPosition, { error: 1 });
           }
         } else {
           if (!reachedOnError) setTeamHits(prev => ({ ...prev, home: prev.home + 1 }));
-          setTeamRBIs(prev => ({ ...prev, home: prev.home + runs }));
           if (result.isError) {
             setTeamErrors(prev => ({ ...prev, away: prev.away + 1 }));
             recordFielding(result.errorPosition, { error: 1 });
@@ -2411,7 +2395,6 @@ if (newOuts === 3) {
             isTopInning ? newScore.away++ : newScore.home++;
             recordRunsToCurrentPitcher(1, outs, isUnearnedRunner(fa.scored[0]) ? 1 : 0);
             updateBatterStats(currentBatter.id, isTopInning ? 'away' : 'home', { rbis: 1 });
-            setTeamRBIs(prev => ({ ...prev, [offense]: prev[offense] + 1 }));
           }
         };
 
@@ -2476,7 +2459,6 @@ if (newOuts === 3) {
                 isTopInning ? newScore.away++ : newScore.home++;
                 recordRunsToCurrentPitcher(1, outs, unearnedAt(newBases, 2));
                 updateBatterStats(currentBatter.id, offenseTeamType, { rbis: 1 });   // スクイズは打点
-                setTeamRBIs(prev => ({ ...prev, [offense]: prev[offense] + 1 }));
                 newBases[2] = false;
               } else {
                 newOuts++;
@@ -2606,9 +2588,9 @@ if (newOuts === 3) {
       const gameControlsCtx = {
         isSubstituting, setCount, setBases, setOuts, setInning, setScore,
         setGameOver, setRemainingPitches, setSimMode, outOccurredRef,
-        setInningScores, setExtraInningScores, setCurrentInningScore,
-        setTeamHits, setTeamErrors, setTeamRBIs, setIsTopInning,
-        setGameLog, setLastResult, setStatistics, setRecentVelocities,
+        setInningScores, setExtraInningScores,
+        setTeamHits, setTeamErrors, setIsTopInning,
+        setGameLog, setLastResult,
         setHomeTeam, setAwayTeam, setCurrentStamina,
         setIsAutoSimulating
       };
@@ -2659,9 +2641,9 @@ if (newOuts === 3) {
       const gameSetupCtx = {
         setCount, setBases, setOuts, setInning, setScore, setGameOver,
         setGameStarted, setRemainingPitches, setSimMode, outOccurredRef,
-        setInningScores, setExtraInningScores, setCurrentInningScore,
-        setTeamHits, setTeamErrors, setTeamRBIs, setIsTopInning,
-        setGameLog, setLastResult, setStatistics, setRecentVelocities,
+        setInningScores, setExtraInningScores,
+        setTeamHits, setTeamErrors, setIsTopInning,
+        setGameLog, setLastResult,
         setHomeTeam, setAwayTeam, setCurrentStamina,
         setManagedGameInfo, managedGameInfoRef, setScreenMode
       };

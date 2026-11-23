@@ -4,9 +4,11 @@ import android.app.Application
 import android.os.Looper
 import androidx.activity.OnBackPressedDispatcher
 import androidx.activity.compose.LocalOnBackPressedDispatcherOwner
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsSelected
+import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.test.junit4.StateRestorationTester
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -59,6 +61,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import jp.icenorth.baseball.app.ui.LocalLook
 import jp.icenorth.baseball.app.ui.LookState
+import jp.icenorth.baseball.app.ui.StatTable
+import jp.icenorth.baseball.shared.StatColumn
+import jp.icenorth.baseball.shared.StatFormat
 import jp.icenorth.baseball.app.ui.LookTypography
 
 @RunWith(RobolectricTestRunner::class)
@@ -221,7 +226,9 @@ class AppUiTest {
         rule.onAllNodesWithTag("team-mark", useUnmergedTree = true).assertCountEquals(0)
         rule.onNodeWithTag("tab-Home").performClick()
         rule.onAllNodesWithContentDescription("メニュー").onFirst().performClick()
-        rule.onNodeWithText("新しい見た目（試作）", substring = true).performClick()
+        // ⚠ メニューの下の方の項目は、テストの小さい画面ではメニューの外に出ていて、座標で押すと当たらない
+        //    （項目が増えて届かなくなった）。押す動作を直接送る
+        rule.onNodeWithText("新しい見た目（試作）", substring = true).performSemanticsAction(SemanticsActions.OnClick)
         rule.runOnIdle { assertTrue(model.lookOn) }
         assertTrue(SessionStore(RuntimeEnvironment.getApplication()).lookOn)
         rule.onNodeWithTag("tab-Games").performClick()
@@ -230,6 +237,35 @@ class AppUiTest {
         // 切に戻すと消える
         rule.runOnIdle { model.changeLookOn(false) }
         rule.onAllNodesWithTag("team-mark", useUnmergedTree = true).assertCountEquals(0)
+    }
+
+    @Test fun newLookPutsGradeChipsOnStatTable() {
+        // 新しい見た目（試作）: 成績の数字の頭に S〜F の札（リーグ平均比）。切のときは付けない
+        val players = (1..3).map { i ->
+            kotlinx.serialization.json.buildJsonObject {
+                put("id", kotlinx.serialization.json.JsonPrimitive(i))
+                put("name", kotlinx.serialization.json.JsonPrimitive("選手$i"))
+                put("position", kotlinx.serialization.json.JsonPrimitive("catcher"))
+            }
+        }
+        val avg = StatColumn("avg", "打率", StatFormat.Rate, get = { 0.25 + (it["id"].toString().toDouble()) / 100 })
+        var on by mutableStateOf(true)
+        rule.setContent {
+            CompositionLocalProvider(LocalLook provides LookState(on = on)) {
+                StatTable(
+                    players = players,
+                    columns = listOf(avg),
+                    sortId = "avg",
+                    ascending = false,
+                    onSort = {},
+                    onPlayer = {},
+                    grade = { _, _, p -> if (p["id"].toString() == "1") null else 'A' },
+                )
+            }
+        }
+        rule.onAllNodesWithTag("rank-chip", useUnmergedTree = true).assertCountEquals(2)
+        rule.runOnIdle { on = false }
+        rule.onAllNodesWithTag("rank-chip", useUnmergedTree = true).assertCountEquals(0)
     }
 
     @Test fun turningTheNewLookOnKeepsTheScreenState() {

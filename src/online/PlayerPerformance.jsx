@@ -32,6 +32,7 @@ import {
 import { CONDITION_ICONS } from '../game/condition.js';
 import { useLook } from './look/LookContext.jsx';
 import { ConditionFace, PlayerFace } from './look/Art.jsx';
+import { leagueBaseline, statGrade } from './look/statGrade.js';
 
 // 能力値1つ。⚠ **PCは数字をランク色で出す**（一人用の `AbilityValue` と同じ）。
 //    以前はオンラインだけ「C」のような字だけで、移植したスタメン設定は数字、
@@ -762,11 +763,34 @@ export function RoleMark({ player, lineup }) {
 }
 
 /**
+ * 新しい見た目（試作）: 主要成績の列のまとまり。見出しの上に小さく出す（まとまりの最初の列に付ける）。
+ * ⚠ 列の並びは `overviewGroup`。列を足したらここも見る
+ */
+const LOOK_SECTIONS = {
+  batting: { games: '出場', avg: '打撃', obp: '指標', strikeouts: '選球' },
+  pitching: { games: '出場', era: '成績', outs: '投球', k9: '指標' },
+};
+/** 新しい見た目（試作）: 並べ替えた列に添える棒の長さ（0〜100）。小さいほど良い列は向きを逆に */
+function barScale(column, players) {
+  if (!column || column === 'name' || column.format === 'condition') return null;
+  const values = players.map((p) => column.get(p)).filter((v) => typeof v === 'number' && Number.isFinite(v));
+  if (values.length < 2) return null;
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  if (max === min) return null;
+  return (value) =>
+    typeof value === 'number' && Number.isFinite(value)
+      ? Math.round(((column.direction === 'asc' ? max - value : value - min) / (max - min)) * 100)
+      : null;
+}
+
+/**
  * 名簿の表（選手成績・通算成績で共通。一人用のチーム情報 `TeamInfoScreen.jsx` も使う）。
  * ⚠ `onOpen` は選手名を押したとき（渡さなければオンラインの小窓）。`extraMark` は名前の
  *    横に足す印（一人用の大学の学年・入部の種類）。
  * ⚠ `periodLabel` は見出しの脇に出す期間の名前。**合計の出し方は呼ぶ側が決める**
  *    （通算は `careerTotals` が出した値を `seasonStats` に差し替えて渡す）。
+ * ⚠ `league` は自分のビュー（他球団の名簿を渡すときだけ。新しい見た目の成績の札が部の平均を引く）。
  */
 export function CompactRoster({
   view,
@@ -777,7 +801,9 @@ export function CompactRoster({
   volumeOrder = false,
   onOpen,
   extraMark,
+  league,
 }) {
+  const look = useLook();
   const [page, setPage] = useState(0);
   const [category, setCategory] = useState('batting');
   const [groupId, setGroupId] = useState(desktop ? 'overview' : 'basic');
@@ -894,6 +920,11 @@ export function CompactRoster({
     : order.slice(page * size, page * size + size);
   const sortedBy =
     active && (active.column === 'name' ? '選手名' : active.column.label);
+  // 新しい見た目（試作）: 成績の札（リーグ平均比。⚠ 通算・過去の年は平均が違うので今季だけ）・
+  // 並べ替えた列の棒・列のまとまり
+  const baseline = look.on && periodLabel === '今季' ? leagueBaseline(league || view, view.teamName) : null;
+  const bar = look.on && desktop && active ? barScale(active.column, order) : null;
+  const sections = look.on && desktop && group.id === 'overview' ? LOOK_SECTIONS[category] : null;
   return (
     <section
       data-wide={desktop && group.columns.length > 4}
@@ -942,11 +973,17 @@ export function CompactRoster({
       <div className="online-roster-columns">
         {sortButton('name', '選手名')}
         <div className="online-roster-values">
-          {group.columns.map((column) => (
-            <React.Fragment key={column.id}>
-              {sortButton(column, column.label)}
-            </React.Fragment>
-          ))}
+          {group.columns.map((column) =>
+            sections?.[column.id] ? (
+              <span key={column.id} className="online-look-section" data-section={sections[column.id]}>
+                {sortButton(column, column.label)}
+              </span>
+            ) : (
+              <React.Fragment key={column.id}>
+                {sortButton(column, column.label)}
+              </React.Fragment>
+            ),
+          )}
         </div>
       </div>
       <div className="online-roster-rows" ref={rows}>
@@ -998,17 +1035,28 @@ export function CompactRoster({
                     );
                   const text = formatStat(column, value, desktop);
                   const rank = statRank(column, value);
+                  const grade = baseline && statGrade(column, value, player, baseline);
+                  const length = bar && sameColumn(active.column, column) ? bar(value) : null;
+                  // 新しい見た目（試作）: 札は PC の能力の列（数字）と、成績の札の付く列
+                  const chip = look.on && desktop ? rank || grade : null;
                   return (
                     <span
                       key={column.id}
-                      className={`online-stat-${column.format} ${rank ? `online-ability-grade ${getRankColor(rank)}` : ''}`}
+                      className={`online-stat-${column.format} ${rank ? `online-ability-grade ${getRankColor(rank)}` : ''}${grade ? ` online-stat-graded ${getRankColor(grade)}` : ''}${length != null ? ' online-look-bar' : ''}${sections?.[column.id] ? ' online-look-section-start' : ''}${look.on && column.format === 'count' && value === 0 ? ' is-zero' : ''}`}
                       style={
                         !desktop && text.length > 5
                           ? { fontSize: `${60 / text.length}px` }
-                          : undefined
+                          : length != null
+                            ? { '--look-bar': `${length}%` }
+                            : undefined
                       }
-                      title={`${column.label}: ${text}${rank && desktop ? `（${rank}）` : ''}`}
+                      title={`${column.label}: ${text}${rank && desktop ? `（${rank}）` : ''}${grade ? `（リーグ平均と比べて${grade}）` : ''}`}
                     >
+                      {chip && (
+                        <b className={`online-rank-chip ${getRankColor(chip)}`} aria-hidden="true">
+                          <span>{chip}</span>
+                        </b>
+                      )}
                       {text}
                     </span>
                   );

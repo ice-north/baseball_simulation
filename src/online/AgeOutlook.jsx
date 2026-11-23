@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { POS } from './api.js';
 import { AGE_GRID_GROUPS, ageGridRows } from './ageOutlook.js';
+import { PosChip, ToneChip } from './look/Parts.jsx';
 
 // ============================================================
 // 年齢構成と3年後の見込み（自球団）。出す場所: PC の選手成績（自球団を見ているとき。`DesktopView.jsx`）と、
@@ -10,6 +11,8 @@ import { AGE_GRID_GROUPS, ageGridRows } from './ageOutlook.js';
 // ============================================================
 
 const KIND_LABEL = { rising: 'まだ伸びる', peak: 'ピークの近く', decline: '下り坂の見込み' };
+// 新しい見た目（試作）の札の色（伸びる=緑、ピーク=黄、下り坂=赤）
+const KIND_TONE = { rising: 'good', peak: 'warn', decline: 'bad' };
 
 /**
  * 年齢 × 守備位置の図（縦が年齢で上ほど高い、横が投手・捕手・内野・外野）。
@@ -121,11 +124,13 @@ export default function AgeOutlook({ outlook, compact = false }) {
             {outlook.core.map((r) => (
               <tr key={r.id} className={r.kind === 'decline' || r.veteran ? 'is-warn' : ''}>
                 <th>{r.name}</th>
-                <td>{POS[r.position] || '—'}</td>
+                <td>
+                  <PosChip position={r.position} label={POS[r.position] || '—'} />
+                </td>
                 <td>{r.age}歳</td>
                 <td>{r.later}歳</td>
                 <td>
-                  {KIND_LABEL[r.kind]}
+                  <ToneChip tone={KIND_TONE[r.kind]}>{KIND_LABEL[r.kind]}</ToneChip>
                   {r.veteran ? '・引退が近い年齢' : ''}
                 </td>
               </tr>

@@ -40,6 +40,8 @@ const CHECKS = [
   { name: 'contract-scope-check', group: 'quick', slow: 2 },
   { name: 'pool-leak-check', group: 'quick', slow: 2 },
   { name: 'base-state-check', group: 'quick', slow: 1 },
+  // 安打の打席で走者が消えない・三塁打の打者が三塁に残る（自動試合）
+  { name: 'runner-count-check', group: 'quick', slow: 3 },
   { name: 'bunt-check', group: 'quick', slow: 1 },
   { name: 'growth-cap-check', group: 'quick', slow: 1 },
   // 自然成長（表示＝実際・係数1.0で平均+1・衰え始めの年齢・衰えの緩さ）
@@ -86,6 +88,7 @@ const CHECKS = [
   { name: 'online-trade-check', group: 'check', online: true, slow: 120 },
   { name: 'online-convert-check', group: 'check', online: true, slow: 30 },
   { name: 'online-two-way-check', group: 'check', online: true, slow: 15 },
+  { name: 'online-catcher-rotation-check', group: 'check', online: true, slow: 12 },
   { name: 'online-rest-swap-check', group: 'check', online: true, slow: 15 },
   { name: 'online-parity-check', group: 'check', online: true, slow: 75 },
   { name: 'online-fatigue-check', group: 'check', online: true, slow: 130 },
@@ -109,6 +112,17 @@ const CHECKS = [
   // 人どうしの関わり（ひとこと・取引の記録・おるすばん・予告先発・練習試合・得点経過）
   { name: 'online-social-check', group: 'check', online: true, slow: 125 },
   { name: 'progression-check', group: 'full', slow: 38 },
+  // 固定の種で回した結果（一人用の自動試合・オンラインの開幕40回と参加者のビュー）が記録と同じか。
+  // 動きを変えない整理の安全網。狙って結果を変えたら `--update` で書き直す（replay-hashes.json）
+  { name: 'replay-hash-check', group: 'check', online: true, slow: 40 },
+  // 同じものを年度更新をまたいで次の年の最初の試合まで（約2分）
+  {
+    name: 'replay-hash-check-year',
+    group: 'full',
+    online: true,
+    slow: 150,
+    args: [harness('replay-hash-check'), '--year'],
+  },
   // アプリの共通部（mobile/shared）に写した表と計算の期待値が、Web 版と食い違っていないか（どれも0.2秒未満）。
   // ⚠ 写し元（src/）だけを変えたときに気づくため、mobile を触らなくても毎回回す（android.yml は paths で絞っている）
   ...['gen-tables', 'expect-logic', 'expect-social', 'expect-chronicle', 'expect-paper'].map((tool) => ({
@@ -133,8 +147,8 @@ const DIST_UI = [
   { name: 'online-invite-ui-check', slow: 8 }, // check:online:invite-ui
   { name: 'online-edit-ui-check', slow: 10 }, // check:online:edit-ui
   { name: 'online-label-ui-check', slow: 17 }, // check:online:label-ui
-  { name: 'online-replay-ui-check', slow: 38 }, // check:online:replay-ui
-  { name: 'online-mobile-gameplay-ui-check', slow: 49 }, // check:online:mobile-gameplay-ui
+  { name: 'online-replay-ui-check', slow: 21 }, // check:online:replay-ui
+  { name: 'online-mobile-gameplay-ui-check', slow: 33 }, // check:online:mobile-gameplay-ui
   { name: 'online-paper-ui-check', slow: 12 }, // check:online:paper-ui
   { name: 'online-look-ui-check', slow: 20 }, // check:online:look-ui
 ];

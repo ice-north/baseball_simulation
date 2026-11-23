@@ -136,6 +136,7 @@ private val INBOX_TITLES = mapOf(
     "challengeWithdrawn" to "練習試合の申し込み",
     "starterAvoided" to "予告先発を回避しました",
     "awayStarted" to "おるすばんになりました",
+    "rotationFilled" to "先発ローテを補いました",
 )
 
 /**

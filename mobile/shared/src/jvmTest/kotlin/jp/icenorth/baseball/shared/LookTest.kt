@@ -292,4 +292,34 @@ class LookTest {
             same(want, got, "場面$i ${c.at("patch")}")
         }
     }
+
+    @Test
+    fun gradesMatchWeb() {
+        val g = expected["grades"].obj()!!
+        val players = g.at("players").list().map { it.obj()!! }
+        val views = g.at("views").list()
+        assertEquals(4, views.size)
+        for ((i, v) in views.withIndex()) {
+            val baseline = leagueBaseline(v.at("view").obj())
+            val want = v.at("baseline")
+            if (want == null || want is JsonNull) assertEquals(null, baseline, "平均$i")
+            else {
+                assertTrue(baseline != null, "平均$i が出ない")
+                val got = buildJsonObject {
+                    put("average", baseline.average); put("era", baseline.era); put("obp", baseline.obp)
+                    put("slg", baseline.slg); put("ops", baseline.ops); put("games", baseline.games)
+                }
+                same(want, got, "平均$i")
+            }
+            val cells = v.at("cells").list()
+            assertTrue(cells.size > 100)
+            for (c in cells) {
+                val id = c.at("id").str()!!
+                val value = c.at("value").num()
+                val player = players[c.at("player").int()!!]
+                val grade = statGrade(id, value, player, baseline)
+                assertEquals(c.at("grade").str(), grade?.toString(), "札$i $id=$value 選手${c.at("player")}")
+            }
+        }
+    }
 }
