@@ -1389,7 +1389,7 @@ CLAUDE.md の各所で潰してきたのと同じ型の誤り:
 - `src/components/GameFlowScreens.jsx` (~530行) - ゲームフロー画面群
 - `src/components/UniversityScoutScreen.jsx` (~740行) - 大学スポーツ推薦スカウト画面
 - `src/components/GameUIComponents.jsx` (~1030行) - Sidebar・RenderBases・AccordionSection・TeamPitcherPanel・TeamMemberPanel・BenchList
-- `src/components/PlayerEditColumn.jsx` (~280行) - デバッグ用エディット画面の1チーム分の列（左右で共有）
+- （PlayerEditColumn.jsx はデバッグ用エディット画面の1チーム分の列だった。開く道が無かったので 2026-11-23 に App.jsx の選手編集の窓ごと除去。歴史の記録）
 - `src/components/` - 各画面コンポーネント（Camp, Tryout, OffSeason, Draft等）
 - `src/season/` - シーズン管理（スケジュール生成, 日付進行, トライアウト, 年間進行）
 - `src/season/universityPool.js` (~1770行) - 大学プール（高卒世代生成・進路振分・ランク別成長・4年間成長・卒業）
