@@ -635,10 +635,24 @@ export const getFatigueGrowthPenalty = (fatigue) => {
  * ⚠ 投手かどうかの判定は「スタミナ100以上なら投手」という当て推量を含む
  *    （野手も `pitching.stamina` を持つため）。投手から野手へコンバートした
  *    選手はスタミナが高いままなので、印を付けないと**登録を変えても投げ続ける**。
- * ⚠ 判定は3か所にある（`isPitcherPlayer`・`autoSimulation` の中の写し・
- *    `generatePitchingRotation` の絞り込み）。この印は**その全部で見ること**。
+ * ⚠ 投手かどうかの判定は下の `isPitcherPlayer` の1か所だけ（試合と `generatePitchingRotation`
+ *    の両方がこれを使う）。写しを置くと、この印を見落とした方だけ投げ続ける。
  */
 export const registeredAsFielder = (player) => player?.primaryRole === 'fielder';
+
+/** 選手が投手かどうか（position だけでなく能力値も見る） */
+export const isPitcherPlayer = (player) => {
+  // ⚠ **コンバートで野手にした選手は投手にしない**。下の「スタミナ100以上」は
+  //    当て推量なので、投手から野手へ移した選手が投げ続けてしまう
+  if (registeredAsFielder(player)) return false;
+  // 明示的にpitcherと設定されている場合
+  if (player.position === 'pitcher') return true;
+  // 投手としての能力を持っている（スタミナ100以上は投手専用）
+  if (player.pitching?.stamina >= 100) return true;
+  // primaryRoleが設定されている場合はそれを優先
+  if (player.primaryRole === 'pitcher') return true;
+  return false;
+};
 
 /**
  * 疲労の重さ → 画面で名前に付ける色の段。

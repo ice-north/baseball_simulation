@@ -1,6 +1,7 @@
 import { humanTeamNames } from './teamControl.js';
 import { TEAMS_DATA, LEAGUE_SETTINGS } from '../teams-data.js';
-import { autoStarterRole, registeredAsFielder } from '../utils/constants.js';
+import { autoStarterRole, isPitcherPlayer } from '../utils/constants.js';
+import { lineupConditionMod, batterFatiguePenalty } from './condition.js';
 
 // ポジション別の攻守バランス重み
 const POSITION_WEIGHTS = {
@@ -47,20 +48,13 @@ const POSITION_WEIGHTS = {
 //    `generateAILineup`）は疲労と調子で選手を入れ替えるのに、一人用の「自動: 標準/
 //    打撃重視/守備重視」はここを通り、`fatigue` も `condition` も読んでいなかった。
 //    疲れた主力がいつまでもスタメンに残り、休ませる導線が無かった。
-// ⚠ **式は CPU と同じにすること**（`getEffectiveBatting`・`fatigueMalus`）。
+// ⚠ **式は CPU と同じにすること**（`getEffectiveBatting`・`fatigueMalus`。補正の式は `condition.js` の1か所）。
 //    片方だけ直すと、自軍と相手で「疲れたら誰を使うか」の判断が食い違う。
 // ============================================================
-/** 調子の補正（絶好調+5 … 絶不調-5）。CPU と同じ */
-const conditionModOf = (p) => ({ 4: 5, 3: 2, 2: 0, 1: -2, 0: -5 })[p?.condition ?? 2] || 0;
-/** 疲労による打撃の目減り（疲労²/1200 → 41で1・61で3・81で5）。CPU と同じ */
-const fatiguePenaltyOf = (p) => {
-  const f = p?.fatigue || 0;
-  return f > 0 ? Math.round((f * f) / 1200) : 0;
-};
-/** 疲労と調子を織り込んだ打撃（この関数を通してから点を付ける） */
+/** 疲労と調子を織り込んだ打撃（この関数を通してから点を付ける）。補正は CPU と同じ（`condition.js`） */
 const effBatting = (p) => {
   const b = p?.batting || {};
-  const d = conditionModOf(p) - fatiguePenaltyOf(p);
+  const d = lineupConditionMod(p?.condition) - batterFatiguePenalty(p?.fatigue);
   return {
     meet: (b.meet || 0) + d,
     power: (b.power || 0) + d,
@@ -261,6 +255,10 @@ function assignBattingOrder(lineupPlayers, mode = 'standard') {
   const players = [...lineupPlayers];
   const order = [];
 
+  // 点の高い順に並べる比較（`score` は選手を受け取る）。`byBatting` は疲労と調子を織り込んだ打撃に点を付ける
+  const byScore = (score) => (a, b) => score(b.player) - score(a.player);
+  const byBatting = (score) => byScore(p => score(effBatting(p)));
+
   const pick = (sortFn) => {
     if (players.length === 0) return null;
     players.sort(sortFn);
@@ -273,38 +271,18 @@ function assignBattingOrder(lineupPlayers, mode = 'standard') {
   if (mode === 'offense') {
     // 打撃重視: パワー・ミート最優先の打順
     // 1番: 出塁+走力
-    pick((a, b) => {
-      const as = effBatting(a.player).meet * 1.0 + effBatting(a.player).eye * 1.2 + effBatting(a.player).speed * 0.8;
-      const bs = effBatting(b.player).meet * 1.0 + effBatting(b.player).eye * 1.2 + effBatting(b.player).speed * 0.8;
-      return bs - as;
-    });
+    pick(byBatting(e => e.meet * 1.0 + e.eye * 1.2 + e.speed * 0.8));
     // 2番: 強打者（最強バランス）
-    pick((a, b) => {
-      const as = effBatting(a.player).meet * 1.1 + effBatting(a.player).power * 1.0 + effBatting(a.player).eye * 0.6;
-      const bs = effBatting(b.player).meet * 1.1 + effBatting(b.player).power * 1.0 + effBatting(b.player).eye * 0.6;
-      return bs - as;
-    });
+    pick(byBatting(e => e.meet * 1.1 + e.power * 1.0 + e.eye * 0.6));
     // 3番: パワー+ミート
-    pick((a, b) => {
-      const as = effBatting(a.player).power * 1.2 + effBatting(a.player).meet * 1.0;
-      const bs = effBatting(b.player).power * 1.2 + effBatting(b.player).meet * 1.0;
-      return bs - as;
-    });
+    pick(byBatting(e => e.power * 1.2 + e.meet * 1.0));
     // 4番: 最強パワー
-    pick((a, b) => {
-      const as = effBatting(a.player).power * 1.5 + effBatting(a.player).meet * 0.5;
-      const bs = effBatting(b.player).power * 1.5 + effBatting(b.player).meet * 0.5;
-      return bs - as;
-    });
+    pick(byBatting(e => e.power * 1.5 + e.meet * 0.5));
     // 5番: パワー2番手
-    pick((a, b) => {
-      const as = effBatting(a.player).power * 1.3 + effBatting(a.player).meet * 0.7;
-      const bs = effBatting(b.player).power * 1.3 + effBatting(b.player).meet * 0.7;
-      return bs - as;
-    });
+    pick(byBatting(e => e.power * 1.3 + e.meet * 0.7));
     // 6-9: 残りを打力順
     while (players.length > 0) {
-      pick((a, b) => calcOffenseScore(b.player) - calcOffenseScore(a.player));
+      pick(byScore(calcOffenseScore));
     }
   } else if (mode === 'defense') {
     // 守備重視: 守備力の低い選手を上位打線に（打席多く回す）、守備力高い選手は下位で守備集中
@@ -327,27 +305,15 @@ function assignBattingOrder(lineupPlayers, mode = 'standard') {
     const remaining = withScores.filter(p => p !== leadoff);
 
     // 2番: つなぎ（ミート+選球眼）
-    remaining.sort((a, b) => {
-      const as = effBatting(a.player).meet * 1.2 + effBatting(a.player).eye * 0.8 + effBatting(a.player).speed * 0.5;
-      const bs = effBatting(b.player).meet * 1.2 + effBatting(b.player).eye * 0.8 + effBatting(b.player).speed * 0.5;
-      return bs - as;
-    });
+    remaining.sort(byBatting(e => e.meet * 1.2 + e.eye * 0.8 + e.speed * 0.5));
     order.push(remaining.shift());
 
     // 3番: バランス
-    remaining.sort((a, b) => {
-      const as = effBatting(a.player).meet * 1.0 + effBatting(a.player).power * 1.0 + effBatting(a.player).eye * 0.5;
-      const bs = effBatting(b.player).meet * 1.0 + effBatting(b.player).power * 1.0 + effBatting(b.player).eye * 0.5;
-      return bs - as;
-    });
+    remaining.sort(byBatting(e => e.meet * 1.0 + e.power * 1.0 + e.eye * 0.5));
     order.push(remaining.shift());
 
     // 4番: パワー最優先
-    remaining.sort((a, b) => {
-      const as = effBatting(a.player).power * 1.5 + effBatting(a.player).meet * 0.5;
-      const bs = effBatting(b.player).power * 1.5 + effBatting(b.player).meet * 0.5;
-      return bs - as;
-    });
+    remaining.sort(byBatting(e => e.power * 1.5 + e.meet * 0.5));
     order.push(remaining.shift());
 
     // 5-9: 残りを打力順
@@ -357,49 +323,21 @@ function assignBattingOrder(lineupPlayers, mode = 'standard') {
   } else {
     // 標準: 従来のセオリー打順
     // 1番: 出塁率+走力（俊足巧打）
-    pick((a, b) => {
-      const as = effBatting(a.player).meet * 0.8 + effBatting(a.player).eye * 1.0 + effBatting(a.player).speed * 1.2;
-      const bs = effBatting(b.player).meet * 0.8 + effBatting(b.player).eye * 1.0 + effBatting(b.player).speed * 1.2;
-      return bs - as;
-    });
+    pick(byBatting(e => e.meet * 0.8 + e.eye * 1.0 + e.speed * 1.2));
     // 2番: ミート+選球眼（つなぎ役）
-    pick((a, b) => {
-      const as = effBatting(a.player).meet * 1.2 + effBatting(a.player).eye * 0.8 + effBatting(a.player).power * 0.3 + effBatting(a.player).speed * 0.5;
-      const bs = effBatting(b.player).meet * 1.2 + effBatting(b.player).eye * 0.8 + effBatting(b.player).power * 0.3 + effBatting(b.player).speed * 0.5;
-      return bs - as;
-    });
+    pick(byBatting(e => e.meet * 1.2 + e.eye * 0.8 + e.power * 0.3 + e.speed * 0.5));
     // 3番: 最強打者（ミート+パワー）
-    pick((a, b) => {
-      const as = effBatting(a.player).meet * 1.0 + effBatting(a.player).power * 1.2 + effBatting(a.player).eye * 0.5;
-      const bs = effBatting(b.player).meet * 1.0 + effBatting(b.player).power * 1.2 + effBatting(b.player).eye * 0.5;
-      return bs - as;
-    });
+    pick(byBatting(e => e.meet * 1.0 + e.power * 1.2 + e.eye * 0.5));
     // 4番: 最強パワーヒッター
-    pick((a, b) => {
-      const as = effBatting(a.player).power * 1.5 + effBatting(a.player).meet * 0.7 + effBatting(a.player).eye * 0.3;
-      const bs = effBatting(b.player).power * 1.5 + effBatting(b.player).meet * 0.7 + effBatting(b.player).eye * 0.3;
-      return bs - as;
-    });
+    pick(byBatting(e => e.power * 1.5 + e.meet * 0.7 + e.eye * 0.3));
     // 5番: パワー2番手
-    pick((a, b) => {
-      const as = effBatting(a.player).power * 1.3 + effBatting(a.player).meet * 0.8 + effBatting(a.player).eye * 0.4;
-      const bs = effBatting(b.player).power * 1.3 + effBatting(b.player).meet * 0.8 + effBatting(b.player).eye * 0.4;
-      return bs - as;
-    });
+    pick(byBatting(e => e.power * 1.3 + e.meet * 0.8 + e.eye * 0.4));
     // 6番: バランス型
-    pick((a, b) => {
-      const as = effBatting(a.player).meet + effBatting(a.player).power + effBatting(a.player).eye * 0.5;
-      const bs = effBatting(b.player).meet + effBatting(b.player).power + effBatting(b.player).eye * 0.5;
-      return bs - as;
-    });
+    pick(byBatting(e => e.meet + e.power + e.eye * 0.5));
     // 7番: 残り打力順
-    pick((a, b) => calcOffenseScore(b.player) - calcOffenseScore(a.player));
+    pick(byScore(calcOffenseScore));
     // 8番: 残り打力順（非DH時は8番に弱い打者を置き9番投手の前で走者を出す）
-    pick((a, b) => {
-      const as = effBatting(a.player).speed * 0.5 + effBatting(a.player).meet * 0.5;
-      const bs = effBatting(b.player).speed * 0.5 + effBatting(b.player).meet * 0.5;
-      return bs - as;
-    });
+    pick(byBatting(e => e.speed * 0.5 + e.meet * 0.5));
     // 9番: 残り
     if (players.length > 0) {
       order.push(players[0]);
@@ -597,16 +535,11 @@ export const generatePitchingRotation = (teamName, given = null) => {
     return;
   }
 
-  // 投手判定は isPitcherPlayer と揃える。野手も pitching.stamina を持つ（40〜93程度）ため
+  // 投手判定は試合と同じ `isPitcherPlayer`。野手も pitching.stamina を持つ（40〜93程度）ため
   // 「stamina > 0」で拾うと全野手が投手集合に混入し、余った野手が敗戦処理ロールに
   // 割り当てられてしまう（大学モードのロスター再登録で顕在化していた不具合）。
-  // ⚠ **コンバートで野手にした選手は入れない**（`registeredAsFielder`）。
-  //    下の「スタミナ100以上」は当て推量なので、投手から野手へ移した選手が
-  //    登板順に残り続けてしまう
-  const pitchers = team.players.filter(p =>
-    !registeredAsFielder(p) &&
-    (p.position === 'pitcher' || p.pitching?.stamina >= 100 || p.primaryRole === 'pitcher')
-  );
+  // コンバートで野手にした選手（`registeredAsFielder`）もそこで外れる
+  const pitchers = team.players.filter(isPitcherPlayer);
 
   const starterScore = (p) =>
     (p.pitching?.stamina || 0) * 0.45 +

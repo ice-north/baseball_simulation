@@ -67,6 +67,7 @@ const REMOVED_ON_PURPOSE = {
   attemptUniversityRecruit: '大学推薦がゲージ制へ移行して死んだまま残っていた関数。除去（歴史の記録）',
   getScoutAccuracy: '「staffData が使う」という残す理由が事実誤認だった。除去（歴史の記録）',
   getScoutAccuracyGain: '同上。staffData 側の似た名前の関数で、こちらも未使用だった',
+  POSITION_PLAYER_RECOVERY_BASE: '参照されていなかった野手の回復の定数（野手は体力比例の式）。監査13で削除（歴史の記録）',
   battedBallStats: '描画されない打球統計。`lastGameResults` と同じ defect で除去（歴史の記録）',
   battedBallAreaStats: '同上',
   setBatterStats:  '描画されない state（書き込み52・読み出し0）。3度目の同じ defect で除去（歴史の記録）',
