@@ -140,6 +140,28 @@ try {
   const saved = await service.command('a', nextA, validCommand);
   // 編成の保存は記録の索引を変えない（保存側は作り直しを省く: archiveUnchanged）
   assert.deepEqual(buildArchiveIndex(await store.read()), archiveBefore);
+  // ⚠ ログイン・ログアウトも記録の索引を変えないので、保存側に作り直しを省かせる（archiveUnchanged）。
+  //    付いていないと、本番はログインのたびに全試合をなめて索引を作り直していた
+  {
+    const outcomes = [];
+    const original = store.transaction.bind(store);
+    store.transaction = (fn, options) =>
+      original(async (bundle) => {
+        const outcome = await fn(bundle);
+        outcomes.push(outcome);
+        return outcome;
+      }, options);
+    try {
+      const extra = (await service.login('b', 'app')).sessionId;
+      await service.logout('b', extra);
+    } finally {
+      store.transaction = original;
+    }
+    assert.equal(outcomes.length, 2, '前提: ログインとログアウトで1回ずつ書く');
+    for (const outcome of outcomes)
+      assert.equal(outcome.archiveUnchanged, true, 'ログイン・ログアウトで記録の索引を作り直させている');
+    assert.deepEqual(buildArchiveIndex(await store.read()), archiveBefore, 'ログイン・ログアウトで記録の索引が変わった');
+  }
   // 返事に載るビューは、読み直したビューと同じ（画面は読み直しを省いてこれを使う）
   assert.deepEqual(saved.view, await service.view('a', nextA));
   // 二重送信（控えから返す）ではビューを載せない。控えに画面を溜めない

@@ -629,6 +629,30 @@ assert.equal(
     const stale = await viewer.view('m0', 's0', fresh.viewGeneration);
     assert.equal(stale.unchanged, undefined, '保存の版が古いのに「変わっていない」と返す');
     assert.equal(stale.versionMismatch, true, '世代の近道で版の門番を飛ばしている');
+    // ⚠ 計算の版（engineVersion）だけが上がったときも同じ（形の版だけを見ていて、古いビューが出続けた）
+    row = {
+      ...row,
+      views: {
+        ...row.views,
+        m0: { ...others.m0, engineVersion: `${ONLINE_ENGINE_VERSION}-old` },
+        _meta: { ...liveMeta, engineVersion: `${ONLINE_ENGINE_VERSION}-old` },
+      },
+    };
+    const oldEngine = await viewer.view('m0', 's0', fresh.viewGeneration);
+    assert.equal(oldEngine.unchanged, undefined, '計算の版が古いのに「変わっていない」と返す');
+    assert.equal(oldEngine.versionMismatch, true, '計算の版が古いビューをそのまま出している');
+    assert.equal((await viewer.view('m0', 's0')).versionMismatch, true, '計算の版が古い保存済みのビューを出している');
+    // 今の計算の版の印なら近道する
+    row = {
+      ...row,
+      views: {
+        ...row.views,
+        m0: { ...others.m0, engineVersion: ONLINE_ENGINE_VERSION },
+        _meta: { ...liveMeta, engineVersion: ONLINE_ENGINE_VERSION },
+      },
+    };
+    assert.equal((await viewer.view('m0', 's0', fresh.viewGeneration)).unchanged, true, '今の計算の版なのに近道しない');
+    assert.equal((await viewer.view('m0', 's0')).teamName, 'T0');
     row = { ...row, views: { ...row.views, m0: others.m0, _meta: liveMeta } };
   }
   // 絞り込みが通らない環境では全列を読んで動く

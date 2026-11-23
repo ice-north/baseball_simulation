@@ -8,6 +8,7 @@ import {
   nextProgressionAt,
   assertLeagueVersion,
   ONLINE_SCHEMA,
+  ONLINE_ENGINE_VERSION,
   TURN_MINUTES,
 } from '../src/online/shared.js';
 
@@ -85,6 +86,13 @@ const unpackBackup = (backup) =>
     : clone(backup?.league);
 // エンジンはグローバル世界を使うため、同一Nodeプロセス内でも全storeをまたいで直列化する。
 let engineQueue = Promise.resolve();
+/**
+ * 保存済みのビュー・管理行の計算の版が、いまのサーバーと同じか。
+ * ⚠ 印の無いもの（印を足す前に保存したビュー・リーグを作る前の管理行）は同じと見る。
+ *    違うと見ると、更新した直後に全員の画面が「版が違う」になり、次の公開まで戻らない
+ */
+const sameEngine = (version) => version == null || version === ONLINE_ENGINE_VERSION;
+
 /** この端末のセッションが生きているか（同時に使えるのはブラウザ・アプリそれぞれ1台） */
 function assertLiveSession(bundle, userId, sessionId) {
   requireOnline(
@@ -129,7 +137,14 @@ export class LeagueService {
       // ⚠ 保存の版が今のサーバーと違うときは近道しない（下の版の門番を通す）。
       //    更新でサーバーの版が上がっても世代は変わらず、開いていた画面に
       //    古いビューが残ったまま操作だけ弾かれていた
-      if (current.generation === since && current.schema === ONLINE_SCHEMA)
+      // ⚠ **計算の版（`engineVersion`）も見る**。形（schema）が同じで計算だけ上がったときも同じ
+      //    ことが起きていた（`isCurrent` は両方を見るので、命令だけ弾かれる）。
+      //    印の無い保存（リーグを作る前）は形の版だけで見る（`sameEngine`）
+      if (
+        current.generation === since &&
+        current.schema === ONLINE_SCHEMA &&
+        sameEngine(current.engineVersion)
+      )
         return { unchanged: true, viewGeneration: since, writable: current.writable };
     }
     const view = this.store.readView
@@ -147,7 +162,11 @@ export class LeagueService {
       !view.setupRequired &&
       !view.joinRequired &&
       !view.versionMismatch &&
-      view.schema !== ONLINE_SCHEMA
+      (view.schema !== ONLINE_SCHEMA ||
+        // ⚠ 計算の版も見る（形が同じで計算だけ上がったとき、古いビューが出続けていた）。
+        //    この印の無いビューは印を足す前に保存したもの（形の版だけで見る。`sameEngine`）。
+        //    次の公開で全員のビューが作り直されて印が付く
+        !sameEngine(view.engineVersion))
     )
       return {
         versionMismatch: true,
@@ -192,7 +211,10 @@ export class LeagueService {
         touchPresence(bundle.league, userId, this.clock()) === 'returned'
       )
         bundle.league.revision++;
-      return { value: { sessionId } };
+      // ⚠ **記録の索引は変わらない**（`archiveUnchanged`）。書くのはセッションと最後に来た時刻・
+      //    おるすばんを解いたときの編成だけで、選手・試合の索引には載らない（球団の索引は保存側が
+      //    いつも作り直す）。付けないと、ログインのたびに保存側が全試合をなめて索引を作り直していた
+      return { value: { sessionId }, archiveUnchanged: true };
     });
   }
   /**
@@ -270,7 +292,8 @@ export class LeagueService {
       const rest = withLogout(bundle.sessions[userId], sessionId);
       if (rest) bundle.sessions[userId] = rest;
       else delete bundle.sessions[userId];
-      return { value: { ok: true } };
+      // ⚠ セッションを消すだけで、記録の索引は変わらない（`login` と同じ）
+      return { value: { ok: true }, archiveUnchanged: true };
     });
   }
   /**

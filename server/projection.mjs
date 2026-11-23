@@ -14,6 +14,7 @@ import { expectedNaturalGrowth, teamRankMult } from '../src/season/growthSystem.
 import {
   PHASE_LABELS,
   ONLINE_SCHEMA,
+  ONLINE_ENGINE_VERSION,
   CAMP_ROUNDS,
   phaseDeadlineAt,
   requireOnline,
@@ -538,6 +539,8 @@ export function projectLeague(bundle, userId, sessionId, adminId) {
     //    読まないので `assertLeagueVersion` が一度も走らない。実際、
     //    固定4球団の頃のリーグが2部制のコードで**そのまま表示された**。
     schema: ONLINE_SCHEMA,
+    // ⚠ 計算の版も押す（形が同じで計算だけ上がったときに、保存済みのビューを止めるため）
+    engineVersion: ONLINE_ENGINE_VERSION,
     revision: l.revision,
     status: l.status,
     error: l.error,
