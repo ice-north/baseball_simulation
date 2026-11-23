@@ -799,7 +799,8 @@ export function executeSubTraining(player, subType, options = {}, staffBonus = n
           const baseRate = 0.22;
           // ⚠ フォーム適性を足した**後**に器用さを掛ける。先に掛けると
           //    上限 0.32 のクランプで器用さが消える
-          const successRate = (formAff ? Math.min(0.40, baseRate + formAff.affinity) : baseRate)
+          // スリークォーターは適性球が無い代わりに、どの球種も少し覚えやすい（`newPitchLearnBonus`）
+          const successRate = Math.min(0.40, baseRate + newPitchLearnBonus(playerForm, newType))
             * dexterityMult(player, 0.8);
           if (Math.random() < successRate) {
             const level = 20 + Math.floor(Math.random() * 20);
@@ -1086,6 +1087,23 @@ function getFormPitchAffinity(form, pitchType) {
   return FORM_PITCH_AFFINITY[form]?.[pitchType] || null;
 }
 
+/**
+ * 新球種の**覚えやすさ**の加算（キャンプだけ。試合の効き目には関わらない）。
+ * 適性球ならその `affinity`。適性球の無い「すべて平均」のフォーム（スリークォーター）は、
+ * どの球種でも `ALL_ROUND_LEARN_BONUS` だけ覚えやすい。
+ * ⚠ いしだ 2026-11-23「おねがいします」（案A）。相性の表を試合の表 1 つにしたら、
+ *    スリークォーターは適性球が無くなり、新球種の取得が 1クール約30%→約22% に落ちた。
+ *    試合の表に適性球を足すと他の球が ×0.88 に弱くなる（標準のフォームなので影響が大きい）ので、
+ *    試合はそのまま「すべて平均」とし、キャンプの覚えやすさだけ戻す。
+ *    +0.08 は、他のフォームの実測（1クール約30〜31%・4クールで約75%）にそろうように選んだ
+ */
+const ALL_ROUND_LEARN_BONUS = { threeQuarter: 0.08 };
+function newPitchLearnBonus(form, pitchType) {
+  const aff = getFormPitchAffinity(form, pitchType);
+  if (aff) return aff.affinity;
+  return FORM_PITCH_SYNERGY[form]?.length === 0 ? (ALL_ROUND_LEARN_BONUS[form] || 0) : 0;
+}
+
 // 速球系変化球・緩急系変化球の分類
 const FAST_PITCH_TYPES = ['slider', 'cutter', 'sinker', 'twoSeam', 'shoot'];
 const SLOW_PITCH_TYPES = ['curve', 'changeup', 'fork', 'splitter', 'palm', 'knuckle'];
@@ -1156,7 +1174,7 @@ export function executeCampTraining(player, trainingType, newPitchType, staffBon
     if (targetType && !existingTypes.includes(targetType)) {
       // フォーム適性ボーナス（適性球種は失敗率が下がる）
       const formAff = getFormPitchAffinity(updatedPlayer.pitching?.form, targetType);
-      const formBonus = formAff ? formAff.affinity : 0;
+      const formBonus = newPitchLearnBonus(updatedPlayer.pitching?.form, targetType);
       // 第2適性（緩急補完）ボーナス
       const hasSecondAffinity = updatedPlayer.pitching?.secondAffinity === targetType;
       const affinityBonus = formBonus + (hasSecondAffinity ? 0.08 : 0);
