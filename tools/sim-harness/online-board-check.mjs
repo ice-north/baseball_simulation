@@ -63,11 +63,16 @@ try {
       });
     }
   }
-  for (let i = 0; i < 14; i += 1) {
+  // ⚠ 14回進めたうえで、直近の自球団の試合に本塁打が出るまで最大10回足す（「何号」の確かめの前提）。
+  //    固定の回数だと、試合の式を変えるたびに直近5試合が本塁打0になって落ちた（三塁打の直しのとき）
+  let view;
+  for (let i = 0; i < 24; i += 1) {
     await send('admin', admin, 'step');
     now = new Date(Date.parse(now) + 3600000).toISOString();
+    if (i < 13) continue;
+    view = await service.view('admin', admin);
+    if ((view.recentGames || []).some((g) => g.homeruns?.length)) break;
   }
-  const view = await service.view('admin', admin);
 
   // --- 2部制の順位表に必要なもの -------------------------------------
   // ⚠ 分け方そのものは画面側（`LeaguePanels` の `Standings`）が持つ。
