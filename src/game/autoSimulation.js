@@ -501,6 +501,11 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false, observer = 
 
   const homeTeamData = cloneTeamForSim(TEAMS_DATA[homeTeamName]);
   const awayTeamData = cloneTeamForSim(TEAMS_DATA[awayTeamName]);
+  // 登録が捕手の選手。⚠ 打順を当てる・代打・守備固めで position を書き換えるので、その前に控える
+  //    （`restoreRealCatcher`。捕手に出した代打がそのままマスクをかぶっていた）
+  const registeredCatchers = new Set(
+    [...homeTeamData.players, ...awayTeamData.players].filter(p => p.position === 'catcher').map(p => p.id),
+  );
 
 
   // スタメン設定を適用（なければAI生成）
@@ -530,6 +535,11 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false, observer = 
 
   applyLineupSettings(homeTeamData, homeTeamName);
   applyLineupSettings(awayTeamData, awayTeamName);
+  // 先発で捕手に就いた選手（人やCPUが打順で決めた形。登録が捕手でなくても試合中に替えない）
+  const startingCatchers = new Set(
+    [...homeTeamData.players, ...awayTeamData.players]
+      .filter(p => p.position === 'catcher' && p.battingOrder > 0 && !p._isDH).map(p => p.id),
+  );
 
   const useDH = LEAGUE_SETTINGS.useDH;
   const pitcherBattingOrder = useDH ? 0 : 9;
@@ -1437,9 +1447,16 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false, observer = 
   // 代打判定（AI監督）- 状況判断・理由付き版
   const considerPinchHitter = (offenseTeam, batter) => {
     if (offenseTeam.onlineTactics?.pinchHit === 'never' || gameState.inning < (offenseTeam.onlineTactics?.pinchHitFrom || 0)) return batter;
-    const benchFielders = offenseTeam.players.filter(p =>
+    // ⚠ 控えに残った**最後の捕手**は、捕手以外の打順の代打に使わない（実際の監督と同じく残しておく）。
+    //    使うと、あとで捕手に代打を出したときに替わりの捕手が居らず、野手がマスクをかぶっていた
+    const benchAll = offenseTeam.players.filter(p =>
       p.isActive !== false && p.battingOrder === 0 && !isPitcherPlayer(p) && !gameState.removedIds.has(p.id)
     );
+    const benchCatchers = benchAll.filter(p => registeredCatchers.has(p.id));
+    // 同じ理由で、控えに捕手が残っていなければ捕手には代打を出さない
+    if (batter.position === 'catcher' && !batter._isDH && registeredCatchers.has(batter.id) && !benchCatchers.length) return batter;
+    const keepCatcher = batter.position !== 'catcher' && benchCatchers.length === 1 ? benchCatchers[0].id : null;
+    const benchFielders = benchAll.filter(p => p.id !== keepCatcher);
     if (benchFielders.length === 0) return batter;
     const offenseKey = offenseTeam === gameState.homeTeam ? 'home' : 'away';
 
@@ -1548,8 +1565,40 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false, observer = 
     return batter;
   };
 
+  // 試合の途中から捕手でない選手がマスクをかぶっていたら、控えの捕手に替える。
+  // ⚠ 捕手に代打を出すと、代打の野手が捕手の守備位置をそのまま継いでいた（`executePinchHit` は
+  //    退いた選手の守備位置を写す）。リード・捕手の守備がその野手の値で回り、捕手別の記録にも
+  //    野手が載っていた（1年で約280打席）。実際の野球と同じく、次の守備で控えの捕手が入る。
+  //    控えの捕手が居なければそのまま（守る人が居ないので野手がかぶる）。
+  //    ⚠ 「守備固めをしない」設定でも替える（采配の好みではなく、守備位置を埋め直すだけ）
+  const restoreRealCatcher = (team) => {
+    const masked = team.players.find(p => p.position === 'catcher' && p.battingOrder > 0 && !p._isDH);
+    if (!masked || registeredCatchers.has(masked.id) || startingCatchers.has(masked.id)) return;
+    const sub = team.players.find(p =>
+      registeredCatchers.has(p.id) && p.battingOrder === 0 && p.isActive !== false
+      && !gameState.removedIds.has(p.id) && !isPitcherPlayer(p));
+    if (!sub) {
+      // 控えの捕手を先に代打で使い、その人が別の守備位置に就いている（捕手→外野などの
+      // 写しで）ときは、守備位置だけを入れ替える
+      const fielding = team.players.find(p =>
+        registeredCatchers.has(p.id) && p.battingOrder > 0 && !p._isDH && p.position !== 'pitcher'
+        && p.position !== 'catcher');
+      if (fielding) {
+        masked.position = fielding.position;
+        fielding.position = 'catcher';
+      }
+      return;
+    }
+    sub.battingOrder = masked.battingOrder;
+    sub.position = 'catcher';
+    delete sub._isDH;
+    masked.battingOrder = 0;
+    gameState.removedIds.add(masked.id);
+  };
+
   // 守備固め判定（AI監督）- イニング終了時に呼ばれる
   const considerDefensiveReplacement = (defenseTeam) => {
+    restoreRealCatcher(defenseTeam);
     if (defenseTeam.onlineTactics?.defensiveSub === 'never' || gameState.inning < (defenseTeam.onlineTactics?.defenseFrom || 0)) return;
     // ⚠ **その球団の点差で見ること**。半イニングの終わりに両球団へ呼ばれるので、
     //    以前の「次に守る側（isTopInning）の点差」では負けている球団まで
@@ -1570,9 +1619,11 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false, observer = 
         if (starter.battingOrder > 0 && starter.position !== 'pitcher' && !starter._isDH) {
           const starterDef = starter.fielding?.defense || 50;
           if (starterDef < 60) {
+            // ⚠ 捕手の守備固めは捕手で（野手にマスクをかぶせない）
             const replacement = benchFielders.find(p =>
               p.battingOrder === 0 &&
-              (p.fielding?.defense || 0) > starterDef + 8
+              (p.fielding?.defense || 0) > starterDef + 8 &&
+              (starter.position !== 'catcher' || registeredCatchers.has(p.id))
             );
             if (replacement) {
               replacement.battingOrder = starter.battingOrder;
@@ -1604,7 +1655,9 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false, observer = 
         }, activeBench[0]);
 
         // 打撃が最も弱いスタメンと交代（投手・DHは守備固め対象外）
-        const starters = defenseTeam.players.filter(p => p.battingOrder > 0 && p.position !== 'pitcher' && !p._isDH);
+        // ⚠ 控えが捕手でなければ、捕手とは替えない（野手にマスクをかぶせない）
+        const starters = defenseTeam.players.filter(p => p.battingOrder > 0 && p.position !== 'pitcher' && !p._isDH
+          && (p.position !== 'catcher' || registeredCatchers.has(leastUsed.id)));
         if (starters.length > 0) {
           const weakest = starters.reduce((w, p) => {
             const wBat = (w.batting?.meet || 0) + (w.batting?.power || 0);
