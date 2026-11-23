@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { PitchingHeaderRow, PitchingCells, pitchingColumnCount } from '../../online/PitchingRows.jsx';
+import { PitchingHeaderRow, PitchingCells, pitchingColumnCount, useRoleMenuDismiss } from '../../online/PitchingRows.jsx';
 import {
   MAX_STARTERS,
   STARTER_ORDER,
@@ -116,25 +116,7 @@ function PitcherCells({ player, starter, onOpen }) {
 /** 役割の選び直し。先発の型・救援の役割・役割なしを並べて出す（押した札の下に出る） */
 function RoleMenu({ menu, state, player, close, choose, remove }) {
   const ref = useRef(null);
-  useEffect(() => {
-    // ⚠ 開いた札を押したときは閉じない（札の側で閉じる。ここで閉じると続くクリックで開き直す）
-    const away = (e) => {
-      if (ref.current?.contains(e.target)) return;
-      if (e.target.closest?.('.online-role-chip[aria-expanded="true"]')) return;
-      close();
-    };
-    const onKey = (e) => e.key === 'Escape' && close();
-    window.addEventListener('mousedown', away);
-    window.addEventListener('keydown', onKey);
-    window.addEventListener('scroll', close, true);
-    window.addEventListener('resize', close);
-    return () => {
-      window.removeEventListener('mousedown', away);
-      window.removeEventListener('keydown', onKey);
-      window.removeEventListener('scroll', close, true);
-      window.removeEventListener('resize', close);
-    };
-  }, [close]);
+  useRoleMenuDismiss(ref, close);
   const current = state.roles[menu.id];
   const option = (role) => {
     const blocked = roleBlocked(state, player, role);
