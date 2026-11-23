@@ -363,6 +363,9 @@ export function executeHandleManagedGameEnd(ctx) {
 
       const ps = p.stats?.pitching || {};
       if (ps.outs > 0 || ps.pitches > 0) {
+        // ⚠ 打席の無い投手は上の打撃の集計を通らないので、seasonStats が無いままここへ来る
+        //    （新加入の選手など）。自動試合（updatePlayerSeasonStats）と同じく初期化する
+        if (!playerData.seasonStats) playerData.seasonStats = { batting: {}, pitching: {} };
         if (!playerData.seasonStats.pitching) playerData.seasonStats.pitching = {};
         const sp = playerData.seasonStats.pitching;
         const prevTotalOuts = sp.inningsPitched || 0;

@@ -1508,12 +1508,13 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false, observer = 
   // 守備固め判定（AI監督）- イニング終了時に呼ばれる
   const considerDefensiveReplacement = (defenseTeam) => {
     if (defenseTeam.onlineTactics?.defensiveSub === 'never' || gameState.inning < (defenseTeam.onlineTactics?.defenseFrom || 0)) return;
-    const isLeading = gameState.isTopInning
-      ? gameState.score.home > gameState.score.away
-      : gameState.score.away > gameState.score.home;
-    const scoreDiff = gameState.isTopInning
+    // ⚠ **その球団の点差で見ること**。半イニングの終わりに両球団へ呼ばれるので、
+    //    以前の「次に守る側（isTopInning）の点差」では負けている球団まで
+    //    「リードしている」として守備固め・大差の控え起用をしていた
+    const scoreDiff = defenseTeam === gameState.homeTeam
       ? gameState.score.home - gameState.score.away
       : gameState.score.away - gameState.score.home;
+    const isLeading = scoreDiff > 0;
 
     const benchFielders = defenseTeam.players.filter(p =>
       p.isActive !== false && p.battingOrder === 0 && !isPitcherPlayer(p) && !gameState.removedIds.has(p.id)
@@ -1553,8 +1554,9 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false, observer = 
       if (activeBench.length > 0) {
         // 出場機会が少ない控えを優先
         const leastUsed = activeBench.reduce((best, p) => {
-          const pGames = (p.seasonStats?.games || 0);
-          const bGames = (best.seasonStats?.games || 0);
+          // ⚠ 出場数は seasonStats.batting.games（seasonStats.games は無く、いつも 0 だった）
+          const pGames = (p.seasonStats?.batting?.games || 0);
+          const bGames = (best.seasonStats?.batting?.games || 0);
           return pGames < bGames ? p : best;
         }, activeBench[0]);
 
@@ -1973,6 +1975,9 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false, observer = 
     const scheduledBatterId = observer ? batter.id : null;
     // AI監督: 代打を検討
     batter = considerPinchHitter(offenseTeam, batter);
+    // 失策で出た印は塁に居る間だけのもの。⚠ 以前はイニングの頭でしか消さず、
+    //    打者一巡で同じ回にまた打席に立つと、安打で出ても非自責の走者のままだった
+    delete batter._reachedOnError;
 
     // AI監督: 打席間のピンチ投手交代（ランナー状況・スタミナ考慮）
     considerMidInningPitcherChange(defenseTeam, pitcher, gameState);
