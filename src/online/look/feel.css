@@ -70,6 +70,16 @@ html.online-look-root ::-webkit-scrollbar-thumb,
   text-decoration-thickness: 2px;
   text-underline-offset: 4px;
 }
+/* 選手成績の行はまるごと押せる名前のボタンなので、行の字ぜんぶに下線が付いてしまう。下線は名前だけにする */
+.online.online-look .online-roster-row:is(:hover, :focus-visible) {
+  text-decoration: none;
+}
+.online.online-look .online-roster-row:is(:hover, :focus-visible) .online-roster-player-name {
+  text-decoration: underline;
+  text-decoration-color: var(--team-c2, var(--accent));
+  text-decoration-thickness: 2px;
+  text-underline-offset: 4px;
+}
 /* 押したところの枠を球団の色に（キーボードで動かしたときだけ出る） */
 .online.online-look :is(button, select, input, [tabindex]):focus-visible {
   outline: 2px solid var(--team-c2, var(--accent));
@@ -241,6 +251,18 @@ html.online-look-root ::-webkit-scrollbar-thumb,
 .online.online-look.online-desktop .online-group-tabs button {
   padding: 4px 8px;
   font-size: 12.5px;
+}
+/* スマホ: 帯は中身の幅だけにして、押していないボタンの枠と地を消す
+   （スマホは帯が画面の幅いっぱいに伸び、中のボタンの枠と二重に見えた） */
+.online.online-look.online-mobile .online-segments:not(:where(.online-sp *)) {
+  width: fit-content;
+  max-width: 100%;
+  padding: 3px;
+  gap: 3px;
+}
+.online.online-look.online-mobile .online-segments:not(:where(.online-sp *)) button:not([aria-pressed='true']) {
+  border-color: transparent;
+  background: transparent;
 }
 /* カードの見出しの頭に球団色の印 */
 .online.online-look .online-card :is(h2, .online-roster-toolbar h2):not(:where(.online-sp *, .online-paper *))::before {
