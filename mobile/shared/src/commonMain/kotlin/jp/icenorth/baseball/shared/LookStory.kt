@@ -70,8 +70,8 @@ fun reporterChat(view: LeagueView): List<String> {
 /** 場面で話す人（監督か、監督が居なければ番記者） */
 data class StorySpeaker(val kind: String, val id: String?, val seed: String, val name: String, val label: String, val age: Int)
 
-/** 場面の主役 */
-data class StoryStar(val id: Long?, val name: String, val age: Int?, val condition: Int?)
+/** 場面の主役。[seed] は顔の種（選手の顔と同じ） */
+data class StoryStar(val id: Long?, val seed: String, val name: String, val age: Int?, val condition: Int?)
 
 /** 球団の出来事の場面。[key] は見た印（同じ場面を2度出さない。端末に覚える） */
 data class EventScene(
@@ -101,9 +101,10 @@ private fun starOf(roster: List<Player>): Player? {
     return best
 }
 
+/** 上（-1）か下（+1）の部の名前。知らない部なら空 */
 private fun leagueAt(id: String?, step: Int): String {
     val i = PYRAMID_LEAGUES.indexOfFirst { it.id == id }
-    return PYRAMID_LEAGUES.getOrNull(i + step)?.name.orEmpty()
+    return if (i < 0) "" else PYRAMID_LEAGUES.getOrNull(i + step)?.name.orEmpty()
 }
 
 private class EventText(
@@ -150,6 +151,7 @@ fun eventScene(view: LeagueView): EventScene? {
     val s = player?.let { surnameOf(it.name) }.orEmpty()
     val month = view.currentDate?.month
     val year = view.year?.toString().orEmpty()
+    val whenText = listOfNotNull(view.year?.let { "${it}年目" }, month?.takeIf { it > 0 }?.let { "${it}月" }).joinToString("・")
     val speaker = if (manager != null) {
         StorySpeaker("coach", manager.id.ifEmpty { null }, "c${manager.id.ifEmpty { manager.name }}", manager.name, "${surnameOf(manager.name)}監督", manager.age.takeIf { it > 0 } ?: 50)
     } else {
@@ -160,10 +162,10 @@ fun eventScene(view: LeagueView): EventScene? {
         key = "$me:$year:${race.kind}",
         kind = race.kind,
         good = def.good,
-        title = "球団の出来事　${year}年目${month?.let { "・${it}月" }.orEmpty()}",
+        title = "球団の出来事${if (whenText.isNotEmpty()) "　$whenText" else ""}",
         heading = def.heading(race),
         speaker = speaker,
-        star = player?.let { StoryStar(it.id, it.name, it.age, it.condition) },
+        star = player?.let { StoryStar(it.id, "p${it.id}", it.name, it.age, it.condition) },
         line = if (manager != null) def.coach(s) else def.reporter(s),
     )
 }

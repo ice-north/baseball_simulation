@@ -196,13 +196,12 @@ fun faceArt(seed: String, look: TeamLook, age: Int = 25, level: Int? = null, sui
     items += LookItem(t = "circle", cx = 50.0, cy = 49.0, r = 38.0, fill = lookShade(c1, 0.82))
     // 首と体（ユニフォーム。番記者は背広）
     add(LookItem(t = "rect", x = 43.0, y = 68.0, w = 14.0, h = 14.0, fill = skinD))
+    add(LookItem(t = "path", d = "M10 104 Q12 82 36 77 L64 77 Q88 82 90 104 Z", fill = if (suit) SUIT else "#f6f3ec"))
     if (suit) {
-        add(LookItem(t = "path", d = "M10 104 Q12 82 36 77 L64 77 Q88 82 90 104 Z", fill = SUIT))
         add(LookItem(t = "path", d = "M39 77 L50 95 L61 77 Z", fill = "#ffffff"))
         add(LookItem(t = "path", d = "M48.4 79 L51.6 79 L52.6 91 L50 95 L47.4 91 Z", fill = c1))
         add(LookItem(t = "path", d = "M36 77 L44 90 M64 77 L56 90", stroke = lookShade(SUIT, -0.35), sw = 1.2))
     } else {
-        add(LookItem(t = "path", d = "M10 104 Q12 82 36 77 L64 77 Q88 82 90 104 Z", fill = "#f6f3ec"))
         add(LookItem(t = "path", d = "M38 77 L50 90 L62 77", stroke = c1, sw = 3.2, join = "round"))
         val side = if (c2 == "#ffffff" || c2 == "#f8fafc") c1 else c2
         add(LookItem(t = "path", d = "M10 104 Q12 82 36 77", stroke = side, sw = 2.0))
@@ -229,26 +228,23 @@ fun faceArt(seed: String, look: TeamLook, age: Int = 25, level: Int? = null, sui
         "mustache" ->
             add(LookItem(t = "path", d = "M42 69.5 Q50 65.5 58 69.5 Q50 71 42 69.5 Z", fill = hair))
     }
-    // 前髪（番記者）。分け目は髪の型で左・右・まん中
     if (suit) {
+        // 前髪（番記者）。分け目は髪の型で左・右・まん中。
+        // 頭の上は帽子が無いので、額から上も肌で描いてから前髪をのせる
         val part = listOf(44, 56, 50)[hairType]
-        // 頭の上（帽子が無いので、額から上も肌で描いてから前髪をのせる）
         add(LookItem(t = "path", d = "M${L(0.0)} 48 Q${L(0.0)} 24 50 24 Q${R(0.0)} 24 ${R(0.0)} 48 Z", fill = skin))
         add(LookItem(t = "path", d = "M${L(-2.0)} 52 Q${L(-4.0)} 22 50 21 Q${R(4.0)} 22 ${R(2.0)} 52 Q${R(-1.0)} 40 $part 36 Q${L(1.0)} 40 ${L(-2.0)} 52 Z", fill = hair))
-    }
-    // 帽子
-    if (!suit) {
+    } else {
+        // 帽子（球団の字とつば）
         add(LookItem(t = "path", d = "M${L(-3.0)} 45 Q${L(-3.0)} 19 50 18 Q${R(3.0)} 19 ${R(3.0)} 45 Z", fill = cap))
         add(LookItem(t = "path", d = "M50 18 L50 45", stroke = lookShade(cap, -0.3), sw = 0.8, op = 0.6))
         add(LookItem(t = "circle", cx = 50.0, cy = 18.6, r = 2.3, fill = lookShade(cap, -0.3)))
-    }
-    if (look.mono.isNotEmpty() && !suit) {
-        val two = look.mono.cpCount() > 1
-        val script = look.style == "script"
-        val size = if (look.font == "jp") (if (two) 8.0 else 11.0) else if (two) 10.0 else if (script) 17.0 else 14.0
-        add(LookItem(t = "text", x = 50.0, y = if (script) 40.0 else 38.5, size = size, font = look.font, fill = c2, stroke = c3, sw = 0.8, text = look.mono, ls = if (two && look.font != "jp") -0.5 else 0.0))
-    }
-    if (!suit) {
+        if (look.mono.isNotEmpty()) {
+            val two = look.mono.cpCount() > 1
+            val script = look.style == "script"
+            val size = if (look.font == "jp") (if (two) 8.0 else 11.0) else if (two) 10.0 else if (script) 17.0 else 14.0
+            add(LookItem(t = "text", x = 50.0, y = if (script) 40.0 else 38.5, size = size, font = look.font, fill = c2, stroke = c3, sw = 0.8, text = look.mono, ls = if (two && look.font != "jp") -0.5 else 0.0))
+        }
         add(LookItem(t = "path", d = "M${L(-6.0)} 45 Q50 39 ${R(6.0)} 45 Q${R(7.0)} 50 ${R(2.0)} 50.5 Q50 46 ${L(-2.0)} 50.5 Q${L(-7.0)} 50 ${L(-6.0)} 45 Z", fill = visor))
         add(LookItem(t = "path", d = "M${L(1.0)} 50.5 Q50 47 ${R(-1.0)} 50.5 L${R(-1.0)} 52.5 Q50 49.5 ${L(1.0)} 52.5 Z", fill = "#000000", op = 0.12))
     }

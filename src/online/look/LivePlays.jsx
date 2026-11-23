@@ -6,8 +6,8 @@
 // ⚠ 入のときだけ出す（呼ぶ側の `GameRecord` が見る）。版20より前の試合には塁と打球の記録が無いので出さない。
 // ============================================================
 import React, { useEffect, useMemo, useState } from 'react';
-import { FieldDiagram, TeamMark } from './Art.jsx';
-import { liveScenes, highlightIndexes } from './playByPlay.js';
+import { PlayField, TeamMark } from './Art.jsx';
+import { liveScenes, highlightIndexes, orderPosition } from './playByPlay.js';
 import { playTone } from '../gamePlays.js';
 import { teamShort } from '../gameText.js';
 
@@ -33,8 +33,18 @@ export default function LivePlays({ game }) {
     () => (only && highlights.length ? highlights : scenes.map((_, i) => i)),
     [only, highlights, scenes],
   );
-  const at = Math.max(0, order.indexOf(index) >= 0 ? order.indexOf(index) : order.findIndex((i) => i >= index));
+  const at = orderPosition(order, index);
   const go = (step) => setIndex(order[Math.max(0, Math.min(order.length - 1, at + step))] ?? 0);
+  // 最後の打席で「自動」を押したら頭から
+  const toggleAuto = () => {
+    if (!auto && at >= order.length - 1) setIndex(order[0] ?? 0);
+    setAuto(!auto);
+  };
+  // 切りかえても、いま出ている場面から続ける
+  const toggleOnly = () => {
+    setIndex(order[at] ?? 0);
+    setOnly(!only);
+  };
   // 自動で次の打席へ（最後まで来たら止まる）
   useEffect(() => {
     if (!auto) return undefined;
@@ -68,7 +78,7 @@ export default function LivePlays({ game }) {
           <Outs outs={Math.min(2, scene.outs)} />
         </span>
       </header>
-      <FieldDiagram scene={scene} home={game.home} />
+      <PlayField scene={scene} home={game.home} />
       <div className="online-live-telop" data-tone={playTone(scene.code, scene.runs)}>
         <strong>
           {scene.batter?.name ? `${scene.batter.name}　` : ''}
@@ -89,13 +99,13 @@ export default function LivePlays({ game }) {
         <button type="button" onClick={() => go(-1)} disabled={at <= 0}>
           ◀ 前の打席
         </button>
-        <button type="button" aria-pressed={auto} onClick={() => setAuto(!auto)}>
+        <button type="button" aria-pressed={auto} onClick={toggleAuto}>
           {auto ? '■ 止める' : '▶ 自動'}
         </button>
         <button type="button" onClick={() => go(1)} disabled={at >= order.length - 1}>
           次の打席 ▶
         </button>
-        <button type="button" aria-pressed={only} onClick={() => setOnly(!only)} disabled={!highlights.length}>
+        <button type="button" aria-pressed={only} onClick={toggleOnly} disabled={!highlights.length}>
           見どころだけ
         </button>
         <small>

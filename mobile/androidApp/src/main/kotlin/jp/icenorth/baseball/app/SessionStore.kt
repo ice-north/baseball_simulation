@@ -94,9 +94,12 @@ class SessionStore(context: Context) {
         set(value) = prefs.edit().putString("campSeen", value).apply()
 
     /** 新しい見た目（試作）段4: 見た球団の出来事の場面（[jp.icenorth.baseball.shared.EventScene.key]。新しい順に20まで） */
+    // ⚠ JSON で持つ（鍵には球団名が入る。区切りの字を決めると、その字を含む名前で覚えられなくなる）
     var lookSeen: List<String>
-        get() = prefs.getString("lookSeen", null)?.split('\n')?.filter { it.isNotEmpty() }.orEmpty()
-        set(value) = prefs.edit().putString("lookSeen", value.joinToString("\n")).apply()
+        get() = prefs.getString("lookSeen", null)?.let { text ->
+            runCatching { OnlineJson.decodeFromString<List<String>>(text) }.getOrNull()
+        }.orEmpty()
+        set(value) = prefs.edit().putString("lookSeen", OnlineJson.encodeToString(value)).apply()
 
     /** ホームで開く新聞（地元紙・全国紙。[jp.icenorth.baseball.shared.FrontPage.Paper] の名前） */
     var homePaper: String?

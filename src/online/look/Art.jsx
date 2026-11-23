@@ -57,7 +57,7 @@ function Shape({ s }) {
 
 /**
  * 描く手順の一覧（`art.js`）を SVG にする。ふつうは正方形（`size`）。
- * `fill` なら入れ物いっぱいに広げ、はみ出すぶんは切る（今日の一戦の札の背景）
+ * `fill` なら入れ物いっぱいに広げ、はみ出すぶんは切る（今日の一戦の札の背景・打席速報の球場の図）
  */
 function ArtSvg({ art, size, className = '', label, fill = false }) {
   const id = `lk${useId().replace(/[^a-zA-Z0-9_-]/g, '')}`;
@@ -180,15 +180,20 @@ export function StadiumBackdrop({ team, city, crowd }) {
   return <ArtSvg art={art} fill className="online-stadium-art" />;
 }
 
-/** 打席速報の球場の図（走者・打球）。`scene` は `playByPlay.js` の場面、`home` は本拠地の球団 */
-export function FieldDiagram({ scene, home }) {
+/**
+ * 打席速報の球場の図（その行の後の走者・打球）。`scene` は `playByPlay.js` の場面、`home` は本拠地の球団。
+ * ⚠ 名前は守備図の `src/online/FieldDiagram.jsx` と別にしてある
+ */
+export function PlayField({ scene, home }) {
+  const { on } = useLook();
   const fence = teamLook(home) || NEUTRAL_LOOK;
   const offense = teamLook(scene.team) || NEUTRAL_LOOK;
-  const bases = scene.basesAfter ?? scene.bases ?? 0;
+  const bases = scene.basesAfter ?? 0;
   const art = useMemo(
-    () => fieldArt({ fence, offense, bases, batted: scene.batted, code: scene.code, runs: scene.runs }),
-    [fence, offense, bases, scene],
+    () => (on ? fieldArt({ fence, offense, bases, batted: scene.batted, code: scene.code, runs: scene.runs }) : null),
+    [on, fence, offense, bases, scene],
   );
+  if (!art) return null;
   return <ArtSvg art={art} fill className="online-field-art" label="球場の図（走者と打球）" />;
 }
 

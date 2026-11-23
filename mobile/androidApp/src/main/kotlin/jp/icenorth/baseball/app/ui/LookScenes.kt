@@ -31,6 +31,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -57,6 +58,7 @@ import jp.icenorth.baseball.shared.str
 import jp.icenorth.baseball.shared.fieldArt
 import jp.icenorth.baseball.shared.highlightIndexes
 import jp.icenorth.baseball.shared.liveScenes
+import jp.icenorth.baseball.shared.orderPosition
 import jp.icenorth.baseball.shared.playTone
 import jp.icenorth.baseball.shared.stadiumArt
 import jp.icenorth.baseball.shared.stadiumScene
@@ -73,15 +75,17 @@ import kotlinx.serialization.json.JsonObject
 // ⚠ **切のときは何も出さない**（試合タブも試合の画面も今までと同じ）。表示専用。
 // ============================================================
 
-private val Night = Color(0xFF0B1220)
+/** 新しい見た目の夜の地色・金色・金の上の字・白い字の影（今日の一戦・打席速報・球団の出来事の場面で共通） */
+internal val LookNight = Color(0xFF0B1220)
+internal val LookGold = Color(0xFFFDE68A)
+internal val LookGoldInk = Color(0xFF422006)
+internal val LookShadow = Shadow(Color.Black, blurRadius = 8f)
 private val NightBar = Color(0xFF131C2F)
-private val Gold = Color(0xFFFDE68A)
 private val Slate300 = Color(0xFFCBD5E1)
 private val Slate400 = Color(0xFF94A3B8)
 private val ScoreRed = Color(0xFFF87171)
 private val HitYellow = Color(0xFFFACC15)
 private val Pressed = Color(0xFF38BDF8)
-private val Shade = Shadow(Color.Black, blurRadius = 8f)
 
 private fun toneColor(tone: String) = when (tone) {
     "score" -> ScoreRed
@@ -99,13 +103,14 @@ fun StadiumBackdrop(team: String, city: String, crowd: Double, modifier: Modifie
     LookCanvas(art, modifier.testTag("stadium-art"), crop = true)
 }
 
-/** 打席速報の球場の図（走者・打球）。走者は打席の後、塁の分からない行は前の塁 */
+/** 打席速報の球場の図（その行の後の走者・打球）。Web 版 `PlayField` */
 @Composable
-fun FieldDiagram(scene: LiveScene, home: String, modifier: Modifier = Modifier) {
+fun PlayField(scene: LiveScene, home: String, modifier: Modifier = Modifier) {
     val look = LocalLook.current
+    if (!look.on) return
     val fence = look.teamLook(home) ?: NEUTRAL_LOOK
     val offense = look.teamLook(scene.team) ?: NEUTRAL_LOOK
-    val bases = scene.basesAfter ?: scene.bases ?: 0
+    val bases = scene.basesAfter ?: 0
     val art = remember(fence, offense, scene) { fieldArt(fence, offense, bases, scene.batted, scene.code, scene.runs) }
     LookCanvas(art, modifier.aspectRatio(160f / 136f).semantics { contentDescription = "球場の図（走者と打球）" }.testTag("field-art"))
 }
@@ -119,7 +124,7 @@ fun TodayGameCard(view: LeagueView, onLineup: (() -> Unit)?) {
     val look = LocalLook.current
     if (!look.on) return
     val card = remember(view) { todayGameCard(view) } ?: return
-    Box(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(Night).testTag("today-game")) {
+    Box(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(LookNight).testTag("today-game")) {
         StadiumBackdrop(card.home, card.city, card.crowd, Modifier.matchParentSize())
         Column {
             Row(
@@ -144,7 +149,7 @@ fun TodayGameCard(view: LeagueView, onLineup: (() -> Unit)?) {
                     "VS",
                     fontFamily = LookGraduate,
                     fontSize = 34.sp,
-                    color = Gold,
+                    color = LookGold,
                     style = TextStyle(shadow = Shadow(Color(0xFFB45309), androidx.compose.ui.geometry.Offset(0f, 5f), 0f)),
                 )
                 TodaySideBlock(view, card.foe, Modifier.weight(1f))
@@ -155,14 +160,14 @@ fun TodayGameCard(view: LeagueView, onLineup: (() -> Unit)?) {
                         card.note,
                         fontSize = 12.sp,
                         color = Color.White,
-                        modifier = Modifier.background(Night.copy(alpha = 0.8f), RoundedCornerShape(8.dp)).padding(horizontal = 10.dp, vertical = 4.dp),
+                        modifier = Modifier.background(LookNight.copy(alpha = 0.8f), RoundedCornerShape(8.dp)).padding(horizontal = 10.dp, vertical = 4.dp),
                     )
                 }
                 Spacer(Modifier.weight(1f))
                 if (onLineup != null) {
                     Button(
                         onClick = onLineup,
-                        colors = ButtonDefaults.buttonColors(containerColor = Gold, contentColor = Color(0xFF422006)),
+                        colors = ButtonDefaults.buttonColors(containerColor = LookGold, contentColor = LookGoldInk),
                         contentPadding = PaddingValues(horizontal = 14.dp, vertical = 4.dp),
                         modifier = Modifier.height(32.dp),
                     ) { Text("スタメンを見る ›", fontSize = 13.sp, fontWeight = FontWeight.Bold) }
@@ -182,12 +187,12 @@ private fun TodaySideBlock(view: LeagueView, side: TodaySide, modifier: Modifier
         TeamMark(side.team, size = 68.dp)
         Text(
             view.teamLabel(side.team),
-            style = MaterialTheme.typography.titleSmall.copy(shadow = Shade),
+            style = MaterialTheme.typography.titleSmall.copy(shadow = LookShadow),
             color = Color.White,
             textAlign = TextAlign.Center,
             maxLines = 2,
         )
-        if (side.record.isNotEmpty()) Text(side.record, fontSize = 11.sp, color = Color(0xFFE2E8F0), style = TextStyle(shadow = Shade))
+        if (side.record.isNotEmpty()) Text(side.record, fontSize = 11.sp, color = Color(0xFFE2E8F0), style = TextStyle(shadow = LookShadow))
     }
 }
 
@@ -196,7 +201,7 @@ private fun StarterBlock(side: TodaySide, right: Boolean, modifier: Modifier) {
     val s = side.starter
     val accent = lookColor(LocalLook.current.teamLook(side.team)?.c2) ?: Slate400
     Row(
-        modifier.height(IntrinsicSize.Min).clip(RoundedCornerShape(10.dp)).background(Night.copy(alpha = 0.86f)),
+        modifier.height(IntrinsicSize.Min).clip(RoundedCornerShape(10.dp)).background(LookNight.copy(alpha = 0.86f)),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         if (!right) Box(Modifier.width(5.dp).fillMaxHeight().background(accent))
@@ -205,12 +210,13 @@ private fun StarterBlock(side: TodaySide, right: Boolean, modifier: Modifier) {
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = if (right) Arrangement.spacedBy(8.dp, Alignment.End) else Arrangement.spacedBy(8.dp),
         ) {
-            val face: @Composable () -> Unit = { s?.id?.let { id -> PlayerFace(id.toString(), s.age, s.condition, size = 40.dp, team = side.team) } }
+            // ⚠ 名前だけの先発（古いビュー）も、Web と同じく名前を種にして顔を出す
+            val face: @Composable () -> Unit = { s?.let { PlayerFace(it.id?.toString() ?: it.name, it.age, it.condition, size = 40.dp, team = side.team) } }
             if (!right) face()
             Column(Modifier.weight(1f, fill = false), horizontalAlignment = if (right) Alignment.End else Alignment.Start) {
                 Text(s?.mark ?: "先発", fontSize = 10.sp, color = Slate400)
                 Text(s?.name ?: "未定", fontSize = 14.sp, color = Color.White, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                if (!s?.line.isNullOrEmpty()) Text(s!!.line, fontSize = 11.sp, color = Slate300, maxLines = 1)
+                s?.line?.takeIf { it.isNotEmpty() }?.let { Text(it, fontSize = 11.sp, color = Slate300, maxLines = 1) }
             }
             if (right) face()
         }
@@ -234,42 +240,44 @@ private const val AUTO_MS = 1800L
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun LivePlays(view: LeagueView, game: JsonObject) {
+    if (!LocalLook.current.on) return
     val scenes = remember(game) { liveScenes(game) { view.teamShort(it) } }
     val highlights = remember(scenes) { highlightIndexes(scenes) }
-    var index by remember(game) { mutableIntStateOf(0) }
+    // 画面を回しても、いまの打席から続ける
+    var index by rememberSaveable(game) { mutableIntStateOf(0) }
     var auto by remember(game) { mutableStateOf(false) }
-    var only by remember(game) { mutableStateOf(false) }
+    var only by rememberSaveable(game) { mutableStateOf(false) }
     val order = remember(only, highlights, scenes) { if (only && highlights.isNotEmpty()) highlights else scenes.indices.toList() }
-    val at = maxOf(0, order.indexOf(index).takeIf { it >= 0 } ?: order.indexOfFirst { it >= index })
+    val pos = orderPosition(order, index)
     // 自動で次の打席へ（最後まで来たら止まる）
-    LaunchedEffect(auto, at, order) {
+    LaunchedEffect(auto, pos, order) {
         if (!auto) return@LaunchedEffect
-        if (at >= order.size - 1) {
+        if (pos >= order.size - 1) {
             auto = false
             return@LaunchedEffect
         }
         delay(AUTO_MS)
-        index = order[at + 1]
+        index = order[pos + 1]
     }
-    val scene = order.getOrNull(at)?.let { scenes.getOrNull(it) }
+    val scene = order.getOrNull(pos)?.let { scenes.getOrNull(it) }
     if (scene == null) {
         Muted("この試合の打席の記録はありません。")
         return
     }
     fun go(step: Int) {
-        index = order.getOrNull((at + step).coerceIn(0, order.size - 1)) ?: 0
+        index = order.getOrNull((pos + step).coerceIn(0, order.size - 1)) ?: 0
     }
     val away = game.at("away").str().orEmpty()
     val home = game.at("home").str().orEmpty()
     Column(
-        Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(Night).testTag("live-plays"),
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(LookNight).testTag("live-plays"),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         // 点の札（両球団と点・回・アウト）
         Row(Modifier.fillMaxWidth().background(NightBar).padding(horizontal = 12.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
             TeamMark(away, size = 22.dp, modifier = Modifier.padding(end = 4.dp))
             Text(view.teamShort(away), color = Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp)
-            Text(" ${scene.score.first} - ${scene.score.second} ", color = Gold, fontWeight = FontWeight.Bold, fontSize = 20.sp)
+            Text(" ${scene.score.first} - ${scene.score.second} ", color = LookGold, fontWeight = FontWeight.Bold, fontSize = 20.sp)
             Text(view.teamShort(home), color = Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp)
             TeamMark(home, size = 22.dp, modifier = Modifier.padding(start = 4.dp))
             Spacer(Modifier.weight(1f))
@@ -279,7 +287,7 @@ fun LivePlays(view: LeagueView, game: JsonObject) {
                 repeat(2) { i -> Box(Modifier.size(9.dp).background(if (outs > i) ScoreRed else Color(0xFF334155), CircleShape)) }
             }
         }
-        FieldDiagram(scene, home, Modifier.padding(horizontal = 12.dp).widthIn(max = 400.dp).fillMaxWidth().align(Alignment.CenterHorizontally))
+        PlayField(scene, home, Modifier.padding(horizontal = 12.dp).widthIn(max = 400.dp).fillMaxWidth().align(Alignment.CenterHorizontally))
         // 実況の1行と点の動き
         val tone = playTone(scene.code, scene.runs)
         Row(Modifier.padding(horizontal = 10.dp).fillMaxWidth().height(IntrinsicSize.Min).clip(RoundedCornerShape(6.dp)).testTag("live-telop")) {
@@ -290,7 +298,7 @@ fun LivePlays(view: LeagueView, game: JsonObject) {
                     .padding(horizontal = 12.dp, vertical = 8.dp),
             ) {
                 Text(
-                    "${scene.batterName?.takeIf { it.isNotEmpty() }?.let { "$it　" }.orEmpty()}${scene.phrase}",
+                    playLine(scene),
                     style = MaterialTheme.typography.titleSmall,
                     color = Color.White,
                 )
@@ -298,7 +306,7 @@ fun LivePlays(view: LeagueView, game: JsonObject) {
             }
         }
         // その半回の、いまの打席までの流れ（新しい順に4つ）
-        val now = order[at]
+        val now = order[pos]
         val flow = scenes.withIndex().filter { (i, s) -> s.inning == scene.inning && s.half == scene.half && i <= now }.takeLast(4).reversed()
         Column(Modifier.padding(horizontal = 12.dp)) {
             flow.forEach { (i, s) ->
@@ -311,7 +319,7 @@ fun LivePlays(view: LeagueView, game: JsonObject) {
                         modifier = Modifier.width(24.dp).background(toneColor(playTone(s.code, s.runs)), RoundedCornerShape(4.dp)),
                     )
                     Text(
-                        "${s.batterName?.takeIf { it.isNotEmpty() }?.let { "$it　" }.orEmpty()}${s.phrase}",
+                        playLine(s),
                         fontSize = 13.sp,
                         color = if (i == now) Color.White else Slate400,
                         fontWeight = if (i == now) FontWeight.Bold else null,
@@ -327,20 +335,31 @@ fun LivePlays(view: LeagueView, game: JsonObject) {
             horizontalArrangement = Arrangement.spacedBy(6.dp),
             verticalArrangement = Arrangement.Center,
         ) {
-            LiveButton("◀ 前の打席", enabled = at > 0) { go(-1) }
-            LiveButton(if (auto) "■ 止める" else "▶ 自動", pressed = auto) { auto = !auto }
-            LiveButton("次の打席 ▶", enabled = at < order.size - 1) { go(1) }
-            LiveButton("見どころだけ", pressed = only, enabled = highlights.isNotEmpty()) { only = !only }
-            Text("${at + 1} / ${order.size}", fontSize = 12.sp, color = Slate400, modifier = Modifier.align(Alignment.CenterVertically).padding(start = 4.dp))
+            LiveButton("◀ 前の打席", enabled = pos > 0) { go(-1) }
+            LiveButton(if (auto) "■ 止める" else "▶ 自動", pressed = auto) {
+                // 最後の打席で「自動」を押したら頭から
+                if (!auto && pos >= order.size - 1) index = order.firstOrNull() ?: 0
+                auto = !auto
+            }
+            LiveButton("次の打席 ▶", enabled = pos < order.size - 1) { go(1) }
+            LiveButton("見どころだけ", pressed = only, enabled = highlights.isNotEmpty()) {
+                // 切りかえても、いま出ている場面から続ける
+                index = order[pos]
+                only = !only
+            }
+            Text("${pos + 1} / ${order.size}", fontSize = 12.sp, color = Slate400, modifier = Modifier.align(Alignment.CenterVertically).padding(start = 4.dp))
         }
     }
 }
+
+/** 実況の1行（打者の名前と実況。打席の外の行は実況だけ） */
+private fun playLine(s: LiveScene): String = "${s.batterName?.takeIf { it.isNotEmpty() }?.let { "$it　" }.orEmpty()}${s.phrase}"
 
 @Composable
 private fun LiveButton(label: String, enabled: Boolean = true, pressed: Boolean = false, onClick: () -> Unit) {
     val padding = PaddingValues(horizontal = 10.dp, vertical = 2.dp)
     if (pressed) {
-        Button(onClick = onClick, enabled = enabled, contentPadding = padding, modifier = Modifier.height(34.dp), colors = ButtonDefaults.buttonColors(containerColor = Pressed, contentColor = Night)) {
+        Button(onClick = onClick, enabled = enabled, contentPadding = padding, modifier = Modifier.height(34.dp), colors = ButtonDefaults.buttonColors(containerColor = Pressed, contentColor = LookNight)) {
             Text(label, fontSize = 12.sp, fontWeight = FontWeight.Bold)
         }
     } else {

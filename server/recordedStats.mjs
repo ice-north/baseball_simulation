@@ -549,7 +549,7 @@ function playCode(e) {
  *    **前からある試合の行は3要素**（画面は記号から数える古い読み方に戻る。`gamePlays.js`）。
  * ⚠ 2026-11-20 監査: 打席が終わらなかった打席（`completed === false`。典型はサヨナラの暴投、
  *    盗塁死で3アウト）の点を落としていた（`last` だけ進めて行を足さなかった）。
- * ⚠ 1試合あたり約1KB（打席70〜80）。箱は元から約28KBなので、増えるのは数%。
+ * ⚠ 1試合あたり約1.9KB（打席70〜80。打席速報の5つ目からを含む）。箱は元から約28KBなので、増えるのは数%。
  */
 export function inningPlaysOf(events, box, result) {
   const index = new Map(
@@ -581,7 +581,7 @@ export function inningPlaysOf(events, box, result) {
         : 0;
     if (e.runnerOnly) {
       // 盗塁死など、打席の途中の走者のアウト（点は後の打席の記録が持つ）
-      if (outs > 0) push(e.inning, half, [null, '刺', 0, outs]);
+      if (outs > 0) push(e.inning, half, [null, '刺', 0, outs, ...basesField(e.endBases)]);
     } else if (e.completed !== false) {
       // ⚠ 打席の途中（最後の1球の前）に暴投・盗塁などで入った点は「走」の行に分ける。
       //    分けないと「三振 1点」のように打者の点として赤く出る（2026-11-20 監査）。
@@ -589,13 +589,14 @@ export function inningPlaysOf(events, box, result) {
       const mid = e.resultScore
         ? Math.max(0, Math.min(runs, (e.resultScore[side] || 0) - (e.scoreBefore?.[side] || 0)))
         : 0;
-      if (mid > 0) push(e.inning, half, [null, '走', mid, 0]);
+      // 塁はその点が入った後（最後の1球の前）
+      if (mid > 0) push(e.inning, half, [null, '走', mid, 0, ...basesField(e.resultBases)]);
       const idx = index.get(e.offense)?.get(e.batterId);
       push(e.inning, half, [idx ?? null, playCode(e), runs - mid, outs, ...liveFields(e)]);
     } else if (runs > 0 || outs > 0) {
       // ⚠ 打席が終わらなかった打席（サヨナラの暴投・盗塁死の3アウトなど）。打者の行は
       //    足さないが、その間に入った点とアウトは落とさない
-      push(e.inning, half, [null, runs > 0 ? '走' : '刺', runs, outs]);
+      push(e.inning, half, [null, runs > 0 ? '走' : '刺', runs, outs, ...basesField(e.endBases)]);
     }
     if (e.scoreAfter) last = { home: e.scoreAfter.home || 0, away: e.scoreAfter.away || 0 };
     lastInning = e.inning;
@@ -612,21 +613,27 @@ export function inningPlaysOf(events, box, result) {
 /** 守備位置 → 番号（1 投手 … 9 ライト）。打席速報の行に置く */
 const FIELDER_NUMBER = { pitcher: 1, catcher: 2, first: 3, second: 4, third: 5, short: 6, left: 7, center: 8, right: 9 };
 
+/** 行の5つ目の塁（一塁＝1・二塁＝2・三塁＝4 の和）。記録が無ければ足さない */
+const basesField = (bases) => (Number.isInteger(bases) ? [bases] : []);
+
 /**
  * 打席速報（新しい見た目の試作。`src/online/look/playByPlay.js`）のための、行の5つ目から。
- *   [塁（最後の1球の前。一塁＝1・二塁＝2・三塁＝4 の和）, 守備位置, 向き, 飛距離, 角度]
+ *   [塁（打席の後）, 守備位置, 向き, 飛距離, 角度]
  * 打球の4つは前へ飛んだ打席だけ（四球・三振・バントは塁だけ）。向きは -45（三塁線）〜45（一塁線）の度、
  * 飛距離は m、角度は打ち出しの度（10 未満はゴロ）。どれも整数に丸める（1試合で約0.7KB）。
- * ⚠ 本塁打は処理した野手が居ないので、向きから外野の番号を当てる。
+ * 打席の外の行（「走」「刺」）は塁だけ（その点・アウトの後）。
+ * ⚠ 塁は**その行の後**。次の打席の行の塁から作ると、次の打席の途中の盗塁・暴投が前の打席の結果に
+ *    混ざる（2026-11-23 レビュー）。
+ * ⚠ 本塁打は処理した野手が居ないので、向きから外野の番号を当てる（`playByPlay.js` の `fieldOf` と同じ境目）。
  * ⚠ 塁の記録が無い打席（版20より前の記録の形の観測）は何も足さない。
  */
 function liveFields(e) {
-  if (!Number.isInteger(e.resultBases)) return [];
+  if (!Number.isInteger(e.endBases)) return [];
   const b = e.result?.batted;
-  if (!b || !Number.isFinite(b.direction)) return [e.resultBases];
+  if (!b || !Number.isFinite(b.direction)) return [e.endBases];
   const dir = Math.round(b.direction);
   const pos = FIELDER_NUMBER[b.fielder] || (dir < -11 ? 7 : dir > 11 ? 9 : 8);
-  return [e.resultBases, pos, dir, Math.round(b.distance || 0), Math.round(b.launchAngle || 0)];
+  return [e.endBases, pos, dir, Math.round(b.distance || 0), Math.round(b.launchAngle || 0)];
 }
 
 /** 打席の結果の種類。⚠ 打者の成績の増えた分から読む（投球の結果の形は打席の種類で違う） */

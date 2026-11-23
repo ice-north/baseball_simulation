@@ -244,6 +244,10 @@
   font-size: 13px;
 }
 .online.online-look .online-today-cta {
+  /* ⚠ 色は変数で渡す（`.online button:hover` のほうが詳細度が高く、じかに書くとホバーで地が灰色になる） */
+  --online-btn-bg: #fde68a;
+  --online-btn-hover: #fcd34d;
+  --online-btn-ink: #422006;
   position: absolute;
   right: 18px;
   top: 200px;
@@ -478,12 +482,24 @@
 
 /* ---- 段4: 球団の出来事の場面（`Story.jsx`） ------------------------------ */
 .online.online-look .online-event-scene {
+  /* 画面いっぱいの <dialog>（showModal で最前面。ほかの小窓の上にも出る） */
   position: fixed;
   inset: 0;
-  z-index: 60;
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  max-height: none;
+  margin: 0;
+  border: 0;
+  padding: 12px;
+  background: transparent;
+  color: inherit;
+}
+.online.online-look .online-event-scene[open] {
   display: grid;
   place-items: center;
-  padding: 12px;
+}
+.online.online-look .online-event-scene::backdrop {
   background: rgb(2 6 23 / 0.78);
 }
 .online.online-look .online-event-stage {
@@ -561,6 +577,9 @@
   line-height: 1.65;
 }
 .online.online-look .online-event-close {
+  --online-btn-bg: #fde68a;
+  --online-btn-hover: #fcd34d;
+  --online-btn-ink: #422006;
   position: absolute;
   inset: auto 12px 20px;
   height: 46px;

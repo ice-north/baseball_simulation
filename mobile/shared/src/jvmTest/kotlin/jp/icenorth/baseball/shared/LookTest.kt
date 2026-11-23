@@ -175,6 +175,14 @@ class LookTest {
             assertEquals(c.at("out").str(), playPhrase(code, c.at("runs").int()!!, battedOf(c.at("batted"))), "実況 $code ${c.at("runs")} ${c.at("batted")}")
         }
         assertEquals(s3.at("bases").list().map { it.str() }, (0..7).map(::basesText))
+        for (c in s3.at("tones").list()) {
+            val code = c.at("code").str()!!
+            assertEquals(c.at("tone").str(), playTone(code, c.at("runs").int()!!), "打席の色 $code ${c.at("runs")}")
+        }
+        for (c in s3.at("orders").list()) {
+            val order = c.at("order").list().map { it.int()!! }
+            assertEquals(c.at("at").int(), orderPosition(order, c.at("index").int()!!), "送りの位置 $order ${c.at("index")}")
+        }
         val games = s3.at("live").list()
         assertEquals(3, games.size)
         for ((g, c) in games.withIndex()) {
@@ -188,7 +196,7 @@ class LookTest {
                 val got = buildJsonObject {
                     put("inning", s.inning); put("half", s.half); put("team", s.team); put("offense", s.offense)
                     put("batterId", s.batterId); put("batterName", s.batterName); put("code", s.code); put("runs", s.runs)
-                    put("outsBefore", s.outsBefore); put("outs", s.outs); put("bases", s.bases); put("basesAfter", s.basesAfter)
+                    put("outsBefore", s.outsBefore); put("outs", s.outs); put("basesAfter", s.basesAfter)
                     put("batted", s.batted?.let { b -> buildJsonObject { put("pos", b.pos); put("dir", b.dir); put("dist", b.dist); put("la", b.la) } } ?: JsonNull)
                     put("scoreBefore", JsonArray(listOf(JsonPrimitive(s.scoreBefore.first), JsonPrimitive(s.scoreBefore.second))))
                     put("score", JsonArray(listOf(JsonPrimitive(s.score.first), JsonPrimitive(s.score.second))))
@@ -278,7 +286,7 @@ class LookTest {
                 )
                 put(
                     "star",
-                    scene.star?.let { p -> buildJsonObject { put("id", p.id); put("name", p.name); put("age", p.age); put("condition", p.condition) } } ?: JsonNull,
+                    scene.star?.let { p -> buildJsonObject { put("id", p.id); put("seed", p.seed); put("name", p.name); put("age", p.age); put("condition", p.condition) } } ?: JsonNull,
                 )
             }
             same(want, got, "場面$i ${c.at("patch")}")

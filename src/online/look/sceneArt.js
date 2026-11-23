@@ -11,9 +11,7 @@
 //    客は決まった数だけ引き、入りに応じて先頭から何人を描くかだけを変える。
 // ============================================================
 import { hash, rng, pick } from './rng.js';
-import { shade } from './art.js';
-
-const r2 = (v) => Math.round(v * 100) / 100;
+import { r2, shade } from './art.js';
 
 /** 山あいの土地（球場の後ろを山にする）。ほかは海 */
 const MOUNTAIN_CITIES = new Set([

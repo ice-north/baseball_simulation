@@ -15,7 +15,8 @@
 // ============================================================
 import { hash, rng, pick } from './rng.js';
 
-const r2 = (v) => Math.round(v * 100) / 100;
+/** 描く手順の数字は小数2桁に丸める（アプリの `lookR2` と同じ。ずれると答え合わせが合わない） */
+export const r2 = (v) => Math.round(v * 100) / 100;
 
 /** 色を暗く（k<0）・明るく（k>0）する */
 export function shade(hex, k) {
@@ -134,13 +135,12 @@ export function faceArt({ seed, look, age = 25, level = null, suit = false }) {
   items.push({ t: 'circle', cx: 50, cy: 49, r: 38, fill: shade(c1, 0.82) });
   // 首と体（ユニフォーム。番記者は背広）
   add({ t: 'rect', x: 43, y: 68, w: 14, h: 14, fill: skinD });
+  add({ t: 'path', d: 'M10 104 Q12 82 36 77 L64 77 Q88 82 90 104 Z', fill: suit ? SUIT : '#f6f3ec' });
   if (suit) {
-    add({ t: 'path', d: 'M10 104 Q12 82 36 77 L64 77 Q88 82 90 104 Z', fill: SUIT });
     add({ t: 'path', d: 'M39 77 L50 95 L61 77 Z', fill: '#ffffff' });
     add({ t: 'path', d: 'M48.4 79 L51.6 79 L52.6 91 L50 95 L47.4 91 Z', fill: c1 });
     add({ t: 'path', d: 'M36 77 L44 90 M64 77 L56 90', stroke: shade(SUIT, -0.35), sw: 1.2 });
   } else {
-    add({ t: 'path', d: 'M10 104 Q12 82 36 77 L64 77 Q88 82 90 104 Z', fill: '#f6f3ec' });
     add({ t: 'path', d: 'M38 77 L50 90 L62 77', stroke: c1, sw: 3.2, join: 'round' });
     add({ t: 'path', d: 'M10 104 Q12 82 36 77', stroke: c2 === '#ffffff' || c2 === '#f8fafc' ? c1 : c2, sw: 2 });
     add({ t: 'path', d: 'M90 104 Q88 82 64 77', stroke: c2 === '#ffffff' || c2 === '#f8fafc' ? c1 : c2, sw: 2 });
@@ -164,24 +164,23 @@ export function faceArt({ seed, look, age = 25, level = null, suit = false }) {
   } else if (beard === 'mustache') {
     add({ t: 'path', d: 'M42 69.5 Q50 65.5 58 69.5 Q50 71 42 69.5 Z', fill: hair });
   }
-  // 前髪（番記者）。分け目は髪の型で左・右・まん中
   if (suit) {
+    // 前髪（番記者）。分け目は髪の型で左・右・まん中。
+    // 頭の上は帽子が無いので、額から上も肌で描いてから前髪をのせる
     const part = [44, 56, 50][hairType];
-    // 頭の上（帽子が無いので、額から上も肌で描いてから前髪をのせる）
     add({ t: 'path', d: `M${L(0)} 48 Q${L(0)} 24 50 24 Q${R(0)} 24 ${R(0)} 48 Z`, fill: skin });
     add({ t: 'path', d: `M${L(-2)} 52 Q${L(-4)} 22 50 21 Q${R(4)} 22 ${R(2)} 52 Q${R(-1)} 40 ${part} 36 Q${L(1)} 40 ${L(-2)} 52 Z`, fill: hair });
-  }
-  // 帽子
-  if (!suit) add({ t: 'path', d: `M${L(-3)} 45 Q${L(-3)} 19 50 18 Q${R(3)} 19 ${R(3)} 45 Z`, fill: cap });
-  if (!suit) add({ t: 'path', d: 'M50 18 L50 45', stroke: shade(cap, -0.3), sw: 0.8, op: 0.6 });
-  if (!suit) add({ t: 'circle', cx: 50, cy: 18.6, r: 2.3, fill: shade(cap, -0.3) });
-  if (look.mono && !suit) {
-    const two = [...look.mono].length > 1;
-    const script = look.style === 'script';
-    const size = look.font === 'jp' ? (two ? 8 : 11) : two ? 10 : script ? 17 : 14;
-    add({ t: 'text', x: 50, y: script ? 40 : 38.5, size, font: look.font, fill: c2, stroke: c3, sw: 0.8, text: look.mono, ls: two && look.font !== 'jp' ? -0.5 : 0 });
-  }
-  if (!suit) {
+  } else {
+    // 帽子（球団の字とつば）
+    add({ t: 'path', d: `M${L(-3)} 45 Q${L(-3)} 19 50 18 Q${R(3)} 19 ${R(3)} 45 Z`, fill: cap });
+    add({ t: 'path', d: 'M50 18 L50 45', stroke: shade(cap, -0.3), sw: 0.8, op: 0.6 });
+    add({ t: 'circle', cx: 50, cy: 18.6, r: 2.3, fill: shade(cap, -0.3) });
+    if (look.mono) {
+      const two = [...look.mono].length > 1;
+      const script = look.style === 'script';
+      const size = look.font === 'jp' ? (two ? 8 : 11) : two ? 10 : script ? 17 : 14;
+      add({ t: 'text', x: 50, y: script ? 40 : 38.5, size, font: look.font, fill: c2, stroke: c3, sw: 0.8, text: look.mono, ls: two && look.font !== 'jp' ? -0.5 : 0 });
+    }
     add({ t: 'path', d: `M${L(-6)} 45 Q50 39 ${R(6)} 45 Q${R(7)} 50 ${R(2)} 50.5 Q50 46 ${L(-2)} 50.5 Q${L(-7)} 50 ${L(-6)} 45 Z`, fill: visor });
     add({ t: 'path', d: `M${L(1)} 50.5 Q50 47 ${R(-1)} 50.5 L${R(-1)} 52.5 Q50 49.5 ${L(1)} 52.5 Z`, fill: '#000000', op: 0.12 });
   }

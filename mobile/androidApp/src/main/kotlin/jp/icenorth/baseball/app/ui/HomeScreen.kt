@@ -226,9 +226,10 @@ fun HomeScreen(
         if (showChronicle) ChronicleDialog(model, team, view.teamShort(team)) { showChronicle = false }
         var showInbox by remember { mutableStateOf(false) }
         if (showInbox) InboxDialog(view) { showInbox = false }
-        // 新しい見た目（試作）段4: 優勝・昇格などが決まったときの場面（1度だけ）と、社告の代わりの番記者のメモ
-        EventSceneDialog(model, view)
-        val reporterNote = rememberReporterNote(view)
+        // 新しい見た目（試作）段4: 優勝・昇格などが決まったときの場面（1度だけ）と、社告の代わりの番記者のメモ。
+        // ⚠ 速報を伏せている間は場面を出さず、番記者も話さない（決着・連勝から結果が分かってしまう）
+        if (!sealed) EventSceneDialog(model, view)
+        val reporterNote = rememberReporterNote(view, sealed)
         val style = homeStyleOf(model.homeStyle)
         val uriHandler = LocalUriHandler.current
         val names = remember(model.raw, team, lastGame, opponent, oppName) {

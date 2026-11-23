@@ -3,9 +3,9 @@
 // （優勝・昇格・残留・降格が決まったとき、ホームを開くと1度だけ出る）。中身は `story.js`。
 //
 // ⚠ **切のときは何も出さない**。表示専用（見た場面の印だけ、この端末のブラウザに覚える）。
-// ⚠ アプリにも同じ部品がある（`mobile/androidApp/.../LookStory.kt`。番記者のメモは新聞の社告の代わり）。
+// ⚠ アプリにも同じ部品がある（`mobile/androidApp/.../LookStoryParts.kt`。番記者のメモは新聞の社告の代わり）。
 // ============================================================
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useLook } from './LookContext.jsx';
 import { StadiumBackdrop, StoryFace } from './Art.jsx';
 import { reporterOf, reporterChat, eventScene } from './story.js';
@@ -24,7 +24,7 @@ const markSeen = (key) => {
   try {
     globalThis.localStorage?.setItem(SEEN_KEY, JSON.stringify([key, ...readSeen().filter((k) => k !== key)].slice(0, 20)));
   } catch {
-    // 覚えられないときは、この画面を開いている間だけ
+    // 覚えられないときは、この画面を開いている間だけ（`EventScene` の状態が持つ）
   }
 };
 
@@ -56,24 +56,44 @@ export function EventScene({ view }) {
   const { on } = useLook();
   const scene = useMemo(() => (on ? eventScene(view) : null), [on, view]);
   const [seen, setSeen] = useState(readSeen);
-  const open = scene && !seen.includes(scene.key);
+  const open = !!scene && !seen.includes(scene.key);
+  // ⚠ 閉じたことは画面の状態にも持つ（端末に覚えられなくても、開いている間はもう出さない）
   const close = () => {
     markSeen(scene.key);
-    setSeen(readSeen());
+    setSeen((list) => [scene.key, ...list]);
   };
-  // Esc でも閉じる
-  useEffect(() => {
-    if (!open) return undefined;
-    const onKey = (e) => e.key === 'Escape' && close();
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  });
   if (!open) return null;
+  return <EventDialog key={scene.key} view={view} scene={scene} close={close} />;
+}
+
+/**
+ * 場面の小窓。⚠ `<dialog>` の showModal で最前面に出す（ほかの小窓が開いていても上に出て、
+ * Esc はいちばん上の小窓だけを閉じる）。閉じたら開く前のところへ戻る
+ */
+function EventDialog({ view, scene, close }) {
+  const dialog = useRef(null);
+  useEffect(() => {
+    const node = dialog.current;
+    const trigger = document.activeElement;
+    node.showModal();
+    return () => {
+      if (node.open) node.close();
+      if (trigger?.isConnected) trigger.focus();
+    };
+  }, []);
   const me = view.teamName;
   const city = view.teamLabels?.[me]?.city || '';
   const face = scene.good ? 4 : 1;
   return (
-    <div className="online-event-scene" role="dialog" aria-modal="true" aria-label={scene.heading}>
+    <dialog
+      ref={dialog}
+      className="online-event-scene"
+      aria-label={scene.heading}
+      onCancel={(e) => {
+        e.preventDefault();
+        close();
+      }}
+    >
       <div className="online-event-stage">
         <StadiumBackdrop team={me} city={city} crowd={scene.good ? 1 : 0.4} />
         <header>
@@ -87,7 +107,7 @@ export function EventScene({ view }) {
           </figure>
           {scene.star && (
             <figure>
-              <StoryFace seed={`p${scene.star.id}`} team={me} age={scene.star.age} level={face} size={120} />
+              <StoryFace seed={scene.star.seed} team={me} age={scene.star.age} level={face} size={120} />
               <figcaption>{scene.star.name}</figcaption>
             </figure>
           )}
@@ -100,6 +120,6 @@ export function EventScene({ view }) {
           閉じる
         </button>
       </div>
-    </div>
+    </dialog>
   );
 }

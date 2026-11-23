@@ -12,6 +12,7 @@
 //    （参加者ごとに呼ぶと人数ぶん重くなる）。
 // ============================================================
 import { observedSeason, completeCoverage, recordedStats } from './recordedStats.mjs';
+import { conditionValue } from '../src/online/statsView.js';
 
 /**
  * 試合ごとの先発予定（`{ home: { player, mark }, away: { player, mark } }` の並び）。
@@ -80,8 +81,9 @@ export function withStarters(games, teams, statsOf = null, picks = null) {
       id: player.id,
       name: player.name,
       // 年齢と調子（新しい見た目の試作で、今日の一戦の札に顔を描く。顔はほかの画面と同じ作り）
-      age: Number.isFinite(player.age) ? player.age : null,
-      condition: Number.isInteger(player.condition) ? player.condition : null,
+      // ⚠ 年齢は整数だけ（アプリは Int で読む。小数が来ると読み込みごと落ちる）。調子は 0〜4（選手の表と同じ決まり）
+      age: Number.isInteger(player.age) ? player.age : null,
+      condition: conditionValue(player),
       // ⚠ 投げる手は `physical.throws`（選手直下ではない）。選手直下を見ると
       //    全員 undefined になり、**全員が右投げ**として出る。
       // ⚠ 既定は右。未設定の選手を「左」に倒すと、左投手が実際より多く見える

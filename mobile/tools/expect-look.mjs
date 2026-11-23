@@ -8,7 +8,8 @@ import { CITY_EN, NICK_EN, PALETTES, STYLES, buildTeamLooks, nameSource, NEUTRAL
 import { emblemArt, faceArt, conditionArt, shade } from '../../src/online/look/art.js';
 import { generatePyramidTeams } from '../../src/online/pyramidLeague.js';
 import { stadiumArt, fieldArt, crowdLevel, stadiumScene } from '../../src/online/look/sceneArt.js';
-import { liveScenes, highlightIndexes, playPhrase, basesText, hasLivePlays } from '../../src/online/look/playByPlay.js';
+import { liveScenes, highlightIndexes, playPhrase, basesText, hasLivePlays, orderPosition } from '../../src/online/look/playByPlay.js';
+import { playTone } from '../../src/online/gamePlays.js';
 import { todayGameCard } from '../../src/online/look/todayGame.js';
 import { reporterOf, reporterChat, eventScene } from '../../src/online/look/story.js';
 
@@ -115,10 +116,10 @@ const games = [
     home: 'H',
     teams: { A: [{ id: 1, name: 'あ' }, { id: 2, name: 'い' }], H: [{ id: 9, name: 'き' }] },
     plays: {
-      '1t': [[0, '安', 0, 0, 0, 7, -20, 60, 12], [1, '本', 2, 0, 1, 7, -30, 110, 30], [0, '振', 0, 1, 0], [1, '凡', 0, 2, 0, 6, -10, 30, 2]],
+      '1t': [[0, '安', 0, 0, 1, 7, -20, 60, 12], [1, '本', 2, 0, 0, 7, -30, 110, 30], [0, '振', 0, 1, 0], [1, '凡', 0, 2, 0, 6, -10, 30, 2]],
       '1b': [[0, '振', 0, 3, 0]],
       '2t': [[0, '振', 0, 3, 0]],
-      '2b': [[0, '四', 0, 0, 0], [null, '走', 1, 0], [0, '本', 2, 0, 1, 8, 5, 120, 28], [0, '振', 0, 3, 0]],
+      '2b': [[0, '四', 0, 0, 1], [null, '走', 1, 0], [0, '本', 2, 0, 0, 8, 5, 120, 28], [0, '振', 0, 3, 0]],
     },
   },
   {
@@ -130,8 +131,8 @@ const games = [
     },
     plays: {
       '10b': [[0, '死', 0, 0, 0], [1, '犠', 0, 1, 1, 1, 2, 8, -10], [2, '二', 1, 0, 2, 7, -27, 104, 21]],
-      '1t': [[0, '三', 1, 0, 1, 9, 30, 112, 17], [1, '失', 1, 0, 4, 5, -35, 26, 1], [2, '併', 0, 2, 1, 6, -12, 31, -2], [null, '刺', 0, 1]],
-      '1b': [[0, '安', 1, 0, 2, 4, 6, 29, 4], [1, '凡', 1, 1, 4, 8, 2, 101, 33], [2, '四', 0, 0, 0], [0, '凡', 0, 1, 1, 3, 40, 22, 14], [1, '振', 0, 1, 1]],
+      '1t': [[0, '三', 1, 0, 4, 9, 30, 112, 17], [1, '失', 1, 0, 1, 5, -35, 26, 1], [2, '併', 0, 2, 0, 6, -12, 31, -2], [null, '刺', 0, 1, 0]],
+      '1b': [[0, '安', 1, 0, 1, 4, 6, 29, 4], [null, '走', 1, 0, 0], [1, '凡', 1, 1, 0, 8, 2, 101, 33], [2, '四', 0, 0, 1], [0, '凡', 0, 1, 2, 3, 40, 22, 14], [1, '振', 0, 1, 2]],
       '9t': [[0, '振', 0, 1, 0], [1, '振', 0, 1, 0], [2, '振', 0, 1, 0]],
       '9b': [[0, '安', 0, 0, 0, 8, -2, 70, 15], [1, '本', 2, 0, 1, 9, 16, 118, 29]],
       x: [[0, '安', 0, 0, 0]],
@@ -198,13 +199,20 @@ const today = [
   { teamStreaks: { [own]: { kind: 'L', count: 2 }, [foe]: { kind: 'W', count: 9 } } },
   { teamName: third, standings: baseView.standings.filter((s) => s.team !== third) },
   { nextGames: [] },
+  // 10月のプレーオフ（ターンの外）の今日の試合
+  { currentDate: { year: 2026, month: 10, day: 12 }, nextGames: [{ ...baseView.nextGames[0], date: { year: 2026, month: 10, day: 12 } }] },
+  // 防御率がちょうど半端（3自責・40アウト＝2.025、7自責・120アウト＝1.575）
+  { nextGames: [{ ...baseView.nextGames[0], homeStarterInfo: { id: 3, name: '先発い', wins: 2, losses: 1, era: 81 / 40 }, awayStarterInfo: { id: 2, name: '先発あ', wins: 1, losses: 0, era: 189 / 120 } }] },
 ].map((patch) => {
   const card = todayGameCard({ ...baseView, ...patch });
   if (!card) return { patch, card: null };
   const side = ({ team, record, standing, starter }) => ({ team, record, rank: standing.rank, teams: standing.teams, starter });
   return { patch, card: { ...card, own: side(card.own), foe: side(card.foe) } };
 });
-const stage3 = { crowds, scenes, stadiums, fieldLooks: { fence: lookA, offense: lookC }, fields, phrases, bases, live, todayView: baseView, today };
+// 打席の色の種類（`gamePlays.js` の `playTone`）と、送りの並びでの位置
+const tones = ['本', '三', '二', '安', '四', '死', '振', '犠', '併', '失', '走', '刺', '凡', '飛', ''].flatMap((code) => [0, 1].map((runs) => ({ code, runs, tone: playTone(code, runs) })));
+const orders = [[[1, 7, 8], 0], [[1, 7, 8], 5], [[1, 7, 8], 7], [[1, 7, 8], 9], [[], 3], [[0, 1, 2, 3], 2]].map(([order, index]) => ({ order, index, at: orderPosition(order, index) }));
+const stage3 = { crowds, scenes, stadiums, fieldLooks: { fence: lookA, offense: lookC }, fields, phrases, bases, live, todayView: baseView, today, tones, orders };
 
 // ---- 段4: 番記者と球団の出来事 ------------------------------------------
 const reporters = [...pyramid.map((t) => t.name), '名前の無い球団'].map((team) => ({ team, reporter: reporterOf(team, pyramidLabels) }));
@@ -237,6 +245,17 @@ const stories = [
   { teamStreaks: { [own]: { kind: 'W', count: 2 } }, currentDate: day(6) },
   { teamName: third, teamStreaks: {} },
   { currentDate: { year: 2026, month: 9, day: 20 }, races: [race('promotion')], staff: { seats: [{ role: 'manager', coach: { name: '名無し' } }] }, roster: storyRoster },
+  // 種類 × 話す人 × 主役の残り
+  { races: [race('first')], roster: storyRoster },
+  { races: [race('promotion')], roster: storyRoster },
+  { races: [race('survive')], roster: storyRoster, staff: { seats: [manager] } },
+  { races: [race('survive')], staff: { seats: [manager] } },
+  { races: [race('relegated')], roster: storyRoster },
+  { races: [race('first')], staff: { seats: [manager] } },
+  // 知らない部・年の無いビュー
+  { races: [race('promotion', { league: 'Z' })] },
+  { races: [race('relegated', { league: 'Z' })] },
+  { year: null, races: [race('first')] },
 ].map((patch) => ({ patch, chat: reporterChat({ ...storyBase, ...patch }), scene: eventScene({ ...storyBase, ...patch }) }));
 const stage4 = { reporters, reporterFaces, storyView: storyBase, stories };
 
@@ -257,7 +276,7 @@ if (process.argv.includes('--check')) {
   const file = new URL('../shared/src/jvmTest/resources/look-expected.json', import.meta.url);
   if (fs.readFileSync(file, 'utf8').trim() !== text) {
     console.error(
-      'look-expected.json が古い。node mobile/tools/expect-look.mjs > mobile/shared/src/jvmTest/resources/look-expected.json で書き出し直し、アプリの Look.kt・LookArt.kt も揃えること',
+      'look-expected.json が古い。node mobile/tools/expect-look.mjs > mobile/shared/src/jvmTest/resources/look-expected.json で書き出し直し、アプリの Look.kt・LookArt.kt・LookScene.kt・LookPlay.kt・TodayGame.kt・LookStory.kt も揃えること',
     );
     process.exit(1);
   }

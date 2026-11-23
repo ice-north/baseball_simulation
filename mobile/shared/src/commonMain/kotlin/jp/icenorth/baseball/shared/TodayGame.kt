@@ -54,7 +54,7 @@ data class TodayGame(
     val foe: TodaySide,
 )
 
-/** 正の数を小数 [digits] 桁で（JS の `toFixed`。0.5 は切り上げ） */
+/** 正の数を小数 [digits] 桁で（0.5 は切り上げ。Web は `Math.round` で丸めてから `toFixed`） */
 private fun fixed(v: Double, digits: Int): String {
     var scale = 1L
     repeat(digits) { scale *= 10 }
@@ -65,19 +65,20 @@ private fun fixed(v: Double, digits: Int): String {
 private fun starterLine(info: StarterInfo): String =
     "${info.wins}勝${info.losses}敗 ${info.era?.let { "防${fixed(it, 2)}" } ?: "防—"}"
 
-private class Standing2(val rank: Int?, val rows: List<Standing>, val row: Standing?, val record: String)
+/** 部の中の順位と成績（札の両側） */
+private class SideStanding(val rank: Int?, val rows: List<Standing>, val row: Standing?, val record: String)
 
-private fun LeagueView.standingOf(team: String): Standing2 {
+private fun LeagueView.standingOf(team: String): SideStanding {
     val league = teamLeagues[team]?.takeIf { it.isNotEmpty() }
     val rows = leagueTable(league)
     val index = rows.indexOfFirst { it.team == team }
-    val row = rows.getOrNull(index) ?: return Standing2(null, rows, null, "")
+    val row = rows.getOrNull(index) ?: return SideStanding(null, rows, null, "")
     val name = PYRAMID_LEAGUES.firstOrNull { it.id == league }?.name.orEmpty()
     val draws = if (row.draws != 0) "${row.draws}分" else ""
-    return Standing2(index + 1, rows, row, "$name${index + 1}位　${row.wins}勝${row.losses}敗$draws")
+    return SideStanding(index + 1, rows, row, "$name${index + 1}位　${row.wins}勝${row.losses}敗$draws")
 }
 
-private fun LeagueView.noteOf(s: Standing2): String {
+private fun LeagueView.noteOf(s: SideStanding): String {
     val parts = mutableListOf<String>()
     if (s.row != null && s.rows.size > 1) {
         if (s.rank == 1) {
@@ -105,13 +106,13 @@ private fun streakValue(s: TeamStreak?): Int = when (s?.kind) {
 fun todayGameCard(view: LeagueView): TodayGame? {
     val me = view.teamName ?: return null
     val game = view.nextGames.firstOrNull { it.home == me || it.away == me } ?: return null
-    val now = turnOfDate(view.currentDate, view.seasonTurns)
     val turn = turnOfDate(game.date, view.seasonTurns)
-    val today = now != null && turn == now
+    // ⚠ 日付で比べる（ターンはシーズンの中だけなので、10月のプレーオフの試合を「次の一戦」にしていた）
+    val today = game.date != null && game.date == view.currentDate
     val homeGame = game.home == me
     val d = game.date
     val weekday = d?.let { DAYS[(((daysFromCivil(it.year, it.month, it.day) + 4) % 7 + 7) % 7).toInt()] }
-    fun sideOf(team: String): Pair<TodaySide, Standing2> {
+    fun sideOf(team: String): Pair<TodaySide, SideStanding> {
         val isHome = team == game.home
         val info = if (isHome) game.homeStarterInfo else game.awayStarterInfo
         val name = info?.name?.takeIf { it.isNotEmpty() } ?: (if (isHome) game.homeStarter else game.awayStarter)?.takeIf { it.isNotEmpty() }

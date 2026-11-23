@@ -569,14 +569,15 @@ export function ScoreBoard({ game, ownTeam, compact = false }) {
 }
 function GameRecord({ id, year, ownTeam, close }) {
   const compact = window.matchMedia('(max-width: 767px)').matches;
-  const [watch, setWatch] = useState(false);
+  // 見せ方: 'stats' 個人成績・'watch' 観戦リプレイ・'live' 打席速報
+  const [mode, setMode] = useState('stats');
   // 新しい見た目（試作）段3: 打席速報（入のときだけ。塁と打球の記録がある試合だけ）
   const look = useLook();
-  const [live, setLive] = useState(false);
   const result = useRead('game', { id, year }),
     game = result.data;
   const liveReady = look.on && hasLivePlays(game);
-  const showLive = live && liveReady;
+  const watch = mode === 'watch';
+  const showLive = mode === 'live' && liveReady;
   return (
     <Panel
       title="試合成績"
@@ -589,34 +590,16 @@ function GameRecord({ id, year, ownTeam, close }) {
         <>
           {(game.replay?.frames?.length > 0 || liveReady) && (
             <nav className="online-replay-launch" aria-label="試合の表示">
-              <button
-                aria-pressed={!watch && !showLive}
-                onClick={() => {
-                  setWatch(false);
-                  setLive(false);
-                }}
-              >
+              <button aria-pressed={!watch && !showLive} onClick={() => setMode('stats')}>
                 個人成績
               </button>
               {liveReady && (
-                <button
-                  aria-pressed={showLive}
-                  onClick={() => {
-                    setWatch(false);
-                    setLive(true);
-                  }}
-                >
+                <button aria-pressed={showLive} onClick={() => setMode('live')}>
                   打席速報
                 </button>
               )}
               {game.replay?.frames?.length > 0 && (
-                <button
-                  aria-pressed={watch}
-                  onClick={() => {
-                    setLive(false);
-                    setWatch(true);
-                  }}
-                >
+                <button aria-pressed={watch} onClick={() => setMode('watch')}>
                   {compact ? '試合経過' : '観戦リプレイ'}
                 </button>
               )}

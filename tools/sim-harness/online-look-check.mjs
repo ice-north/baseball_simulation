@@ -7,7 +7,8 @@
 //    - 同じ選手は年齢・調子が変わっても同じ顔（乱数を引く回数が条件で変わると別人になる）
 //    - 描く手順の数字がすべて有限（NaN が混ざると SVG が黙って消える）
 //    - 実在の球団（リーグの外の名前）にはマークを付けない
-//    - 段3: 客の入りで球場の星や旗の並びが変わらない・打席速報の点とアウトの数え方・実況の文・今日の一戦の札
+//    - 段3: 客の入りで球場の星や旗の並びが変わらない・打席速報の点とアウトと塁・実況の文・今日の一戦の札
+//    - 段4: 番記者は球団名から決まる・背広の顔でも乱数の回数が同じ・ひとことと場面の文
 import assert from 'node:assert/strict';
 import { CITIES, NICKNAMES, generatePyramidTeams } from '../../src/online/pyramidLeague.js';
 import {
@@ -22,7 +23,7 @@ import {
 } from '../../src/online/look/teamLook.js';
 import { emblemArt, faceArt, conditionArt, CONDITION_FACE_COLORS } from '../../src/online/look/art.js';
 import { stadiumArt, stadiumScene, crowdLevel, fieldArt } from '../../src/online/look/sceneArt.js';
-import { liveScenes, playPhrase, basesText, highlightIndexes, hasLivePlays } from '../../src/online/look/playByPlay.js';
+import { liveScenes, playPhrase, basesText, highlightIndexes, hasLivePlays, orderPosition } from '../../src/online/look/playByPlay.js';
 import { todayGameCard } from '../../src/online/look/todayGame.js';
 import { reporterOf, reporterChat, eventScene } from '../../src/online/look/story.js';
 
@@ -178,10 +179,10 @@ assert.ok(!faceArt({ seed: 'c1', look: NEUTRAL_LOOK, age: 60, level: 3 }).items.
     homeScore: 3,
     teams: { A: [{ id: 1, name: 'あ' }, { id: 2, name: 'い' }], H: [{ id: 9, name: 'き' }] },
     plays: {
-      '1t': [[0, '安', 0, 0, 0, 7, -20, 60, 12], [1, '本', 2, 0, 1, 7, -30, 110, 30], [0, '振', 0, 1, 0], [1, '凡', 0, 2, 0, 6, -10, 30, 2]],
+      '1t': [[0, '安', 0, 0, 1, 7, -20, 60, 12], [1, '本', 2, 0, 0, 7, -30, 110, 30], [0, '振', 0, 1, 0], [1, '凡', 0, 2, 0, 6, -10, 30, 2]],
       '1b': [[0, '振', 0, 3, 0]],
       '2t': [[0, '振', 0, 3, 0]],
-      '2b': [[0, '四', 0, 0, 0], [null, '走', 1, 0], [0, '本', 2, 0, 1, 8, 5, 120, 28], [0, '振', 0, 3, 0]],
+      '2b': [[0, '四', 0, 0, 1], [null, '走', 1, 0], [0, '本', 2, 0, 0, 8, 5, 120, 28], [0, '振', 0, 3, 0]],
     },
   };
   assert.ok(hasLivePlays(game));
@@ -189,8 +190,9 @@ assert.ok(!faceArt({ seed: 'c1', look: NEUTRAL_LOOK, age: 60, level: 3 }).items.
   const scenes = liveScenes(game, (t) => (t === 'A' ? 'エー' : 'エイチ'));
   assert.equal(scenes.length, 10);
   assert.deepEqual(scenes.map((s) => s.outs), [0, 0, 1, 3, 3, 3, 0, 0, 0, 3]);
-  assert.equal(scenes[0].basesAfter, 1, '打席の後の塁は次の打席の前の塁');
-  assert.equal(scenes[1].situation, 'エーが2点、勝ち越し（2-0）');
+  // 塁はその行の5つ目（打席の後）。⚠ 次の行から作ると、次の打席の途中の盗塁・暴投が混ざる（2026-11-23 レビュー）
+  assert.deepEqual(scenes.map((s) => s.basesAfter), [1, 0, 0, 0, 0, 0, 1, null, 0, 0]);
+  assert.equal(scenes[1].situation, 'エーが2点、先制（2-0）', '0-0 からの点は先制');
   assert.equal(scenes[3].situation, 'チェンジ');
   assert.equal(scenes[6].situation, '0死一塁');
   assert.equal(scenes[7].situation, 'エイチが1点（1-2）');
@@ -198,6 +200,14 @@ assert.ok(!faceArt({ seed: 'c1', look: NEUTRAL_LOOK, age: 60, level: 3 }).items.
   assert.equal(scenes[9].situation, '試合終了');
   assert.deepEqual(scenes.at(-1).score, { away: 2, home: 3 });
   assert.deepEqual(highlightIndexes(scenes), [1, 7, 8]);
+  // 見どころだけに切りかえたら、いまより前の見どころに留まる（先頭へ飛ばない）
+  assert.equal(orderPosition([1, 7, 8], 0), 0);
+  assert.equal(orderPosition([1, 7, 8], 5), 0);
+  assert.equal(orderPosition([1, 7, 8], 7), 1);
+  assert.equal(orderPosition([1, 7, 8], 9), 2);
+  // 同点からの点は勝ち越し（先制ではない）
+  const tied = liveScenes({ ...game, plays: { '1t': [[0, '本', 1, 0, 0]], '1b': [[0, '本', 1, 0, 0], [0, '振', 0, 3, 0]], '2t': [[0, '安', 1, 0, 1]] } });
+  assert.deepEqual(tied.map((s) => s.situation.replace(/^.*、|（.*$/g, '')), ['先制', '同点', 'チェンジ', '勝ち越し']);
 }
 
 // --- 段3: 今日の一戦の札 --------------------------------------------------
@@ -240,6 +250,13 @@ assert.ok(!faceArt({ seed: 'c1', look: NEUTRAL_LOOK, age: 60, level: 3 }).items.
   // 今日が休養日なら次の試合を「次の一戦」として出す。自球団の試合が無ければ出さない
   assert.equal(todayGameCard({ ...view, currentDate: date(6) }).title, '次の一戦');
   assert.equal(todayGameCard({ ...view, nextGames: [] }), null);
+  // 10月のプレーオフ（ターンの外）でも、今日の試合なら「今日の一戦」（2026-11-23 レビュー）
+  const playoff = { ...view.nextGames[0], date: { year: 2026, month: 10, day: 12 } };
+  assert.equal(todayGameCard({ ...view, currentDate: playoff.date, nextGames: [playoff] }).title, '今日の一戦');
+  // 防御率は百分の一に四捨五入（3自責・40アウト＝2.025。toFixed だけだと 2.02 でアプリとずれる）
+  const era = (value) => todayGameCard({ ...view, nextGames: [{ ...view.nextGames[0], homeStarterInfo: { id: 3, name: 'い', era: value } }] }).foe.starter.line;
+  assert.equal(era((3 * 27) / 40), '0勝0敗 防2.03');
+  assert.equal(era((7 * 27) / 120), '0勝0敗 防1.58');
 }
 
 // --- 段4: 番記者と球団の出来事 ----------------------------------------------
@@ -285,6 +302,10 @@ assert.ok(!faceArt({ seed: 'c1', look: NEUTRAL_LOOK, age: 60, level: 3 }).items.
   assert.match(scene.line, /^「ついに上がれるぞ。主役の活躍/);
   assert.equal(eventScene({ ...view, races: [{ ...race, team: foe }] }), null, '他球団の昇格で場面が出た');
   assert.equal(eventScene({ ...view, staff: null, races: [race] }).speaker.kind, 'reporter', '監督が居なければ番記者が話す');
+  // 知らない部は「上の部」と書く（先頭の部の名前にしない）。年の無いビューは「年目」を書かない
+  assert.equal(eventScene({ ...view, races: [{ ...race, league: 'Z' }] }).heading, '2部優勝！　来季は上の部へ');
+  assert.equal(eventScene({ ...view, year: undefined, races: [race] }).title, '球団の出来事　9月');
+  assert.equal(scene.star.seed, 'p1', '主役の顔の種が選手の顔と違う');
 }
 
 console.log('online-look-check: ok');

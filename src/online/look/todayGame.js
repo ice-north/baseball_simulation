@@ -1,21 +1,28 @@
 // ============================================================
 // 新しい見た目（試作）段3: 「今日の一戦」の札の中身（`TodayGame.jsx`）。ビューから作る。
 //
-// ⚠ 試合はビューの `nextGames`（近い順。自球団の試合だけ）の先頭。いまのターンの試合なら
+// ⚠ 試合はビューの `nextGames`（近い順。自球団の試合だけ）の先頭。今日の日付の試合なら
 //    「今日の一戦」、先の試合なら「次の一戦」（休養日・手続きの日）。
 // ⚠ 順位は部の中の順（`compareLeagueStanding`。順位表の画面と同じ並べ方）。
-// ⚠ アプリの試合タブの札（`TodayGameCard.kt`）も同じ文にする。
+// ⚠ アプリ（共通部の `TodayGame.kt`、札は `LookScenes.kt` の `TodayGameCard`）に写してある。文を変えたら両方を直し、
+//    `node mobile/tools/expect-look.mjs > mobile/shared/src/jvmTest/resources/look-expected.json`
+//    で期待値を書き出し直す（答え合わせはアプリの `LookTest`）。
 // ============================================================
 import { compareLeagueStanding, PYRAMID_LEAGUES } from '../pyramidLeague.js';
 import { turnOfDate } from '../shared.js';
+import { sameDate } from '../paper/paperView.js';
 import { teamLook } from './teamLook.js';
 import { crowdLevel } from './sceneArt.js';
 
 const DAYS = ['日', '月', '火', '水', '木', '金', '土'];
 
-/** 先発の1行（「0勝1敗 防23.63」）。投げていなければ防御率は「—」 */
+/**
+ * 先発の1行（「0勝1敗 防23.63」）。投げていなければ防御率は「—」。
+ * ⚠ 防御率は丸めずに来る（自責点×27÷アウト）。`toFixed` だけだと 2.025 が 2.02 になり（2進数で 2.02499…）、
+ *    アプリ（百分の一に四捨五入）とずれるので、先に `Math.round` で百分の一にする
+ */
 const starterLine = (info) =>
-  `${info.wins || 0}勝${info.losses || 0}敗 ${info.era == null ? '防—' : `防${Number(info.era).toFixed(2)}`}`;
+  `${info.wins || 0}勝${info.losses || 0}敗 ${info.era == null ? '防—' : `防${(Math.round(Number(info.era) * 100) / 100).toFixed(2)}`}`;
 
 /** 部の中の順位と成績（「2部2位 5勝4敗」） */
 function standingOf(view, team) {
@@ -61,14 +68,15 @@ function noteOf(view, standing) {
 /**
  * 札の中身。自球団の試合が無ければ null。
  * @returns `{ title, when, place, home, city, crowd, note, own, foe }`。
- *   `own` / `foe` は `{ team, record, color, starter: { id, name, age, condition, mark, line } | null }`
+ *   `own` / `foe` は `{ team, record, standing, color, starter: { id, name, age, condition, mark, line } | null }`
+ *   （`standing` は `{ rank, rows, row, teams, record }`）
  */
 export function todayGameCard(view) {
   const game = (view?.nextGames || []).find((g) => g.home === view.teamName || g.away === view.teamName);
   if (!game) return null;
-  const now = turnOfDate(view.currentDate, view.seasonTurns);
   const turn = turnOfDate(game.date, view.seasonTurns);
-  const today = now != null && turn === now;
+  // ⚠ 日付で比べる（ターンはシーズンの中だけなので、10月のプレーオフの試合を「次の一戦」にしていた）
+  const today = sameDate(game.date, view.currentDate);
   const homeGame = game.home === view.teamName;
   const d = game.date || {};
   const weekday = d.year ? DAYS[new Date(Date.UTC(d.year, (d.month || 1) - 1, d.day || 1)).getUTCDay()] : '';

@@ -6,9 +6,9 @@
 // ⚠ **切のときは何も出さない**（ホームは今までと同じ）。
 // ⚠ 中身はビューの `nextGames`（先発予定つき。`server/leagueBoard.mjs` の `withStarters`）と順位表。
 //    今日の試合が無い日（休養日・手続きの日）は次の試合を「次の一戦」として出す。
-// ⚠ アプリの試合タブにも同じ札がある（`mobile/androidApp/.../TodayGameCard.kt`）。文を変えたら両方を直す。
+// ⚠ アプリの試合タブにも同じ札がある（`mobile/androidApp/.../LookScenes.kt` の `TodayGameCard`）。文を変えたら両方を直す。
 // ============================================================
-import React from 'react';
+import React, { useMemo } from 'react';
 import { useLook } from './LookContext.jsx';
 import { PlayerFace, StadiumBackdrop, TeamMark } from './Art.jsx';
 import { todayGameCard } from './todayGame.js';
@@ -40,7 +40,7 @@ function StarterCard({ side, right }) {
 
 export default function TodayGame({ view, onLineup }) {
   const { on } = useLook();
-  const card = on ? todayGameCard(view) : null;
+  const card = useMemo(() => (on ? todayGameCard(view) : null), [on, view]);
   if (!card) return null;
   return (
     <section className="online-today-game" aria-label={card.title}>

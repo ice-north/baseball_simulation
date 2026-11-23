@@ -471,6 +471,9 @@ export const recoverAllPitcherFatigue = (recoveryAmount = 20) => {
 // 試合シミュレーション用のチーム複製。試合中に一切参照しない重い履歴/通算系
 // フィールドを除外して複製することで、1試合あたりのディープコピーを約2倍高速化する。
 // 成績は最後に TEAMS_DATA（原本）へ書き戻すため、コピーに履歴がなくても問題ない。
+/** 塁の走者を数にする（一塁＝1・二塁＝2・三塁＝4 の和）。対人版の観測だけが使う */
+const basesMask = (bases) => bases.reduce((n, r, i) => (r ? n | (1 << i) : n), 0);
+
 const SIM_CLONE_OMIT = new Set([
   'growthHistory', 'statsHistory', 'careerHistory', 'careerStats', 'previousSeasonStats',
 ]);
@@ -2058,8 +2061,8 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false, observer = 
       // 最後の1球の前の得点（その打席の途中に暴投などで入った点を、打者の点と分けるため。
       // オンラインの「回の攻撃」が読む。⚠ 2026-11-20 監査「三振 1点」）
       observed.resultScore = { ...gameState.score };
-      // 最後の1球の前の塁（一塁＝1・二塁＝2・三塁＝4 の和）。オンラインの打席速報が読む
-      observed.resultBases = gameState.bases.reduce((n, r, i) => (r ? n | (1 << i) : n), 0);
+      // 最後の1球の前の塁（一塁＝1・二塁＝2・三塁＝4 の和）。打席の途中に暴投などで点が入った後の塁
+      observed.resultBases = basesMask(gameState.bases);
     };
 
     let atBatOver = false;
@@ -2173,7 +2176,7 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false, observer = 
       if (pitchCount <= 3 && gameState.outs < 2 && !gameState._stolenAttempted) {
         const stealBefore = observed ? {outs:pitcher.gameStats.pitching.outs,risp:!!(gameState.bases[1] || gameState.bases[2])} : null;
         const stealResult = attemptStolenBase(offenseTeam, defenseTeam);
-        if (observed && pitcher.gameStats.pitching.outs > stealBefore.outs) observer.runnerOut?.({...observed,risp:stealBefore.risp,outs:pitcher.gameStats.pitching.outs-stealBefore.outs});
+        if (observed && pitcher.gameStats.pitching.outs > stealBefore.outs) observer.runnerOut?.({...observed,risp:stealBefore.risp,outs:pitcher.gameStats.pitching.outs-stealBefore.outs,endBases:basesMask(gameState.bases)});
         if (stealResult) gameState._stolenAttempted = true;
         if (stealResult) observeReplay('steal', { success: stealResult.success, base: stealResult.base });
         if (stealResult && !stealResult.success && gameState.outs >= 3) {
@@ -2497,7 +2500,8 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false, observer = 
       const delta = Object.fromEntries(['atBats','hits','doubles','triples','homeruns','rbis','walks','hitByPitch','strikeouts','sacrificeBunts'].map(key=>[key,(after[key] || 0)-(observed.before[key] || 0)]));
       // 盗塁死や暴投サヨナラ、球数上限の未完了打席は対戦打席へ加えない。
       const completed = delta.atBats + delta.walks + delta.hitByPitch + delta.sacrificeBunts > 0;
-      observer.plateAppearance({ ...observed, delta, completed, scoreAfter: { ...gameState.score }, outs: pitcher.gameStats.pitching.outs - (observed.resultStartOuts ?? pitcher.gameStats.pitching.outs),
+      // endBases: 打席の後の塁（オンラインの打席速報が読む）
+      observer.plateAppearance({ ...observed, delta, completed, scoreAfter: { ...gameState.score }, endBases: basesMask(gameState.bases), outs: pitcher.gameStats.pitching.outs - (observed.resultStartOuts ?? pitcher.gameStats.pitching.outs),
         runs: (pitcher.gameStats.pitching.runsAllowed || 0) - observed.runsBefore,
         earnedRuns: (pitcher.gameStats.pitching.earnedRuns || 0) - observed.earnedBefore });
     }

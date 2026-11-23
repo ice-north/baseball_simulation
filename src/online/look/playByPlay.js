@@ -3,9 +3,10 @@
 // 1打席ずつの「場面」にして、実況の1行（テロップ）を作る。
 //
 // ⚠ **表示専用**。行の形はサーバーの `inningPlaysOf`（`server/recordedStats.mjs`）:
-//    [打者の番号, 記号, 点, アウト, 塁（打席の前）, 守備位置, 向き, 飛距離, 角度]
+//    [打者の番号, 記号, 点, アウト, 塁（その行の後）, 守備位置, 向き, 飛距離, 角度]
 //    5つ目からは打席速報のために足したもの（版20）。前からある試合の行は4つまでなので、
-//    その試合は打席速報を出さない（`hasLivePlays`）。打球の4つは打球が前へ飛んだ打席だけ。
+//    その試合は打席速報を出さない（`hasLivePlays`）。打球の4つは打球が前へ飛んだ打席だけ、
+//    打席の外の行（「走」「刺」）は塁だけ。
 // ⚠ アプリ（`mobile/shared/.../LookPlay.kt`）に写してある。文を変えたら両方を直し、
 //    `node mobile/tools/expect-look.mjs > mobile/shared/src/jvmTest/resources/look-expected.json`
 //    で期待値を書き出し直す（答え合わせはアプリの `LookTest`）。
@@ -102,17 +103,19 @@ function situationText(scene, short, last) {
     const other = offense === 'home' ? 'away' : 'home';
     const before = scoreBefore[offense] - scoreBefore[other];
     const after = score[offense] - score[other];
-    // ⚠ 最後の打席で裏の球団が前に出たらサヨナラ
+    // ⚠ 最後の打席で裏の球団が前に出たらサヨナラ。0-0 から点が入ったら先制
     const turn =
       last && offense === 'home' && after > 0
         ? 'サヨナラ'
-        : before < 0 && after > 0
-          ? '逆転'
-          : before === 0 && after > 0
-            ? '勝ち越し'
-            : before < 0 && after === 0
-              ? '同点'
-              : '';
+        : scoreBefore.home === 0 && scoreBefore.away === 0
+          ? '先制'
+          : before < 0 && after > 0
+            ? '逆転'
+            : before === 0 && after > 0
+              ? '勝ち越し'
+              : before < 0 && after === 0
+                ? '同点'
+                : '';
     const own = `${score[offense]}-${score[other]}`;
     return `${short(team)}が${runs}点${turn ? `、${turn}` : ''}（${own}）`;
   }
@@ -124,8 +127,8 @@ function situationText(scene, short, last) {
 /**
  * 試合を1打席ずつの場面にする。打席の外の点（暴投など）とアウト（盗塁死など）も1場面にする。
  * @param short 球団の内部名 → 短い表示名
- * @returns `[{ inning, half, team, offense, batter, code, runs, outsBefore, outs, bases, basesAfter,
- *            batted, scoreBefore, score, phrase, situation }]`
+ * @returns `[{ inning, half, team, offense, batter, code, runs, outsBefore, outs, basesAfter,
+ *            batted, scoreBefore, score, phrase, situation }]`（`basesAfter` は記録の無い行で null）
  */
 export function liveScenes(game, short = (t) => t) {
   const scenes = [];
@@ -136,7 +139,6 @@ export function liveScenes(game, short = (t) => t) {
     const team = game[offense];
     const players = game.teams?.[team] || [];
     let outs = 0;
-    const start = scenes.length;
     rows.forEach(([index, code, runs, rowOuts, bases, pos, dir, dist, la]) => {
       const before = { ...score };
       score[offense] += Number(runs) || 0;
@@ -153,25 +155,31 @@ export function liveScenes(game, short = (t) => t) {
         runs: Number(runs) || 0,
         outsBefore,
         outs,
-        bases: Number.isInteger(bases) ? bases : null,
-        basesAfter: null,
+        // 3つ目のアウトの後は走者なし
+        basesAfter: outs >= 3 ? 0 : Number.isInteger(bases) ? bases : null,
         batted: Number.isInteger(pos) ? { pos, dir: Number(dir) || 0, dist: Number(dist) || 0, la: Number(la) || 0 } : null,
         scoreBefore: before,
         score: { ...score },
       });
     });
-    // 打席の後の塁は、同じ半回で次に塁の分かる打席の前の塁（3つ目のアウトの後は空）。
-    // ⚠ 打席の外の行（暴投の点・盗塁死）には塁の記録が無いので飛ばす
-    for (let i = start; i < scenes.length; i++) {
-      const next = scenes.slice(i + 1).find((s) => s.bases != null);
-      scenes[i].basesAfter = scenes[i].outs >= 3 ? 0 : next ? next.bases : null;
-    }
   }
   scenes.forEach((s, i) => {
     s.phrase = playPhrase(s);
     s.situation = situationText(s, short, i === scenes.length - 1);
   });
   return scenes;
+}
+
+/**
+ * 送りの並び（全部か見どころだけ。小さい順）での、いまの場面の位置。並びに無ければ、その前でいちばん近いもの
+ * （見どころだけにしたとき、いまより前の見どころに留まる）。前に無ければ先頭
+ */
+export function orderPosition(order, index) {
+  let at = 0;
+  order.forEach((i, k) => {
+    if (i <= index) at = k;
+  });
+  return at;
 }
 
 /** 見どころ（点が入った・長打・併殺）だけの場面の番号 */

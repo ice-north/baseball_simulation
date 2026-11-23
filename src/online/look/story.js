@@ -91,9 +91,10 @@ function starOf(roster) {
   return best;
 }
 
+/** 上（-1）か下（+1）の部の名前。知らない部なら空（「上の部」「下の部」と書く） */
 const leagueAt = (id, step) => {
   const i = PYRAMID_LEAGUES.findIndex((l) => l.id === id);
-  return PYRAMID_LEAGUES[i + step]?.name || '';
+  return i < 0 ? '' : PYRAMID_LEAGUES[i + step]?.name || '';
 };
 
 /** 決着の種類ごとの見出しと台詞（`s` は主役の名字。居なければ空） */
@@ -129,7 +130,7 @@ const EVENTS = {
  * @returns `{ key, kind, good, title, heading, speaker, star, line }`
  *   `key` は見た印（同じ場面を2度出さない。端末に覚える）。
  *   `speaker` は `{ kind: 'coach' | 'reporter', id, seed, name, label, age }`（監督が居なければ番記者）。
- *   `star` は `{ id, name, age, condition }` か null
+ *   `star` は `{ id, seed, name, age, condition }` か null（`seed` は顔の種。選手の顔と同じ）
  */
 export function eventScene(view) {
   const me = view?.teamName;
@@ -141,6 +142,7 @@ export function eventScene(view) {
   const player = starOf(view.roster);
   const s = player ? surnameOf(player.name) : '';
   const month = view.currentDate?.month;
+  const when = [view.year != null ? `${view.year}年目` : '', month ? `${month}月` : ''].filter(Boolean).join('・');
   let speaker;
   if (manager) {
     speaker = { kind: 'coach', id: manager.id || null, seed: `c${manager.id || manager.name}`, name: manager.name || '', label: `${surnameOf(manager.name)}監督`, age: manager.age || 50 };
@@ -152,10 +154,12 @@ export function eventScene(view) {
     key: `${me}:${view.year ?? ''}:${race.kind}`,
     kind: race.kind,
     good: def.good,
-    title: `球団の出来事　${view.year ?? ''}年目${month ? `・${month}月` : ''}`,
+    title: `球団の出来事${when ? `　${when}` : ''}`,
     heading: def.heading(race),
     speaker,
-    star: player ? { id: player.id ?? null, name: player.name || '', age: player.age ?? null, condition: player.condition ?? null } : null,
+    star: player
+      ? { id: player.id ?? null, seed: `p${player.id ?? player.name}`, name: player.name || '', age: player.age ?? null, condition: player.condition ?? null }
+      : null,
     line: manager ? def.coach(s) : def.reporter(s),
   };
 }
