@@ -1586,7 +1586,7 @@ export function advanceToNextYear(seasonData, allTeams, { playedTeamNames = [], 
               s.gamesPlayed = found.gamesPlayed || 0;
             }
           });
-          uLeague.fall[standingsKey].sort((a, b) => b.winRate - a.winRate || b.wins - a.wins);
+          uLeague.fall[standingsKey].sort(compareStandings);
         }
         uLeague.fall.done = true;
       }

@@ -31,7 +31,7 @@ import { TEAMS_DATA, clearReleasedPlayersPool, initializeAllPitchingRotations } 
 import { reservePlayerIds } from '../state/playerIds.js';
 import { INDEPENDENT_LEAGUES, ALL_INDEPENDENT_LEAGUE_IDS } from './independentLeagueData.js';
 import { generateFullSeasonSchedule } from '../season/scheduleGenerator.js';
-import { initializeStandings } from '../season/seasonManager.js';
+import { initializeStandings, compareStandings } from '../season/seasonManager.js';
 import { initializeUniversityLeagues } from '../university/universityLeagueManager.js';
 import { UNIVERSITY_TEAMS } from '../university/universityTeamsData.js';
 import { seedInitialUniversityClasses, warmUpPlayerPipeline, universityPool, clearUniversityPool, clearHighSchoolPool } from '../season/universityPool.js';
@@ -1400,7 +1400,7 @@ export const updateAllTeamReputations = (seasonData) => {
   standings.forEach(s => { standingsMap[s.team] = s; });
 
   const champion = standings.length > 0
-    ? [...standings].sort((a, b) => b.winRate - a.winRate || b.wins - a.wins)[0]?.team
+    ? [...standings].sort(compareStandings)[0]?.team
     : null;
 
   // 大会結果を集計
@@ -1456,7 +1456,7 @@ export const updateAllTeamReputations = (seasonData) => {
 
     // 独立リーグは順位ベース（大学と同じ）
     if (teamData.independentLeagueId) {
-      const sorted = [...standings].sort((a, b) => b.winRate - a.winRate || b.wins - a.wins);
+      const sorted = [...standings].sort(compareStandings);
       const leaguePosition = sorted.findIndex(st => st.team === teamName) + 1;
       const seasonResults = {
         leaguePosition: leaguePosition || 0,
@@ -1537,7 +1537,7 @@ export const updateAllRanks = (seasonData) => {
   updateAllTeamReputations(seasonData);
 
   // TEAMS_DATA大学チームのreputation更新
-  const sortedStandings = [...standings].sort((a, b) => b.winRate - a.winRate || b.wins - a.wins);
+  const sortedStandings = [...standings].sort(compareStandings);
   const ucChampion = seasonData.universityChampionship?.champion || null;
   const mjChampion = seasonData.meijiJingu?.champion || null;
   for (const teamName of Object.keys(TEAMS_DATA)) {
@@ -1573,7 +1573,7 @@ export const updateAllRanks = (seasonData) => {
           ? [...(sd.standings1 || []), ...(sd.standings2 || [])]
           : (sd.standings || []);
         if (allSt.length === 0) continue;
-        const sorted = [...allSt].sort((a, b) => b.winRate - a.winRate || b.wins - a.wins);
+        const sorted = [...allSt].sort(compareStandings);
         for (const st of allSt) {
           if (!worldTeamGains[st.team]) worldTeamGains[st.team] = 0;
           const pos = sorted.findIndex(s => s.team === st.team) + 1;
