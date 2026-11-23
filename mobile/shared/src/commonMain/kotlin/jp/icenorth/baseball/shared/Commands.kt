@@ -169,7 +169,7 @@ fun campSubTargetChoices(subKey: String?, player: JsonObject): List<Choice> {
     val arsenal = player.at("pitching", "arsenal").list().mapNotNull { it.obj() }
     val owned = arsenal.mapNotNull { it.at("type").str() }.filter { it != "straight" }
     val name = { type: String -> PITCH_TYPE_NAMES[type] ?: type }
-    return when (CAMP_SUB_TARGETS[subKey]) {
+    return when (campTargetKind(subKey, player)) {
         "pitch" -> CAMP_PITCH_TYPES.filter { it !in owned }.map { Choice(it, name(it)) }
         "ownPitch" -> arsenal.filter { (it.at("type").str() ?: "") in owned && (it.at("level").num() ?: 0.0) < 100 }
             .map { pitch ->
@@ -179,6 +179,9 @@ fun campSubTargetChoices(subKey: String?, player: JsonObject): List<Choice> {
         // ⚠ フォーム改造・打席変更は、いまの形を除く（Web 版と同じ「サイドへ」「両打へ」）
         "form" -> CAMP_FORMS.filter { it != (player.at("pitching", "form").str() ?: "threeQuarter") }
             .map { Choice(it, "${FORM_SHORT[it] ?: it}へ") }
+        // ⚠ 野手のフォーム改造＝打撃フォーム（いしだ 2026-11-23。Web 版 batterZone.js の BATTING_STANCES）
+        "stance" -> CAMP_STANCES.filter { it != battingStanceOf(player) }
+            .map { Choice(it, "${BATTING_STANCE_NAMES[it] ?: it}へ") }
         "bats" -> CAMP_BATS.filter { it != currentBats(player) }.map { Choice(it, "${BATS_SHORT[it] ?: it}へ") }
         "position" -> CONVERT_POSITIONS.filter { it != "pitcher" && it != player.at("position").str() }
             .map { pos -> Choice(pos, (POSITION_NAMES[pos] ?: pos) + (player.at("positionFitness", pos).num()?.let { " ${plainNumber(it)}%" } ?: "")) }
@@ -190,8 +193,47 @@ fun campSubTargetChoices(subKey: String?, player: JsonObject): List<Choice> {
 fun currentBats(player: JsonObject): String =
     player.at("batting", "bats").str() ?: player.at("physical", "bats").str() ?: "right"
 
+/**
+ * その選手にとっての対象の種類。Web 版 shared.js の campTargetKind と同じ決まり。
+ * ⚠ フォーム改造だけ**投手と野手で別物**（投球フォーム / 打撃フォーム）。
+ */
+fun campTargetKind(subKey: String?, player: JsonObject): String? =
+    if (subKey == "form_change" && player.at("position").str() != "pitcher") "stance"
+    else CAMP_SUB_TARGETS[subKey]
+
+/** 打撃フォームの名前（Web 版 batterZone.js の BATTING_STANCES と同じ） */
+val BATTING_STANCE_NAMES: Map<String, String> =
+    mapOf("open" to "オープン", "square" to "スクエア", "closed" to "クローズ")
+
+/**
+ * いまの打撃フォーム。持っていなければ**名前とIDから決める**
+ * （Web 版 batterZone.js の battingStanceOf と同じ。スクエア50%/オープン25%/クローズ25%）。
+ */
+fun battingStanceOf(player: JsonObject): String {
+    val own = player.at("battingStance").str()
+    if (own != null && BATTING_STANCE_NAMES.containsKey(own)) return own
+    val name = player.at("name").str().orEmpty()
+    val id = player.at("id").num()?.toLong() ?: 0L
+    val u = hash32("$name#$id", 0x5f356495u).toDouble() / 4294967296.0
+    return if (u < 0.25) "open" else if (u < 0.75) "square" else "closed"
+}
+
+/** Web 版 batterZone.js の hash32（FNV-1a + avalanche）と同じ */
+private fun hash32(text: String, seed: UInt): UInt {
+    var h = seed
+    for (ch in text) {
+        h = h xor (ch.code.toUInt() and 0xffffu)
+        h *= 16777619u
+    }
+    h = h xor (h shr 15); h *= 2246822507u
+    h = h xor (h shr 13); h *= 3266489909u
+    h = h xor (h shr 16)
+    return h
+}
+
 /** 対象を選ばないと練習しない（基礎体力になる）サブ練習か。選ばないときの見出しを「未選択」にする */
-fun campTargetRequired(subKey: String?): Boolean = CAMP_SUB_TARGETS[subKey] in CAMP_TARGET_REQUIRED
+fun campTargetRequired(subKey: String?, player: JsonObject): Boolean =
+    campTargetKind(subKey, player) in CAMP_TARGET_REQUIRED
 
 /** 整数なら小数点を付けずに出す（JS の `${n}` と同じ見え方） */
 private fun plainNumber(value: Double): String = if (value % 1.0 == 0.0) value.toLong().toString() else value.toString()

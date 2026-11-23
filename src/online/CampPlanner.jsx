@@ -1,3 +1,4 @@
+import { BATTING_STANCES, battingStanceOf } from '../game/batterZone.js';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { menusFor, subMenusFor, clampMenu, clampSub } from './campMenus.js';
 import { FORM_PITCH_AFFINITY } from '../season/campTraining.js';
@@ -20,6 +21,8 @@ import {
   CAMP_TARGET_REQUIRED,
   CAMP_FORMS,
   CAMP_BATS,
+  CAMP_STANCES,
+  campTargetKind,
   currentBats,
   CONVERT_POSITIONS,
 } from './shared.js';
@@ -72,7 +75,8 @@ import { formatDeadline } from './LeaguePanels.jsx';
  *    「未選択」に戻る（サーバーは基礎体力で回す。`campSubKey`）。文はアプリ（Camp.kt）と同じ
  */
 export function subTargetChoices(key, player) {
-  const kind = CAMP_SUB_TARGETS[key];
+  // ⚠ フォーム改造は投手と野手で別物（投球フォーム / 打撃フォーム。`campTargetKind`）
+  const kind = campTargetKind(key, player);
   const owned = (player.pitching?.arsenal || [])
     .filter((pitch) => pitch?.type && pitch.type !== 'straight')
     .map((pitch) => pitch.type);
@@ -92,6 +96,12 @@ export function subTargetChoices(key, player) {
     return CAMP_FORMS.filter(
       (form) => form !== (player.pitching?.form || 'threeQuarter'),
     ).map((form) => [form, `${FORM_SHORT[form]}へ`]);
+  // 打撃フォーム（オープン/スクエア/クローズ）。いまのフォーム以外を出す
+  if (kind === 'stance')
+    return CAMP_STANCES.filter((st) => st !== battingStanceOf(player)).map((st) => [
+      st,
+      `${BATTING_STANCES[st].label}へ`,
+    ]);
   if (kind === 'bats')
     return CAMP_BATS.filter((bats) => bats !== currentBats(player)).map(
       (bats) => [bats, `${BATS_SHORT[bats]}へ`],
@@ -379,7 +389,7 @@ function PlayerRow({
             className="online-camp-target"
             aria-label={`${player.name}の練習の対象`}
             title={
-              CAMP_TARGET_REQUIRED.includes(CAMP_SUB_TARGETS[sub])
+              CAMP_TARGET_REQUIRED.includes(campTargetKind(sub, player))
                 ? '選ばないと基礎体力になります'
                 : undefined
             }
@@ -388,7 +398,7 @@ function PlayerRow({
             onChange={(e) => onTarget(player.id, e.target.value)}
           >
             <option value="">
-              {CAMP_TARGET_REQUIRED.includes(CAMP_SUB_TARGETS[sub])
+              {CAMP_TARGET_REQUIRED.includes(campTargetKind(sub, player))
                 ? '未選択'
                 : 'おまかせ'}
             </option>

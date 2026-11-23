@@ -21,6 +21,8 @@ import { TEAMS_DATA } from '../../src/teams-data.js';
 import { CAMP_PITCH_TYPES, currentBats } from '../../src/online/shared.js';
 import { campSubKey } from '../../server/leagueEngine.mjs';
 import { subMenusFor } from '../../src/online/campMenus.js';
+import { CAMP_STANCES } from '../../src/online/shared.js';
+import { battingStanceOf } from '../../src/game/batterZone.js';
 
 const NOW = '2026-10-26T15:00:00.000Z';
 const quiet = (fn) => {
@@ -101,17 +103,31 @@ const roster = () => league.game.teams[name].players;
   const from = pitcher.pitching.form || 'threeQuarter';
   const to = from === 'sidearm' ? 'overhand' : 'sidearm';
   assert.ok(subMenusFor(pitcher).some(([k]) => k === 'form_change'), '投手にフォーム改造が出ていない');
-  assert.ok(!subMenusFor(batter).some(([k]) => k === 'form_change'), '野手にフォーム改造が出ている');
+  // ⚠ **野手にもフォーム改造が出る**（いしだ 2026-11-23）。投手は投球フォーム、
+  //    野手は打撃フォーム（オープン/スクエア/クローズ）。中身は `campTargetKind` が分ける
+  assert.ok(subMenusFor(batter).some(([k]) => k === 'form_change'), '野手にフォーム改造が出ていない');
   assert.ok(subMenusFor(batter).some(([k]) => k === 'switch_hit'), '野手に打席変更が出ていない');
   // 対象が無い・もうその形 → 基礎体力
   assert.equal(campSubKey('form_change', pitcher, undefined), 'physique');
   assert.equal(campSubKey('form_change', pitcher, from), 'physique');
   assert.equal(campSubKey('form_change', pitcher, to), 'form_change');
   assert.equal(campSubKey('switch_hit', batter, undefined), 'physique');
-  // 野手にフォーム改造の対象は断る（練習そのものが野手に出ない）
-  assert.throws(() =>
-    validateCampRound(league, name, { round: 1, sub: { [batter.id]: 'form_change' }, subTarget: { [batter.id]: 'sidearm' } }),
-  );
+  // 野手の打撃フォーム: いまのフォーム以外を選べば効く。投球フォームの名前は断る
+  {
+    const now = battingStanceOf(batter);
+    const other = CAMP_STANCES.find((st) => st !== now);
+    assert.equal(campSubKey('form_change', batter, undefined), 'physique', '野手も対象なしは基礎体力');
+    assert.equal(campSubKey('form_change', batter, now), 'physique', 'いまと同じ打撃フォームは基礎体力');
+    assert.equal(campSubKey('form_change', batter, other), 'form_change', '別の打撃フォームが効かない');
+    // ⚠ 投手のフォーム名は野手では断る（取り違えを通さない）
+    assert.throws(() =>
+      validateCampRound(league, name, { round: 1, sub: { [batter.id]: 'form_change' }, subTarget: { [batter.id]: 'sidearm' } }),
+    );
+    // ⚠ 逆も断る（投手に打撃フォームの名前）
+    assert.throws(() =>
+      validateCampRound(league, name, { round: 1, sub: { [pitcher.id]: 'form_change' }, subTarget: { [pitcher.id]: 'closed' } }),
+    );
+  }
   // 4クール同じ指示で回しても、フォームは選んだ形から動かない（1回目で変わり、後は基礎体力）
   const bats = currentBats(batter);
   const toBats = bats === 'switch' ? 'right' : 'switch';

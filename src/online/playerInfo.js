@@ -1,6 +1,7 @@
 import { BALL_EFFECTS, PITCHING_FORM_EFFECTS, normalizeAbility } from '../utils/constants.js';
 import { naturalGrowthText } from '../utils/naturalGrowth.js';
 import { getDeception } from '../game/deception.js';
+import { describeBatterShape } from '../game/batterZone.js';
 import { getBatterType, BATTER_TYPE_LABEL } from '../game/batterType.js';
 const n = (value) =>
   typeof value === 'number' && Number.isFinite(value) ? value : null;
@@ -48,6 +49,7 @@ export const ABILITY_HELP = {
   スタミナ: '1試合で投げられる量。減るほど球速と制球が落ちる。',
   回転: '直球のノビと変化球のキレ。高いほど球種の実際の効きが上がる。',
   出どころ: '球の見えにくさ。打者がタイミングを取りにくく、球種も見分けにくい。生まれつきで変わらない。',
+  打撃フォーム: 'オープン・スクエア・クローズの3つ。オープンは内角が得意で外角が苦手、クローズはその逆、スクエアは偏りなし。体格も同じ向きに効く（小柄は内角・大柄は外角が得意）。キャンプの「フォーム改造」で変えられる（成功率は器用さで上下し、成否にかかわらずフォームは変わる）。苦手を消すか、得意を伸ばすかの選択。',
   フォーム: '球速の出方（オーバー1.00倍〜アンダー0.92倍）と、球速・制球の伸びやすさが変わる。',
   守備: '打球の処理のうまさ。失策と、捕れる範囲に効く。',
   肩力: '送球の強さ。外野からの返球・内野の送球・捕手の盗塁阻止に効く。',
@@ -88,6 +90,11 @@ export function abilityRows(player, group) {
         '打者型',
         player.batting ? BATTER_TYPE_LABEL[getBatterType(player)] : null,
       ],
+      // ⚠ 打撃フォーム（オープン/スクエア/クローズ）。内外角の得手不得手を動かす
+      //    （`src/game/batterZone.js` の `BATTING_STANCES`）。体格も同じ向きに効く。
+      //    ⚠ **能力の数字より後ろに置くこと**。先頭に置くと、先頭の行を能力と見て
+      //       並べ替える画面（`abilityRows(...)[0]`）が文字を掴む
+      ['打撃フォーム', player.batting ? describeBatterShape(player) : null],
     ],
     pitching: [
       ['球速', n(p.velocity)],

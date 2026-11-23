@@ -521,7 +521,7 @@ private fun CampPlayerCard(
         }
         // 対象を取る練習（新球種習得・変化球練習・サブポジ練習）だけ、何を練習するかを選ぶ。⚠「おまかせ」を残す（従来どおり中で選ぶ）
         val choices = campSubTargetChoices(sub, p)
-        if (choices.isNotEmpty()) TargetPicker(target, choices, enabled, if (campTargetRequired(sub)) "未選択" else "おまかせ", onTarget)
+        if (choices.isNotEmpty()) TargetPicker(target, choices, enabled, if (campTargetRequired(sub, p)) "未選択" else "おまかせ", onTarget)
     }
 }
 

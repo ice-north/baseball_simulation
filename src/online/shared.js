@@ -15,7 +15,7 @@ import { SEASON_TURNS } from './pyramidLeague.js';
 //    1 = 固定4球団・2人・1日7枠）。
 // ⚠ 上げてもリーグは**作り直せない**（`create` は既存リーグがあると拒む）。
 //    `docs/online/PRODUCTION_SETUP.md` の作り直し手順で制御行を空にすること。
-export const ONLINE_SCHEMA = 19;
+export const ONLINE_SCHEMA = 20;
 export const ONLINE_ENGINE_VERSION = 'online-1';
 
 // ---- ターンの長さ
@@ -511,14 +511,26 @@ export const CAMP_SUB_TARGETS = {
   breaking: 'ownPitch',
   // 覚えさせたい守備位置
   subposition: 'position',
-  // 変えたいフォーム（投手だけ。野手のフォーム改造はミートの練習で、対象は無い）
+  // 変えたいフォーム。⚠ **投手と野手で中身が違う**（`campTargetKind`）。
+  //    投手は投球フォーム（`CAMP_FORMS`）、野手は打撃フォーム（`CAMP_STANCES`）
   form_change: 'form',
   // 変えたい打席（右・左・両）
   switch_hit: 'bats',
 };
 
 /** 対象を選ばないと練習しない種類（おまかせを出さない） */
-export const CAMP_TARGET_REQUIRED = ['form', 'bats'];
+export const CAMP_TARGET_REQUIRED = ['form', 'stance', 'bats'];
+/** 打撃フォーム改造で選べるフォーム（いしだ 2026-11-23。中身は `BATTING_STANCES`） */
+export const CAMP_STANCES = ['open', 'square', 'closed'];
+/**
+ * その選手にとっての「対象の種類」。
+ * ⚠ フォーム改造だけ**投手と野手で別物**なので、menu の名前だけでは決まらない。
+ *    サーバー（受け付け・実行）と画面（選択肢）が必ずこれを通すこと。
+ */
+export const campTargetKind = (key, player) =>
+  key === 'form_change' && player?.position !== 'pitcher'
+    ? 'stance'
+    : CAMP_SUB_TARGETS[key];
 /** フォーム改造で選べるフォーム */
 export const CAMP_FORMS = ['overhand', 'threeQuarter', 'sidearm', 'submarine'];
 /** 打席変更で選べる打席 */

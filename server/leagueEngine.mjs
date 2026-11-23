@@ -2,6 +2,8 @@ import { numberLeagueTeams, captainsOfYear, updateTeamFace } from './teamFace.mj
 import './engine-bootstrap.mjs';
 import { schedulePlayoffReplay, PLAYOFF_REPLAY } from './playoffReplay.mjs';
 import { selectHonors } from './seasonAwards.mjs';
+// 打撃フォーム（野手のフォーム改造の対象）。既定は名前とIDから決まる
+import { battingStanceOf } from '../src/game/batterZone.js';
 import {
   recordMilestones,
   recordKoshien,
@@ -177,6 +179,8 @@ import {
   CAMP_PITCH_TYPES,
   CAMP_FORMS,
   CAMP_BATS,
+  CAMP_STANCES,
+  campTargetKind,
   currentBats,
   onlineFielderFatigueFor,
 } from '../src/online/shared.js';
@@ -383,12 +387,14 @@ function campPlayerPolicies(roster, source) {
  * サブ練習の「対象」を `executeSubTraining` が読む形にする。
  * ⚠ 対象を取らないメニューには何も渡さない（知らない鍵を増やさない）。
  */
-function campTargetOptions(key, value) {
+function campTargetOptions(key, value, player) {
   if (!value) return {};
-  const kind = CAMP_SUB_TARGETS[key];
+  const kind = campTargetKind(key, player);
   if (kind === 'pitch' || kind === 'ownPitch') return { targetPitch: value };
   if (kind === 'position') return { targetPosition: value };
   if (kind === 'form') return { targetForm: value };
+  // 野手のフォーム改造＝打撃フォーム（オープン/スクエア/クローズ）
+  if (kind === 'stance') return { targetStance: value };
   if (kind === 'bats') return { targetBats: value };
   return {};
 }
@@ -401,6 +407,11 @@ function campTargetOptions(key, value) {
  * ⚠ 打席変更は失敗すると打席が変わらないので、次のクールでまた挑む（成功したら止まる）
  */
 export function campSubKey(key, player, target) {
+  // ⚠ フォーム改造は投手と野手で別物（投球フォーム / 打撃フォーム）
+  if (key === 'form_change' && player?.position !== 'pitcher')
+    return CAMP_STANCES.includes(target) && target !== battingStanceOf(player)
+      ? key
+      : 'physique';
   if (key === 'form_change')
     return CAMP_FORMS.includes(target) && target !== (player.pitching?.form || 'threeQuarter')
       ? key
@@ -508,7 +519,7 @@ export function runCampRound(
         executeSubTraining(
           player,
           key,
-          campTargetOptions(key, subTarget?.[player.id]),
+          campTargetOptions(key, subTarget?.[player.id], player),
           staff,
         )?.growthReport,
       );
@@ -1389,7 +1400,7 @@ export function validateCampRound(league, teamName, payload) {
     const playerId = Number(id);
     const player = byId.get(playerId);
     if (!player || !value) continue;
-    const kind = CAMP_SUB_TARGETS[sub[playerId]];
+    const kind = campTargetKind(sub[playerId], player);
     requireOnline(kind, '対象を選べない練習に対象が付いています');
     // ⚠ **磨きたい球種（ownPitch）はその選手の持ち球で照らす**。新球種の表
     //    （`CAMP_PITCH_TYPES`、覚えられる8種）で照らしていたので、スプリット・
@@ -1402,8 +1413,10 @@ export function validateCampRound(league, teamName, payload) {
         ? CONVERT_POSITIONS.includes(value) && value !== 'pitcher'
         : kind === 'form'
           ? CAMP_FORMS.includes(value)
-          : kind === 'bats'
-            ? CAMP_BATS.includes(value)
+          : kind === 'stance'
+            ? CAMP_STANCES.includes(value)
+            : kind === 'bats'
+              ? CAMP_BATS.includes(value)
             : kind === 'ownPitch'
               ? owned.includes(value)
               : CAMP_PITCH_TYPES.includes(value),

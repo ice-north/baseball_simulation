@@ -9,7 +9,7 @@ import PotentialBadge from './PotentialBadge.jsx';
 import { useEscapeToClose } from './useEscapeToClose.js';
 import { withoutPlaceholderHighSchool } from '../utils/careerHistory.js';
 import { TEAMS_DATA } from '../teams-data.js';
-import { getZoneProfile, zoneHeatmap, describeZoneProfile } from '../game/batterZone.js';
+import { getZoneProfile, zoneHeatmap, describeZoneProfile, describeBatterShape, battingStanceOf, BATTING_STANCES } from '../game/batterZone.js';
 import { getDeception, describeDeception } from '../game/deception.js';
 import { getBatterType, BATTER_TYPE_LABEL, BATTER_TYPE_NOTE } from '../game/batterType.js';
 import { naturalGrowthOf, naturalGrowthText, naturalGrowthColor, naturalGrowthTitle } from '../utils/naturalGrowth.js';
@@ -33,6 +33,13 @@ const ZoneHeatGrid = ({ player }) => {
         コース適性
         <span className="ml-2 text-xs font-normal text-gray-300">赤=得意 / 青=苦手</span>
       </h3>
+      {/* ⚠ 打撃フォームと体格（いしだ 2026-11-23）。内外角の得手不得手を動かす
+          （オープンは内角が得意・クローズは外角が得意／小柄は内角・大柄は外角）。
+          絵の偏りの「なぜ」がここに出る。キャンプのフォーム改造で変えられる */}
+      <div className="text-xs text-gray-300 mb-2">
+        打撃フォーム: <span className="text-white font-bold">{describeBatterShape(player)}</span>
+        <span className="text-gray-400 ml-1">（{BATTING_STANCES[battingStanceOf(player)].note}）</span>
+      </div>
       {/* 打者の型（野村の4分類）。能力から決まり、狙い方が変わる */}
       {(() => {
         const t = getBatterType(player);

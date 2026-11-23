@@ -61,6 +61,58 @@ function bell(key, seed) {
 
 export const NEUTRAL_ZONE_PROFILE = Object.freeze({ inside: 0, low: 0, middle: 0 });
 
+// ============================================================
+// 【打撃フォームと体格のレイヤー】いしだ 2026-11-23
+//   「打撃フォームを取り入れよう…オープン：インコースが得意になり、アウトコースが
+//    苦手になる／スクエア：平均的／クローズ：アウトコースが得意になり、インコースが
+//    苦手になる。また、体格によっても違いを出します（大柄：アウトコースが得意／
+//    普通：平均的／小柄：インコースが得意）。元々の打撃タイプに加え、個人の好み。
+//    この２つにフォームと体格によるレイヤーを加え、苦手を無くす打撃フォームにするか、
+//    得意を伸ばす打撃フォームにするか、プレイヤーの判断で変わります」
+//
+// `inside` は**内角の苦手さ**なので、「内角が得意」は**マイナス**側。
+//   オープン → 内角が得意 → -0.35 ／ クローズ → 外角が得意 → +0.35
+//   小柄     → 内角が得意 → -0.20 ／ 大柄     → 外角が得意 → +0.20
+//
+// ⚠ **幅はハッシュの σ(0.34) を目安にした**。フォームは自分で選ぶものなので1σ、
+//    体格は生まれつきなので0.6σ。両方を同じ向きに積むと ±0.55 動き、先天の偏りと
+//    合わせて端（±1）に届く＝「得意を伸ばしきった打者」になる。逆向きに積めば
+//    先天の偏りをほぼ打ち消せる＝「苦手を無くす」。どちらを選ぶかが判断になる。
+// ⚠ **体格はここが初めての実戦での効き目**。それまでは生成時の能力（大柄はパワー+6・
+//    走力-5 など）と守備適性に乗るだけで、試合には一切効いていなかった。
+// ============================================================
+export const BATTING_STANCES = {
+  open:   { label: 'オープン', short: '開', inside: -0.35, note: '内角が得意・外角が苦手' },
+  square: { label: 'スクエア', short: '平', inside: 0,     note: '偏りなし' },
+  closed: { label: 'クローズ', short: '閉', inside: 0.35,  note: '外角が得意・内角が苦手' },
+};
+/** 体格ごとの内角の苦手さ（大柄は外角が得意＝内角が苦手寄り） */
+export const BUILD_INSIDE = { large: 0.20, medium: 0, small: -0.20 };
+
+/**
+ * その打者の打撃フォーム。
+ * ⚠ 自分で変えていなければ（`battingStance` が無ければ）**名前とIDから決定的に導く**。
+ *    生成箇所が散在していて全部に足すと必ず漏れる、というこのファイルの方針と同じ
+ *    （冒頭の「なぜセーブに持たないか」を参照）。スクエア50% / オープン25% / クローズ25%。
+ * ⚠ キャンプの「フォーム改造」で変えたときだけ選手に載る（`battingStance`）。
+ */
+export function battingStanceOf(player) {
+  if (!player) return 'square';
+  if (BATTING_STANCES[player.battingStance]) return player.battingStance;
+  const u = unit(hash32(`${player.name || ''}#${player.id ?? 0}`, 0x5f356495));
+  return u < 0.25 ? 'open' : u < 0.75 ? 'square' : 'closed';
+}
+const stanceInside = (player) => BATTING_STANCES[battingStanceOf(player)].inside;
+const buildInside = (player) => BUILD_INSIDE[player?.physical?.build] ?? 0;
+
+/** 「オープン・小柄」のような短い説明（選手情報で得意ゾーンの横に出す） */
+export function describeBatterShape(player) {
+  const stance = BATTING_STANCES[battingStanceOf(player)];
+  const build = player?.physical?.build;
+  const buildText = build === 'large' ? '大柄' : build === 'small' ? '小柄' : null;
+  return buildText ? `${stance.label}・${buildText}` : stance.label;
+}
+
 const cache = new WeakMap();
 
 /**
@@ -118,18 +170,22 @@ export function getZoneProfile(player) {
   if (player.zoneProfile) return player.zoneProfile;
   const b = player.batting;
   const hit = cache.get(player);
-  // 成長でミート・パワーが動いたら作り直す（キャッシュが古くなるため）
-  if (hit && hit.m === (b?.meet ?? -1) && hit.p === (b?.power ?? -1)) return hit.profile;
+  // 成長でミート・パワーが動いたら作り直す（キャッシュが古くなるため）。
+  // ⚠ **打撃フォームもキャンプで変わる**ので見ること（見ないと変えた年のうちは古い絵が出る）
+  const stance = battingStanceOf(player);
+  if (hit && hit.m === (b?.meet ?? -1) && hit.p === (b?.power ?? -1) && hit.s === stance)
+    return hit.profile;
   // IDはチーム内でしか一意でない（players.js は 1〜9）ので名前と混ぜる
   const key = `${player.name || ''}#${player.id ?? 0}`;
   const r2 = (v) => Math.round(clamp(v, -1, 1) * 100) / 100;
   const profile = {
-    inside: r2(bell(key, 0x01000193) + tendencyInside(b)),
+    // 先天の偏り＋打撃タイプ（ミートとパワーの差）＋**打撃フォーム**＋**体格**
+    inside: r2(bell(key, 0x01000193) + tendencyInside(b) + stanceInside(player) + buildInside(player)),
     low: r2(bell(key, 0x7feb352d) * LOW_W),
     // 真ん中↔四隅の得手不得手。これが無いと中心は全打者ぴったり0になる（下記）
     middle: r2(bell(key, 0x2545f491) + MIDDLE_BIAS),
   };
-  cache.set(player, { profile, m: b?.meet ?? -1, p: b?.power ?? -1 });
+  cache.set(player, { profile, m: b?.meet ?? -1, p: b?.power ?? -1, s: stance });
   return profile;
 }
 

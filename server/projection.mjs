@@ -152,6 +152,10 @@ const playerView = (p) => ({
   },
   positionFitness: p.positionFitness,
   zoneProfile: p.zoneProfile,
+  // ⚠ 打撃フォーム（オープン/スクエア/クローズ）。画面は得意ゾーンを
+  //    名前とIDから組み直す（`batterZone.js`）ので、**変えた人の分は渡さないと絵がずれる**。
+  //    変えていない選手は undefined で、画面が既定を導く
+  battingStance: p.battingStance,
   growthPotential: p.growthPotential,
   growthModifier: p.growthModifier,
   origin: {

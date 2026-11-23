@@ -40,8 +40,14 @@ class CampTargetTest {
         assertEquals(listOf("overhand" to "オーバーへ", "sidearm" to "サイドへ", "submarine" to "アンダーへ"), campSubTargetChoices("form_change", pitcher).map { it.key to it.label })
         val lefty = obj("""{"id":3,"position":"left","batting":{"bats":"left"}}""")
         assertEquals(listOf("right" to "右打へ", "switch" to "両打へ"), campSubTargetChoices("switch_hit", lefty).map { it.key to it.label })
-        assertEquals(true, campTargetRequired("switch_hit"))
-        assertEquals(false, campTargetRequired("newpitch"))
+        assertEquals(true, campTargetRequired("switch_hit", lefty))
+        assertEquals(false, campTargetRequired("newpitch", pitcher))
+        // ⚠ 野手のフォーム改造は**打撃フォーム**（いしだ 2026-11-23）。投球フォームは出さない
+        val stances = campSubTargetChoices("form_change", lefty)
+        assertEquals(2, stances.size)
+        assertEquals(true, stances.all { it.key in CAMP_STANCES && it.label.endsWith("へ") })
+        assertEquals(true, stances.none { it.key == battingStanceOf(lefty) })
+        assertEquals(true, campTargetRequired("form_change", lefty))
     }
 
     @Test

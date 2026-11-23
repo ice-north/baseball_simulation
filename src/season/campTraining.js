@@ -13,6 +13,8 @@ import { PITCHING_FORM_EFFECTS, getPitchTypeName, FORM_SHORT, BATS_SHORT, ABILIT
 import { syncPositionToFitness, getVelocityCap, getVelocityCatchupMult } from '../utils/physics.js';
 // ⚠ **確率的丸め**。年次成長（`growthSystem`）と同じものを使う（二重に書かない）
 import { stochasticRound } from './growthSystem.js';
+// 打撃フォーム（オープン/スクエア/クローズ）。得意ゾーンへの効き目は `batterZone.js` が持つ
+import { BATTING_STANCES, battingStanceOf } from '../game/batterZone.js';
 
 /**
  * 覚えられる変化球（直球は除く）。
@@ -301,9 +303,9 @@ const SUB_MENU_ONLY = {
   newpitch: 'pitcher',
   spin_analysis: 'pitcher',
   clead_study: 'catcher',
-  // ⚠ 野手のフォーム改造はミートが少し伸びるだけ（打撃練習と変わらない）。名前どおりの
-  //    投球フォームの改造は投手だけなので、オンラインでは投手にだけ出す（一人用の画面はこの表を見ない）
-  form_change: 'pitcher',
+  // ⚠ フォーム改造は**投手も野手も使える**（いしだ 2026-11-23）。投手は投球フォーム、
+  //    野手は打撃フォーム（オープン/スクエア/クローズ）を変える。以前は野手だと
+  //    ミートが少し伸びるだけだったので投手にだけ出していた
 };
 export const subMenuFitsPlayer = (key, player) => {
   if (!SUB_TRAINING_MENUS[key]) return false;
@@ -341,7 +343,7 @@ export const SUB_TRAINING_MENUS = {
   form_change: {
     name: 'フォーム改造',
     icon: '🔄',
-    description: '投球フォーム変更に挑戦（成功20%・器用さで上下: フォーム変更+能力UP / 失敗: 制球低下）',
+    description: '投手は投球フォーム、野手は打撃フォーム（オープン/スクエア/クローズ）の変更に挑戦（成功20%・器用さで上下: 成功で能力UP / 失敗で低下。フォームは成否によらず変わる）',
     targets: ['control', 'meet'],
   },
   switch_hit: {
@@ -649,14 +651,43 @@ export function executeSubTraining(player, subType, options = {}, staffBonus = n
           }
         }
       } else if (player.batting) {
-        // 野手のフォーム改造: ミート微増（70以上は減衰）
-        const mtRaw = growthAmount();
-        if (mtRaw > 0) {
+        // ============================================================
+        // 【野手のフォーム改造＝打撃フォームを変える】いしだ 2026-11-23
+        //   「オープン：インコースが得意になり、アウトコースが苦手になる／スクエア：
+        //    平均的／クローズ：アウトコースが得意になり、インコースが苦手になる…
+        //    苦手を無くす打撃フォームにするか、得意を伸ばす打撃フォームにするか、
+        //    プレイヤーの判断で変わります」
+        //
+        // ⚠ それまではミートが少し伸びるだけで、打撃練習の劣化版だった。
+        // ⚠ 投手のフォーム改造と**同じ形**にする（成否にかかわらずフォームは変わり、
+        //    成功なら主要能力が伸び、失敗なら下がる。成功率は器用さで動く）。
+        //    違うのは動く能力がミートであることだけ。
+        // ⚠ 得意ゾーンへの効き目は `src/game/batterZone.js`（`BATTING_STANCES`）。
+        //    ここは「どのフォームにするか」だけを決める。
+        // ============================================================
+        const currentStance = battingStanceOf(player);
+        const stances = Object.keys(BATTING_STANCES);
+        const targetStance = options.targetStance && BATTING_STANCES[options.targetStance]
+          && options.targetStance !== currentStance
+          ? options.targetStance
+          : stances.filter(f => f !== currentStance)[Math.floor(Math.random() * (stances.length - 1))];
+        player.battingStance = targetStance;
+        const stanceRate = 0.20 * dexterityMult(player, 1.0);
+        const label = (k) => BATTING_STANCES[k].label;
+        if (Math.random() < stanceRate) {
+          growthReport.push({ statName: '打撃フォーム改造成功', before: label(currentStance), after: label(targetStance), growth: 0, isAwakening: true });
+          const bonus = Math.floor(Math.random() * 3) + 3;
           const oldMeet = player.batting.meet || 50;
-          const mt = applyTechStatDecay(oldMeet, mtRaw);
-          if (mt > 0) {
-            player.batting.meet = Math.min(ABILITY_CAP, oldMeet + mt);
-            growthReport.push({ statName: 'ミート', before: oldMeet, after: player.batting.meet, growth: mt });
+          player.batting.meet = Math.min(ABILITY_CAP, oldMeet + bonus);
+          if (player.batting.meet !== oldMeet)
+            growthReport.push({ statName: 'ミート', before: oldMeet, after: player.batting.meet, growth: player.batting.meet - oldMeet });
+        } else {
+          growthReport.push({ statName: '打撃フォーム改造', before: label(currentStance), after: label(targetStance), growth: 0 });
+          const penalty = Math.floor(Math.random() * 3) + 1;
+          const oldMeet = player.batting.meet || 50;
+          if (oldMeet > 20) {
+            player.batting.meet = Math.max(15, oldMeet - penalty);
+            growthReport.push({ statName: 'ミート', before: oldMeet, after: player.batting.meet, growth: player.batting.meet - oldMeet });
           }
         }
       }
