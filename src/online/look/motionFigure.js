@@ -58,7 +58,7 @@ export function kitOf(look, home, role) {
 
 /**
  * 姿勢 → 体の点。
- * @returns `{ hip, sh, head, handA, handB, footA, footB, fx, fz, tilt, lift, reach, bat, glove, ball }`
+ * @returns `{ hip, sh, head, handA, handB, footA, footB, fx, fz, tilt, reach, bat, glove, ball, splay }`
  */
 export function skeleton(pose) {
   let [fx, fz] = pose.face || [0, 1];
@@ -66,12 +66,14 @@ export function skeleton(pose) {
   const u = pose.u ?? 0;
   const d = pose.dir || 1;
   // c: 腰を落とす量、lean: 肩の横ずれ
-  const S = { c: 0.03, lean: 0, hipX: 0, hipY: null, footA: [-0.075, 0], footB: [0.075, 0], tilt: 0, lift: 0, reach: 1, headDrop: 0, bat: null, glove: 'A', ball: null };
+  // splay: 前から見たとき、膝をどれだけ外へ開くか（0 まっすぐ … 1 いっぱい）。腰を落とす構えだけ開く
+  const S = { c: 0.03, lean: 0, hipX: 0, hipY: null, footA: [-0.075, 0], footB: [0.075, 0], tilt: 0, lift: 0, reach: 1, headDrop: 0, bat: null, glove: 'A', ball: null, splay: 0.08 };
   // 手は腰・肩が決まってから置く
   let hands = null;
   switch (kind) {
     case 'ready':
       S.c = 0.34 + 0.08 * u;
+      S.splay = 0.3;
       S.footA = [-0.14, 0];
       S.footB = [0.14, 0];
       hands = (b) => [
@@ -81,6 +83,7 @@ export function skeleton(pose) {
       break;
     case 'ready-of':
       S.c = 0.16 + 0.06 * u;
+      S.splay = 0.2;
       S.footA = [-0.11, 0];
       S.footB = [0.11, 0];
       hands = (b) => [
@@ -159,6 +162,7 @@ export function skeleton(pose) {
       S.hipY = lerp(0.17, 0.36, up);
       S.footA = [-0.14, 0];
       S.footB = [0.14, 0];
+      S.splay = lerp(0.85, 0.1, up);
       hands = (b) => [
         [-0.16 - 0.02 * pop, b.hip[1] + 0.2 + 0.04 * pop],
         [0.12, b.hip[1] + 0.05],
@@ -417,7 +421,7 @@ export function skeleton(pose) {
         [sh[0] - 0.185, hip[1] + 0.02],
         [sh[0] + 0.185, hip[1] + 0.02],
       ];
-  return { ...body, handA, handB, footA: [S.footA[0], S.footA[1] + S.lift * 0.3], footB: [S.footB[0], S.footB[1] + S.lift * 0.3], fx, fz, tilt: S.tilt, reach: S.reach, bat: S.bat, glove: S.glove, ball: S.ball };
+  return { ...body, handA, handB, footA: [S.footA[0], S.footA[1] + S.lift * 0.3], footB: [S.footB[0], S.footB[1] + S.lift * 0.3], fx, fz, tilt: S.tilt, reach: S.reach, bat: S.bat, glove: S.glove, ball: S.ball, splay: S.splay };
 }
 
 /** 2本の骨の関節（肘・膝）。`pref` の向きへ曲げる。届かない先は手前で止める */
@@ -443,6 +447,29 @@ function joint(root, tip, l1, l2, pref) {
   const s1 = (c1[0] - mx) * pref[0] + (c1[1] - my) * pref[1];
   const s2 = (c2[0] - mx) * pref[0] + (c2[1] - my) * pref[1];
   return { mid: s1 >= s2 ? c1 : c2, end };
+}
+
+/**
+ * 脚（腰 → 膝 → 足）。`bend` は膝を絵の横へどれだけ出すか（-1 左いっぱい … 0 まっすぐ … 1 右いっぱい）。
+ * ⚠ 前向き・後ろ向きの人の膝はカメラの方へ出るので、絵の上では脚がまっすぐ短く見える（`bend` が 0 に近い）。
+ *    いつも横へいっぱいに曲げると、立っているだけでもガニ股になる
+ */
+function legOf(hip, foot, len, bend) {
+  let dx = foot[0] - hip[0];
+  let dy = foot[1] - hip[1];
+  let dist = Math.hypot(dx, dy);
+  const max = len * 2 - 0.002;
+  let end = foot;
+  if (dist > max) {
+    end = [hip[0] + (dx / dist) * max, hip[1] + (dy / dist) * max];
+    dx = end[0] - hip[0];
+    dy = end[1] - hip[1];
+    dist = max;
+  }
+  if (dist < 1e-4) return { mid: [hip[0] + bend * len, hip[1]], end };
+  // 下へ伸びる脚の、絵の右向きの法線
+  const out = Math.sqrt(Math.max(0, len * len - (dist / 2) * (dist / 2))) * Math.max(-1, Math.min(1, bend));
+  return { mid: [(hip[0] + end[0]) / 2 - (dy / dist) * out, (hip[1] + end[1]) / 2 + (dx / dist) * out], end };
 }
 
 /** 帽子・ヘルメットの山（上は半円、下の縁は浅い弧） */
@@ -519,11 +546,11 @@ export function drawFigure(ctx, x, y, h, kit, pose, opt = {}) {
   const shB = [b.sh[0] + sw, b.sh[1] - 0.015];
   const hipA = [b.hip[0] - hw * 0.75, b.hip[1]];
   const hipB = [b.hip[0] + hw * 0.75, b.hip[1]];
-  // 膝は、前向きは外へ・横向きは進む方へ。肘は外へ下へ
-  const kneeA = side > 0.45 ? [Math.sign(fx), 0.1] : [-1, 0.25];
-  const kneeB = side > 0.45 ? [Math.sign(fx), 0.1] : [1, 0.25];
-  const legA = joint(hipA, b.footA, 0.195, 0.195, kneeA);
-  const legB = joint(hipB, b.footB, 0.195, 0.195, kneeB);
+  // 膝: 横向きは進む方へ曲げる。前向き・後ろ向きはまっすぐ（構えのときだけ `splay` のぶん外へ）。肘は外へ下へ
+  const turn = fx * 1.8;
+  const open = b.splay * Math.max(0, 1 - side * 1.8);
+  const legA = legOf(hipA, b.footA, 0.195, turn - open);
+  const legB = legOf(hipB, b.footB, 0.195, turn + open);
   const armL = 0.138 * b.reach;
   const armA = joint(shA, b.handA, armL, armL * 0.96, b.handA[1] > shA[1] ? [-1, 0.2] : [-0.8, -0.6]);
   const armB = joint(shB, b.handB, armL, armL * 0.96, b.handB[1] > shB[1] ? [1, 0.2] : [0.8, -0.6]);
