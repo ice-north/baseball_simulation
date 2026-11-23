@@ -142,6 +142,7 @@ fun OnlineApp(model: AppViewModel) {
     val looks = remember(teamLabels) { teamLabels?.let { buildTeamLooks(it) }.orEmpty() }
     val look = remember(model.lookOn, looks, model.view?.teamName) { LookState(model.lookOn, model.view?.teamName, looks) }
     CompositionLocalProvider(LocalLook provides look) {
+    LookTypography {
     Box(Modifier.fillMaxSize()) {
         if (!joined) {
             // ⚠ 参加前もお知らせ・失敗を出す場所を置く（無いと参加の失敗が見えず、知らせも消えない）
@@ -273,6 +274,7 @@ fun OnlineApp(model: AppViewModel) {
         if (renaming) RenameDialog(model) { renaming = false }
         // ⚠ 保存・提出の間は画面全体を塞ぐ（いちばん上に重ねる）
         if (model.busy) BusyOverlay(model.busyLabel)
+    }
     }
     }
 }

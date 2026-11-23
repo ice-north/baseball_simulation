@@ -18,6 +18,8 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
+import androidx.compose.material3.Typography
+import androidx.compose.ui.text.font.FontSynthesis
 import io.ktor.http.content.TextContent
 import java.util.Collections
 import kotlinx.coroutines.CompletableDeferred
@@ -28,11 +30,14 @@ import io.ktor.http.HttpHeaders
 import io.ktor.http.headersOf
 import jp.icenorth.baseball.app.ui.BaseballTheme
 import jp.icenorth.baseball.app.ui.OnlineApp
+import jp.icenorth.baseball.app.ui.lookTypography
 import jp.icenorth.baseball.shared.LatestApp
 import jp.icenorth.baseball.shared.OnlineApi
 import org.junit.Assume.assumeTrue
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotEquals
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -210,9 +215,27 @@ class AppUiTest {
         rule.onNodeWithTag("tab-Games").performClick()
         rule.onNodeWithTag("chip-standings").performClick()
         rule.onAllNodesWithTag("team-mark", useUnmergedTree = true).assertCountEquals(2)
-        // 切に戻すと消える
+        // 切に戻すと消える。⚠ 入／切で字の表を差しかえても、開いている面（順位表）は保つ
         rule.runOnIdle { model.changeLookOn(false) }
         rule.onAllNodesWithTag("team-mark", useUnmergedTree = true).assertCountEquals(0)
+        rule.onNodeWithTag("chip-standings").assertIsSelected()
+    }
+
+    @Test fun newLookChangesOnlyTheFonts() {
+        // 入のときの字: 見出しの型は見出しのフォント（太字を作らせない）、本文と札は数字のフォント。大きさは変えない
+        val base = Typography()
+        val look = lookTypography(base)
+        for ((b, l) in listOf(base.titleLarge to look.titleLarge, base.titleSmall to look.titleSmall, base.headlineSmall to look.headlineSmall)) {
+            assertEquals(b.fontSize, l.fontSize)
+            assertNotNull(l.fontFamily)
+            assertEquals(FontSynthesis.None, l.fontSynthesis)
+        }
+        assertEquals(look.titleLarge.fontFamily, look.headlineMedium.fontFamily)
+        assertNotNull(look.bodyMedium.fontFamily)
+        assertNotEquals(look.titleLarge.fontFamily, look.bodyMedium.fontFamily)
+        assertEquals(look.bodyMedium.fontFamily, look.labelLarge.fontFamily)
+        assertEquals(base.bodyMedium.fontSize, look.bodyMedium.fontSize)
+        assertNull(base.titleLarge.fontFamily)
     }
 
     @Test fun backFromTeamPlayersReturnsToTheStandings() {

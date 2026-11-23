@@ -55,7 +55,8 @@ fun HomePage(
     onOpenProcedures: () -> Unit,
 ) {
     when (style) {
-        HomeStyle.Paper -> FrontPageCard(page, nextAdvanceAt, menu, onLink, onOpenProcedures)
+        // 新聞は新しい見た目（試作）でも新聞の字のまま（Web も同じ）
+        HomeStyle.Paper -> PlainTypography { FrontPageCard(page, nextAdvanceAt, menu, onLink, onOpenProcedures) }
         HomeStyle.Web -> WebNewsPage(page, nextAdvanceAt, menu, onLink, onOpenProcedures)
         HomeStyle.Plain -> PlainPage(page, nextAdvanceAt, menu, onLink, onOpenProcedures)
     }

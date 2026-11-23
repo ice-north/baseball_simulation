@@ -7,11 +7,15 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.InlineTextContent
 import androidx.compose.foundation.text.appendInlineContent
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.Typography
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -36,6 +40,7 @@ import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontSynthesis
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.Dp
@@ -56,7 +61,7 @@ import jp.icenorth.baseball.shared.emblemArt
 import jp.icenorth.baseball.shared.faceArt
 
 // ============================================================
-// 新しい見た目（試作）: 球団マーク・選手と指導者の顔・調子の顔・段位の字。
+// 新しい見た目（試作）: 球団マーク・選手と指導者の顔・調子の顔・段位の字・見出しと数字の字。
 // 描く手順は共通部の `LookArt.kt`（Web 版 `src/online/look/art.js` の写し）。ここは Canvas に描くだけ。
 // ⚠ どの部品も**切のときは何も描かない**（呼ぶ側で入／切を分けない）。入／切は端末に覚える
 //    （[jp.icenorth.baseball.app.AppViewModel.lookOn]）。既定は切で、切なら今までと同じ画面。
@@ -80,6 +85,55 @@ val LocalLook = compositionLocalOf { LookState() }
 private val LookGraduate = FontFamily(Font(R.font.look_graduate))
 private val LookAlfa = FontFamily(Font(R.font.look_alfaslab))
 private val LookYellowtail = FontFamily(Font(R.font.look_yellowtail))
+
+/** 数字と英字（Barlow Semi Condensed。英数記号だけ）。日本語は端末の字で出る */
+private val LookNum = FontFamily(
+    Font(R.font.look_num_regular, FontWeight.Normal),
+    Font(R.font.look_num_semibold, FontWeight.SemiBold),
+)
+
+/** 見出し（Dela Gothic One。JIS 第1水準＋画面に出る字に絞ったもの。`tools/look-fonts.py`） */
+private val LookHead = FontFamily(Font(R.font.look_head))
+
+/**
+ * 入のときの字（Web の `look.css` と同じ考え）: 見出しの型（display・headline・title）を太いゴシックに、
+ * 本文と札の型（body・label）は数字と英字をスポーツ体に。日本語の本文は今のまま。
+ */
+internal fun lookTypography(base: Typography): Typography {
+    // ⚠ 見出しのフォントは1つの太さしか無い。呼ぶ側の Bold で太字を作らせない
+    fun head(s: TextStyle) = s.copy(fontFamily = LookHead, fontSynthesis = FontSynthesis.None)
+    fun num(s: TextStyle) = s.copy(fontFamily = LookNum)
+    return base.copy(
+        displayLarge = head(base.displayLarge), displayMedium = head(base.displayMedium), displaySmall = head(base.displaySmall),
+        headlineLarge = head(base.headlineLarge), headlineMedium = head(base.headlineMedium), headlineSmall = head(base.headlineSmall),
+        titleLarge = head(base.titleLarge), titleMedium = head(base.titleMedium), titleSmall = head(base.titleSmall),
+        bodyLarge = num(base.bodyLarge), bodyMedium = num(base.bodyMedium), bodySmall = num(base.bodySmall),
+        labelLarge = num(base.labelLarge), labelMedium = num(base.labelMedium), labelSmall = num(base.labelSmall),
+    )
+}
+
+private val LocalPlainTypography = staticCompositionLocalOf<Typography?> { null }
+
+/**
+ * 入のときだけ、中の字を新しい見た目の字にする。
+ * ⚠ 入／切で部品の並びを変えない（いつも MaterialTheme で包み、字の表だけ差しかえる）。並びが変わると、中の画面の状態（開いている面・スクロール）が消える
+ */
+@Composable
+fun LookTypography(content: @Composable () -> Unit) {
+    val plain = MaterialTheme.typography
+    val on = LocalLook.current.on
+    val look = remember(plain) { lookTypography(plain) }
+    CompositionLocalProvider(LocalPlainTypography provides plain) {
+        MaterialTheme(colorScheme = MaterialTheme.colorScheme, shapes = MaterialTheme.shapes, typography = if (on) look else plain, content = content)
+    }
+}
+
+/** 入でも今までの字のまま（新聞） */
+@Composable
+fun PlainTypography(content: @Composable () -> Unit) {
+    val plain = LocalPlainTypography.current ?: MaterialTheme.typography
+    MaterialTheme(colorScheme = MaterialTheme.colorScheme, shapes = MaterialTheme.shapes, typography = plain, content = content)
+}
 
 private fun fontOf(key: String?): FontFamily = when (key) {
     "alfa" -> LookAlfa

@@ -15,6 +15,26 @@
   src: url('./fonts/yellowtail.woff2') format('woff2');
   font-display: swap;
 }
+/* 数字と英字（Barlow Semi Condensed。英数記号だけに絞ったもの。`tools/look-fonts.py`） */
+@font-face {
+  font-family: LookNum;
+  src: url('./fonts/barlow-regular.woff2') format('woff2');
+  font-weight: 100 500;
+  font-display: swap;
+}
+@font-face {
+  font-family: LookNum;
+  src: url('./fonts/barlow-semibold.woff2') format('woff2');
+  font-weight: 600 900;
+  font-display: swap;
+}
+/* 見出し（Dela Gothic One。JIS 第1水準＋ソースに出てくる字に絞ったもの。`tools/look-fonts.py`）。
+   ⚠ 約450KB あるので配布 HTML に埋め込まず `public/fonts/` に置く。入にした人だけが読む */
+@font-face {
+  font-family: LookHead;
+  src: url('/fonts/look-head.woff2') format('woff2');
+  font-display: swap;
+}
 .online-look-art {
   display: inline-block;
   vertical-align: middle;
@@ -23,6 +43,25 @@
 }
 
 /* ---- 入のときだけ当てる差しかえ ------------------------------------------ */
+/* 字: 数字と英字を細身のスポーツ体に、見出しを太いゴシックに。日本語の本文は今のまま
+   （無い字は後ろの今までのフォントで出る）。⚠ 新聞（`.online-paper`）と一人用の画面（`.online-sp`）は変えない */
+.online.online-look {
+  font-family: LookNum, -apple-system, BlinkMacSystemFont, 'Hiragino Kaku Gothic ProN', sans-serif;
+}
+.online.online-look
+  :is(h1, h2, h3, .online-nav-context strong, .online-mobile-overview > strong):not(:where(.online-paper *, .online-sp *)) {
+  font-family: LookHead, LookNum, -apple-system, BlinkMacSystemFont, 'Hiragino Kaku Gothic ProN', sans-serif;
+  /* 太さは見出しのまま（中の注記が受け継ぐ）。見出しのフォントは1つの太さしか無いので、太字を作らせない */
+  font-synthesis: none;
+  letter-spacing: 0.02em;
+}
+/* 見出しの中の注記（「先発は予定…」など）とボタンは本文の字に戻す */
+.online.online-look :is(h1, h2, h3):not(:where(.online-paper *, .online-sp *)) :is(small, button) {
+  font-family: LookNum, -apple-system, BlinkMacSystemFont, 'Hiragino Kaku Gothic ProN', sans-serif;
+  font-synthesis: initial;
+  letter-spacing: 0;
+}
+
 /* 球団マーク・顔と、隣の字との間 */
 .online.online-look .online-team-mark {
   margin: 0 4px;

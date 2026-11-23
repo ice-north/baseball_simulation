@@ -7,6 +7,8 @@
 //     スタメン設定に選手の顔、選手の詳細に顔と段位の字、調子は自前の顔になる
 //   - 入／切は端末に覚える（開き直しても入のまま）。リーグの球団でない名前にはマークを描かない
 //   - スマホはメニュー（☰）から切り替えられる
+//   - 字: 入のときだけ見出しが LookHead・数字が LookNum。見出しの中の注記と新聞は今までの字のまま。
+//     見出しのフォント（public/fonts/、約450KB）は入にするまで読まない
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { chromium } from 'playwright';
@@ -21,6 +23,9 @@ const browser = await chromium.launch({
   headless: true,
 });
 const errors = [];
+const headFont = await readFile(new URL('../../public/fonts/look-head.woff2', import.meta.url));
+let headFontLoads = 0;
+const fontOf = (p, selector) => p.evaluate((sel) => getComputedStyle(document.querySelector(sel)).fontFamily, selector);
 const EMOJI = /[🔥😊😐😞😰]/u;
 
 async function open(contextOptions) {
@@ -30,6 +35,10 @@ async function open(contextOptions) {
   await context.route(`${base}/online`, (route) =>
     route.fulfill({ contentType: 'text/html', body: html }),
   );
+  await context.route(`${base}/fonts/look-head.woff2`, (route) => {
+    headFontLoads += 1;
+    return route.fulfill({ contentType: 'font/woff2', body: headFont });
+  });
   const p = await context.newPage();
   p.on('pageerror', (e) => errors.push(e.message));
   await p.goto(`${base}/online`);
@@ -50,6 +59,10 @@ await withDeadline(
       assert.equal(await p.locator('.online.online-look').count(), 0);
       const standingsNames = await p.locator('.online-standings tbody th').count();
       assert.ok(standingsNames >= 12, '順位表が出ていない');
+      assert.doesNotMatch(await fontOf(p, '.online'), /LookNum/, '切なのに数字の字が変わっている');
+      assert.doesNotMatch(await fontOf(p, '.online h2'), /LookHead/, '切なのに見出しの字が変わっている');
+      await p.evaluate(() => document.fonts.ready);
+      assert.equal(headFontLoads, 0, '切なのに見出しのフォントを読んだ');
 
       // 入にする
       await toggle.click();
@@ -72,6 +85,18 @@ await withDeadline(
       const monos = await p.locator('.online-standings .online-team-mark text').allTextContents();
       assert.equal(monos.length, 12);
       assert.equal(new Set(monos).size, 12, `12球団の字が重なった: ${monos}`);
+      // 字: 見出しと数字。見出しの中の注記は本文の字に戻す
+      assert.match(await fontOf(p, '.online'), /^LookNum,/);
+      assert.match(await fontOf(p, '.online h2'), /^LookHead,/);
+      assert.match(await fontOf(p, '.online h2 small'), /^LookNum,/, '見出しの中の注記まで見出しの字になった');
+      await p.waitForFunction(() => document.fonts.check('16px LookHead'));
+      assert.ok(headFontLoads > 0, '入なのに見出しのフォントを読んでいない');
+      // 新聞は新聞の字のまま
+      await p.locator('.online-paper-open').click();
+      await p.locator('.online-paper h2').first().waitFor();
+      assert.doesNotMatch(await fontOf(p, '.online-paper h2'), /LookHead/, '新聞の見出しまで変わった');
+      await p.keyboard.press('Escape');
+      await p.locator('.online-paper-dialog[open]').waitFor({ state: 'hidden' });
 
       // スタメン設定: 顔・調子の顔
       await nav.getByRole('button', { name: 'スタメン設定', exact: true }).click();
@@ -104,6 +129,7 @@ await withDeadline(
       const emoji = await p.locator('.online-lineup-person .online-condition').first().textContent();
       assert.match(emoji, EMOJI);
       assert.equal(await p.evaluate((key) => localStorage.getItem(key), LOOK_KEY), null);
+      assert.doesNotMatch(await fontOf(p, '.online h1'), /LookHead/, '切に戻しても見出しの字が残った');
       await context.close();
     }
 
