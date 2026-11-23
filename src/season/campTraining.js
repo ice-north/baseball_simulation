@@ -9,7 +9,7 @@
 // ============================================================
 
 import { PHYSICAL_STATS, getAgeGrowthBase, getStatPath, getStatName, getNestedValue, setNestedValue, physiqueMultFor, dexterityMult, dexterityShift } from './growthUtils.js';
-import { PITCHING_FORM_EFFECTS, getPitchTypeName, FORM_SHORT, BATS_SHORT, ABILITY_CAP } from '../utils/constants.js';
+import { PITCHING_FORM_EFFECTS, getPitchTypeName, FORM_SHORT, BATS_SHORT, ABILITY_CAP, ALL_PITCH_TYPES } from '../utils/constants.js';
 import { syncPositionToFitness, getVelocityCap, getVelocityCatchupMult } from '../utils/physics.js';
 // ⚠ **確率的丸め**。年次成長（`growthSystem`）と同じものを使う（二重に書かない）
 import { stochasticRound } from './growthSystem.js';
@@ -1063,15 +1063,10 @@ function getBattingOrderGrowthBonus(player, targetStat) {
   return weightedBonus || 1.0;
 }
 
-// 利用可能な全変化球（新球種習得用）
-const ALL_PITCH_TYPES = [
-  'slider', 'curve', 'fork', 'changeup', 'sinker', 'shoot',
-  'cutter', 'splitter', 'twoSeam', 'palm', 'knuckle'
-];
-
 // フォーム別の変化球適性（習得しやすさ・成長ボーナス）
 // affinity: 習得成功率ボーナス(加算), growth: 変化球練習の成長倍率
-const FORM_PITCH_AFFINITY = {
+// ⚠ 大学の新球種（`universityPool` の UNI_FORM_PITCH_AFFINITY）はこの表のキーの順を使う
+export const FORM_PITCH_AFFINITY = {
   overhand: {
     fork: { affinity: 0.15, growth: 1.5 },
     curve: { affinity: 0.10, growth: 1.3 },
@@ -1508,7 +1503,7 @@ export function executeCampTraining(player, trainingType, newPitchType, staffBon
 }
 
 // getPitchTypeName は utils/constants.js（BALL_EFFECTS が出典）から取り込んで再輸出する
-export { ALL_PITCH_TYPES, getPitchTypeName, FORM_PITCH_AFFINITY };
+export { ALL_PITCH_TYPES, getPitchTypeName };
 
 /**
  * チーム全体のキャンプ練習を実行

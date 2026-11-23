@@ -186,6 +186,12 @@ export const FORM_OPTIONS = Object.keys(PITCHING_FORM_EFFECTS).map(k => ({ key: 
 /**
  * 投球フォームと相性の良い変化球（ボーナス適用）
  */
+// 利用可能な全変化球（新球種習得の候補。⚠ 順を変えない——候補の選び方が順に依る）
+export const ALL_PITCH_TYPES = [
+  'slider', 'curve', 'fork', 'changeup', 'sinker', 'shoot',
+  'cutter', 'splitter', 'twoSeam', 'palm', 'knuckle'
+];
+
 export const FORM_PITCH_SYNERGY = {
   overhand: ['curve', 'fork', 'splitter', 'knuckle'],      // 縦変化
   threeQuarter: [],                                         // すべて平均的

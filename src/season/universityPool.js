@@ -7,7 +7,8 @@
 import { generateRandomPlayerName, getRandomGivenName } from '../data/playerNames.js';
 import { getRegionalSurname, REGIONAL_SHARE } from '../data/prefectureNames.js';
 import { homeBlockOf, blockOfUniversity, HOME_UNIV_PREF } from '../data/regions.js';
-import { generateCatcherLead, taperLow } from '../utils/constants.js';
+import { generateCatcherLead, taperLow, ALL_PITCH_TYPES } from '../utils/constants.js';
+import { FORM_PITCH_AFFINITY } from './campTraining.js';
 import { generatePositionFitness, generateRandomArsenal, generateTwoWayPositionFitness } from './tryoutSystem.js';
 import { getUniversityGrowthMultiplier, UNIVERSITY_TEAMS, getUniversityTeamsByRank } from '../university/universityTeamsData.js';
 import { assignHighSchool } from '../data/highSchoolData.js';
@@ -1217,17 +1218,9 @@ export function processUniversityYear(currentYear) {
   return { graduates, report };
 }
 
-const UNI_ALL_PITCH_TYPES = [
-  'slider', 'curve', 'fork', 'changeup', 'sinker', 'shoot',
-  'cutter', 'splitter', 'twoSeam', 'palm', 'knuckle'
-];
-
-const UNI_FORM_PITCH_AFFINITY = {
-  overhand: ['fork', 'curve', 'splitter'],
-  threeQuarter: ['slider', 'changeup', 'cutter'],
-  sidearm: ['sinker', 'slider', 'shoot'],
-  submarine: ['sinker', 'changeup', 'twoSeam'],
-};
+// フォームごとの適性球種（キャンプの表のキー。順もそのまま使う）
+const UNI_FORM_PITCH_AFFINITY = Object.fromEntries(
+  Object.entries(FORM_PITCH_AFFINITY).map(([form, table]) => [form, Object.keys(table)]));
 
 /**
  * 大学での1年間の成長を適用
@@ -1316,7 +1309,7 @@ function applyUniversityGrowth(player, universityRank = null, universityTeamId =
       // フォーム適性球種を優先候補にする
       let candidates = affinityTypes.filter(t => !existingTypes.includes(t));
       if (candidates.length === 0) {
-        candidates = UNI_ALL_PITCH_TYPES.filter(t => !existingTypes.includes(t));
+        candidates = ALL_PITCH_TYPES.filter(t => !existingTypes.includes(t));
       }
       if (candidates.length > 0) {
         const newType = candidates[Math.floor(Math.random() * candidates.length)];
