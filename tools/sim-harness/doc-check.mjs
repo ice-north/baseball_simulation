@@ -82,6 +82,7 @@ const REMOVED_ON_PURPOSE = {
   progressToNextPhase: '次のフェーズの初日へ日付を差し替えて残り試合をまとめて消化する経路。progressToNextGame と同じ型で除去（歴史の記録）',
   calendarUI:      '日程表のカレンダー。同上',
   simulateGamesOnDate: '`seasonProgress.js` にあった1日分の試合の消化。いまの本体は daySimulation.js の simulateScheduledGamesOnDate（歴史の記録）',
+  CAMP_PRESETS:    'キャンプの旧プリセット5種。方向性×フェーズの2軸の方針に集約したあとも画面から呼ばれずに残っていたので 2026-11-23 に除去（歴史の記録）',
 };
 
 const r = new Report('■ CLAUDE.md の腐り検査');
