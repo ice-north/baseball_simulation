@@ -36,13 +36,16 @@ private val PITCHING_BANDS = listOf('S' to 2.2, 'A' to 1.6, 'B' to 1.25, 'C' to 
 
 fun isGradedColumn(id: String): Boolean = id in GRADED
 
-/** 自球団と同じ部の平均と、自球団の試合数（生のビュー）。`teamStats` が無ければ null */
-fun leagueBaseline(view: JsonObject?): LeagueBaseline? {
+/**
+ * その球団（省くと自球団）と同じ部の平均と、その球団の試合数（生のビュー）。`teamStats` が無ければ null。
+ * `team` は見ている球団（他球団の表に札を付けるとき。Web の `leagueBaseline(view, team)` と同じ）
+ */
+fun leagueBaseline(view: JsonObject?, team: String? = null): LeagueBaseline? {
     val stats = view.at("teamStats").obj() ?: return null
-    val ownTeam = view.at("teamName").str()
+    val ownTeam = team ?: view.at("teamName").str()
     val leagues = view.at("teamLeagues").obj()
     val own = ownTeam?.let { leagues.at(it).str() }
-    val teams = stats.keys.filter { team -> own == null || leagues == null || leagues.at(team).str() == own }
+    val teams = stats.keys.filter { name -> own == null || leagues == null || leagues.at(name).str() == own }
     fun mean(key: String): Double? {
         val list = teams.mapNotNull { stats.at(it, key).num()?.takeIf { v -> v.isFinite() } }
         return if (list.isEmpty()) null else list.sum() / list.size
