@@ -871,3 +871,19 @@ export const rosterCounts = (players) => {
   for (const p of players || []) counts[rosterGroup(p.position)] += 1;
   return counts;
 };
+
+// ============================================================
+// 空の成績欄（新しく作る選手に入れる）。⚠ 2つの形がある。混ぜないこと
+// ============================================================
+
+/** 空の成績（試合数・セーブ/ホールド・失点・球数まで持つ形。トライアウト・高校生・OB） */
+export const createEmptyStats = () => ({
+  batting: { games: 0, atBats: 0, hits: 0, doubles: 0, triples: 0, homeruns: 0, rbis: 0, walks: 0, strikeouts: 0, stolenBases: 0, sacrificeBunts: 0 },
+  pitching: { games: 0, wins: 0, losses: 0, saves: 0, holds: 0, inningsPitched: 0, runsAllowed: 0, earnedRuns: 0, hits: 0, homeruns: 0, walks: 0, strikeouts: 0, pitches: 0 },
+});
+
+/** 大学・独立の補充で入れる今季の成績（盗塁死・先発/救援・対戦打者まで持つ形） */
+export const blankSeasonStats = () => ({ batting: { atBats: 0, hits: 0, doubles: 0, triples: 0, homeruns: 0, walks: 0, strikeouts: 0, rbis: 0, stolenBases: 0, caughtStealing: 0, sacrificeBunts: 0 }, pitching: { inningsPitched: 0, hits: 0, walks: 0, strikeouts: 0, earnedRuns: 0, wins: 0, losses: 0, saves: 0, gamesStarted: 0, gamesRelieved: 0, battersFaced: 0, homeruns: 0 } });
+
+/** 同じ補充で入れる通算の成績（今季の形から盗塁死・犠打・対戦打者・被本塁打を除いた形） */
+export const blankCareerStats = () => ({ batting: { atBats: 0, hits: 0, doubles: 0, triples: 0, homeruns: 0, walks: 0, strikeouts: 0, rbis: 0, stolenBases: 0 }, pitching: { inningsPitched: 0, hits: 0, walks: 0, strikeouts: 0, earnedRuns: 0, wins: 0, losses: 0, saves: 0, gamesStarted: 0, gamesRelieved: 0 } });

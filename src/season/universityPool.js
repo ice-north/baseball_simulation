@@ -7,7 +7,7 @@
 import { generateRandomPlayerName, getRandomGivenName } from '../data/playerNames.js';
 import { getRegionalSurname, REGIONAL_SHARE } from '../data/prefectureNames.js';
 import { homeBlockOf, blockOfUniversity, HOME_UNIV_PREF } from '../data/regions.js';
-import { generateCatcherLead, taperLow, ALL_PITCH_TYPES } from '../utils/constants.js';
+import { generateCatcherLead, taperLow, ALL_PITCH_TYPES, createEmptyStats, blankSeasonStats } from '../utils/constants.js';
 import { FORM_PITCH_AFFINITY } from './campTraining.js';
 import { generatePositionFitness, generateRandomArsenal, generateTwoWayPositionFitness } from './tryoutSystem.js';
 import { getUniversityGrowthMultiplier, UNIVERSITY_TEAMS, getUniversityTeamsByRank } from '../university/universityTeamsData.js';
@@ -509,13 +509,6 @@ function generateFielderArsenalBasic() {
     { id: 1, type: 'straight', level: 100 },
     { id: 2, type, level: Math.floor(Math.random() * 15) + 15 }
   ];
-}
-
-function createEmptyStats() {
-  return {
-    batting: { games: 0, atBats: 0, hits: 0, doubles: 0, triples: 0, homeruns: 0, rbis: 0, walks: 0, strikeouts: 0, stolenBases: 0, sacrificeBunts: 0 },
-    pitching: { games: 0, wins: 0, losses: 0, saves: 0, holds: 0, inningsPitched: 0, runsAllowed: 0, earnedRuns: 0, hits: 0, homeruns: 0, walks: 0, strikeouts: 0, pitches: 0 }
-  };
 }
 
 // ============================================================
@@ -1452,11 +1445,6 @@ export function enrollInUniversity(players, enrollYear, allTeams = TEAMS_DATA) {
     }
   }
 }
-
-const blankSeasonStats = () => ({
-  batting: { atBats: 0, hits: 0, doubles: 0, triples: 0, homeruns: 0, walks: 0, strikeouts: 0, rbis: 0, stolenBases: 0, caughtStealing: 0, sacrificeBunts: 0 },
-  pitching: { inningsPitched: 0, hits: 0, walks: 0, strikeouts: 0, earnedRuns: 0, wins: 0, losses: 0, saves: 0, gamesStarted: 0, gamesRelieved: 0, battersFaced: 0, homeruns: 0 },
-});
 
 // 名簿に入る新1年生の支度（所属・学年・成績欄）
 function prepareUniversityFreshman(player, rank, team, universityYear = 1) {
