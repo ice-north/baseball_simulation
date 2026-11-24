@@ -93,8 +93,13 @@ while (days < 2000) {
     const phase = league.phase;
     if (phase.kind === 'contract') { standings('y1 end'); strengthReport('y1 end'); }
     strengthReport(`before ${phase.kind} y${league.season.year}`);
-    for (const m of league.members)
+    // ⚠ **1人出すごとに手続きが閉じていないか見る**。最後の1人が決めた瞬間に処理されて
+    //    `league.phase` が null になるので、次の人の `defaultPhasePlan` が落ちていた
+    //    （この計測は `check` に入っていないので、engine が変わったあと腐ったまま残っていた）
+    for (const m of league.members) {
+      if (!league.phase || league.phase.id !== phase.id) break;
       submitPhase(league, m.userId, { phaseId: phase.id, plan: defaultPhasePlan(league, m.teamName), ready: true }, now.toISOString());
+    }
     if (league.phase?.id !== phase.id) strengthReport(`after ${phase.kind} y${league.season.year}`);
     if (phase.kind === 'pack_select' && !did.pack) { strengthReport('after pack'); tradeRound('after pack'); strengthReport('after pack trades'); did.pack = true; }
     continue;
