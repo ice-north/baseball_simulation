@@ -239,11 +239,14 @@ private fun DrawScope.drawItem(s: LookItem, path: Path?, measurer: TextMeasurer?
     }
 }
 
-/** 球団マーク。切のとき・リーグの球団でないときは描かない */
+/**
+ * 球団マーク。切のとき・リーグの球団でないときは描かない。
+ * [always] なら切のときも描く（トレードの相手選び。いしだ 2026-11-24「球団フォントとチーム名を配置し」。Web の `always` と同じ）
+ */
 @Composable
-fun TeamMark(team: String?, size: Dp = 18.dp, modifier: Modifier = Modifier) {
+fun TeamMark(team: String?, size: Dp = 18.dp, modifier: Modifier = Modifier, always: Boolean = false) {
     val look = LocalLook.current
-    if (!look.on) return
+    if (!look.on && !always) return
     val t = look.teamLook(team) ?: return
     val art = remember(t) { emblemArt(t) }
     LookImage(art, size, modifier.testTag("team-mark"))

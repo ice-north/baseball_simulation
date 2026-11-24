@@ -1,5 +1,6 @@
 // 新しい見た目（試作）の絵を描く部品。描く手順は `art.js`、色と字は `teamLook.js`。
 // ⚠ マークと顔は**切のときは何も描かない**（null を返す）。呼ぶ側で入／切を分けない。
+//    例外はトレードの相手選びの球団マーク（`TeamMark` の `always`。切でも描き、新しい見た目の字は読まない）。
 //    調子の顔（`ConditionFace`）だけは絵文字と差しかえるので、入／切は呼ぶ側（`ConditionMark`）が見る。
 import React, { useId, useMemo } from 'react';
 import { useLook } from './LookContext.jsx';
@@ -16,8 +17,18 @@ const FONTS = {
   yellowtail: 'LookYellowtail, cursive',
   jp: '"Hiragino Kaku Gothic ProN", "Noto Sans JP", "Noto Sans CJK JP", "Yu Gothic", sans-serif',
 };
+/**
+ * 切のときに描くマーク（`TeamMark` の `always`）の字。⚠ 新しい見た目の字（`public/fonts/`）を名指ししない
+ * （名指しすると切の人まで字を読みに行く。切は今までどおり字を読まないこと）。端末にある太い字で描く
+ */
+const PLAIN_FONTS = {
+  graduate: '"Arial Black", "Helvetica Neue", Arial, sans-serif',
+  alfa: '"Arial Black", Georgia, serif',
+  yellowtail: '"Brush Script MT", "Segoe Script", cursive',
+  jp: FONTS.jp,
+};
 
-function Shape({ s }) {
+function Shape({ s, fonts = FONTS }) {
   const paint = {
     fill: s.fill || 'none',
     stroke: s.stroke,
@@ -41,7 +52,7 @@ function Shape({ s }) {
           x={s.x}
           y={s.y}
           textAnchor="middle"
-          fontFamily={FONTS[s.font] || FONTS.graduate}
+          fontFamily={fonts[s.font] || fonts.graduate}
           fontWeight={s.font === 'jp' ? 900 : undefined}
           fontSize={s.size}
           letterSpacing={s.ls || undefined}
@@ -60,7 +71,7 @@ function Shape({ s }) {
  * 描く手順の一覧（`art.js`）を SVG にする。ふつうは正方形（`size`）。
  * `fill` なら入れ物いっぱいに広げ、はみ出すぶんは切る（今日の一戦の札の背景・打席速報の球場の図）
  */
-function ArtSvg({ art, size, className = '', label, fill = false }) {
+function ArtSvg({ art, size, className = '', label, fill = false, fonts = FONTS }) {
   const id = `lk${useId().replace(/[^a-zA-Z0-9_-]/g, '')}`;
   const [x, y, w, h] = art.box;
   // `c` の付いた図形を続けて1つの切り抜きにまとめる
@@ -72,10 +83,10 @@ function ArtSvg({ art, size, className = '', label, fill = false }) {
         group = [];
         parts.push(group);
       }
-      group.push(<Shape key={i} s={s} />);
+      group.push(<Shape key={i} s={s} fonts={fonts} />);
     } else {
       group = null;
-      parts.push(<Shape key={i} s={s} />);
+      parts.push(<Shape key={i} s={s} fonts={fonts} />);
     }
   });
   return (
@@ -110,13 +121,24 @@ function ArtSvg({ art, size, className = '', label, fill = false }) {
   );
 }
 
-/** 球団マーク。リーグの球団でなければ（実在の球団・経歴の行き先）描かない */
-export function TeamMark({ team, size = 18, className = '' }) {
+/**
+ * 球団マーク。リーグの球団でなければ（実在の球団・経歴の行き先）描かない。
+ * `always` なら切のときも描く（トレードの相手選び。いしだ 2026-11-24「球団フォントとチーム名を配置し」）。
+ * ⚠ 切のときは新しい見た目の字を読まない（`PLAIN_FONTS`）。描き方（`emblemArt`）は入と同じ
+ */
+export function TeamMark({ team, size = 18, className = '', always = false }) {
   const { on } = useLook();
-  const look = on ? teamLook(team) : null;
+  const look = on || always ? teamLook(team) : null;
   const art = useMemo(() => (look ? emblemArt(look) : null), [look]);
   if (!art) return null;
-  return <ArtSvg art={art} size={size} className={`online-team-mark ${className}`} />;
+  return (
+    <ArtSvg
+      art={art}
+      size={size}
+      className={`online-team-mark ${className}`}
+      fonts={on ? FONTS : PLAIN_FONTS}
+    />
+  );
 }
 
 /** 選手の所属（帽子の色）。`team` を渡さなければ、選手に付いた所属か自球団 */
