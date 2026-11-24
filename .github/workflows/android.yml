@@ -19,6 +19,10 @@ on:
       - 'src/online/tryoutPlan.js'
       - 'src/online/restPlan.js'
       - 'src/online/statsView.js'
+      - 'src/online/playerInfo.js'
+      - 'src/online/recordStats.js'
+      - 'src/online/lineupEdit.js'
+      - 'src/game/condition.js'
       - 'src/online/pyramidLeague.js'
       - 'src/online/api.js'
       - 'src/online/campMenus.js'
@@ -42,6 +46,10 @@ on:
       - 'src/online/tryoutPlan.js'
       - 'src/online/restPlan.js'
       - 'src/online/statsView.js'
+      - 'src/online/playerInfo.js'
+      - 'src/online/recordStats.js'
+      - 'src/online/lineupEdit.js'
+      - 'src/game/condition.js'
       - 'src/online/pyramidLeague.js'
       - 'src/online/api.js'
       - 'src/online/campMenus.js'
@@ -88,6 +96,7 @@ jobs:
           node tools/expect-chronicle.mjs --check
           node tools/expect-paper.mjs --check
           node tools/expect-look.mjs --check
+          node tools/expect-stats.mjs --check
       - name: 共通部分の検査
         run: ./gradlew :shared:jvmTest --console=plain
       - name: アプリの通信・画面の回帰検査

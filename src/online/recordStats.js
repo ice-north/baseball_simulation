@@ -150,7 +150,7 @@ export const CATCH_KEYS = [
 ];
 /** 組み合わせを「まだ少ない」と薄く出す境目（アウト数。30回=90） */
 export const BATTERY_MIN_OUTS = 90;
-/** 組み合わせの表の注記。⚠ アプリ（Battery.kt の BATTERY_NOTE）と同文 */
+/** 組み合わせの表の注記。⚠ アプリの BATTERY_NOTE は gen-tables.mjs がここから Tables.kt に書き出す */
 export const BATTERY_NOTE = `${BATTERY_MIN_OUTS / 3}回未満の組は薄く出しています。回数が少ないうちは運の差が大きく出ます。読まれ率は、打者に狙い球を当てられた球の割合で、低いほどリードが効いています。`;
 /** 捕手の行（CATCH_KEYS）から、画面に出す率を作る。守った回が無ければ null */
 export function catchRates(line) {
