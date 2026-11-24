@@ -109,6 +109,17 @@ export const AWAKENING_EXPERIENCE_CAP = 1.5;
  *    打撃系の中で最大）。保証のほうもこの率で引くこと。
  * ⚠ 体力・スタミナ・体幹（やれば伸びるもの）はここに入れない。
  */
+/**
+ * キャンプのメイン練習（ふだんの伸び・集中・覚醒）で、ミートとパワーだけに掛ける倍率。
+ * ⚠ 要望 2026-11-24「ミートとパワーの成長量をやや下げます → 70台はプロでもレギュラークラス
+ *    としています。数年プレイしているとレギュラーの半分がプロクラスになってしまうため」。
+ *    才能の係数（`TALENT_STAT_MULTIPLIERS`）とは分けて持つ（才能の係数は走力・肩・球速にも効く）。
+ *    年度替わりの自然成長（オンライン）は `growthSystem.js` の `NATURAL_GROWTH_KIND` で下げた。
+ * ⚠ 0.85 では5年の長期シミュで差が種のゆらぎに埋もれたので 0.8 にし、覚醒の量にも掛けた
+ *    （覚醒は 3〜6 → 2〜5。最低+1 は残す）
+ */
+export const CAMP_BAT_GROWTH_MULT = { meet: 0.8, power: 0.8 };
+
 export const TALENT_STAT_MULTIPLIERS = {
   arm: 0.3,       // 肩力: 生まれ持った体格に依存
   speed: 0.4,     // 走力: 先天的な筋繊維に依存
@@ -196,7 +207,12 @@ export const TRAINING_MENUS = {
     // ⚠ 0.45 → **0.2**（2026-11-23、いしだ「3件とも直す」）。0.45 でも10年でリーグの制球が
     //    49→65 と伸び続け、選球眼（横ばい）との差で四球が半分になった。指導者の「長所を伸ばす」の
     //    制球集中にも同じ係数を掛ける（`executeCampTraining` の `focusStatMult`）
-    growthMultipliers: { control: 0.2, stamina: 0.5 },
+    // ⚠ 0.2 → **0.4**（要望 2026-11-24「制球の成長をやや上げます → 現在は4クールでも1～2程度しか
+    //    上がらず効果が低い」）。実測（人の球団の投手11人・4クール・20回の平均）:
+    //    制球集中 +1.05 → +2.1、投げ込み +0.23 → +0.5。0.45 で四球が半分になった頃は、ストレッチの
+    //    制球・集中の最低保証が減衰を素通りしていた（2026-11-23〜24 に塞いだ）。長期の BB/9 は
+    //    long-run-probe で確かめた
+    growthMultipliers: { control: 0.4, stamina: 0.5 },
     category: 'pitching'
   },
   velocity: {
@@ -314,7 +330,19 @@ const SUB_MENU_ONLY = {
   //    野手は打撃フォーム（オープン/スクエア/クローズ）を変える。以前は野手だと
   //    ミートが少し伸びるだけだったので投手にだけ出していた
 };
-export const subMenuFitsPlayer = (key, player) => {
+/**
+ * 名前を変えた・まとめたサブ練習の、古い名前 → 今の名前。
+ * ⚠ 保存済みの計画（オンラインの下書き・一人用のセーブ・アプリ）に古い名前が残っていても
+ *    壊さない。サブ練習の名前を受け取る入口（`subMenuFitsPlayer`・`executeSubTraining`・
+ *    `clampSub`・サーバーの受け付け）はこれを通す。アプリの写しは `Camp.kt` の `SUB_MENU_ALIASES`
+ */
+export const SUB_MENU_ALIASES = {
+  defense_sub: 'subposition', // 守備補強 → サブポジ練習（2026-11-24）
+};
+export const canonicalSubMenu = (key) => SUB_MENU_ALIASES[key] || key;
+
+export const subMenuFitsPlayer = (rawKey, player) => {
+  const key = canonicalSubMenu(rawKey);
   if (!SUB_TRAINING_MENUS[key]) return false;
   const only = SUB_MENU_ONLY[key];
   return !only || player?.position === only;
@@ -340,13 +368,6 @@ export const SUB_TRAINING_MENUS = {
     description: '野手：ミート/パワー/選球眼/走力/肩/守備からランダム1能力+1。投手：制球/球速/スタミナ/肩/守備/ミートからランダム1能力+1。回復力30%UP',
     targets: ['all_minor', 'recovery_sub'],
   },
-  defense_sub: {
-    name: '守備補強',
-    icon: '🧤',
-    description: '非適正ポジションの守備練習・バント微増',
-    targets: ['defense', 'fitness', 'bunt'],
-    growthMultipliers: { bunt: 0.3 },
-  },
   form_change: {
     name: 'フォーム改造',
     icon: '🔄',
@@ -365,11 +386,15 @@ export const SUB_TRAINING_MENUS = {
     description: '変化球レベルを強化（1球種を選んで集中練習も可）',
     targets: ['breaking'],
   },
+  // ⚠ 「守備補強」（`defense_sub`）を**ここへまとめた**（要望 2026-11-24「サブポジ練習を現在の
+  //    ポジションも上がるように → 守備補助で上げられますが、わかりにくいため統合します」。守備補助＝守備補強）。
+  //    守備補強がしていた「守備+0〜2・今の守備位置の適性+4〜8」をサブポジ練習が一緒に行う
+  //    （バントの微増は落とした。守備の練習ではないため）。古い名前は `canonicalSubMenu` で読み替える
   subposition: {
     name: 'サブポジ練習',
     icon: '🔀',
-    description: '指定ポジションの守備練習（適正大幅UP・器用さで伸びが変わる）',
-    targets: ['subposition'],
+    description: '指定ポジションの適正大幅UP（器用さで伸びが変わる）・今の守備位置の適正+4〜8・守備+0〜2',
+    targets: ['subposition', 'defense', 'fitness'],
   },
   clead_study: {
     name: 'Cリード学習',
@@ -468,7 +493,8 @@ const TECH_SUB_DAMP = { from: 50, rate: 0.03, floor: 0.15 };
  * @param {string} subType - サブ練習タイプ
  * @param {Object} options - オプション { targetPosition, targetForm, targetBats, targetPitch }
  */
-export function executeSubTraining(player, subType, options = {}, staffBonus = null) {
+export function executeSubTraining(player, rawSubType, options = {}, staffBonus = null) {
+  const subType = canonicalSubMenu(rawSubType);
   const menu = SUB_TRAINING_MENUS[subType];
   if (!menu) return { player, growthReport: [] };
 
@@ -577,7 +603,7 @@ export function executeSubTraining(player, subType, options = {}, staffBonus = n
           const armVal = player.physical?.arm || 50;
           gain = old < getVelocityCap(armVal) ? 1 : 0;
         } else {
-          // 守備は守備補強（`defense_sub`）と同じ努力系の減衰（70から）。技術系（50から）だと
+          // 守備はサブポジ練習（もと守備補強）と同じ努力系の減衰（70から）。技術系（50から）だと
           // ストレッチだけ守備が伸びにくかった（2026-11-24 監査）
           gain = picked.key === 'fielding.defense' ? applyTechStatDecay(old, 1, EFFORT_DAMP.defense)
             : picked.isTech ? applyTechStatDecay(old, 1) : 1;
@@ -606,38 +632,6 @@ export function executeSubTraining(player, subType, options = {}, staffBonus = n
         const recBefore = player.physical.recovery || 50;
         player.physical.recovery = Math.min(99, recBefore + 1);
         growthReport.push({ statName: '回復', before: recBefore, after: player.physical.recovery, growth: 1 });
-      }
-      break;
-    }
-    case 'defense_sub': {
-      const defRaw = growthAmount();
-      if (defRaw > 0 && player.fielding) {
-        const oldDef = player.fielding.defense || 50;
-        const def = applyTechStatDecay(oldDef, defRaw, EFFORT_DAMP.defense);
-        if (def > 0) {
-          player.fielding.defense = Math.min(ABILITY_CAP, oldDef + def);
-          growthReport.push({ statName: '守備', before: oldDef, after: player.fielding.defense, growth: def });
-        }
-      }
-      // バント微増（30%で+1）
-      if (player.batting && Math.random() < 0.3) {
-        const oldBunt = player.batting.bunt || 30;
-        const buntGrowth = applyTechStatDecay(oldBunt, 1);
-        if (buntGrowth > 0) {
-          player.batting.bunt = Math.min(ABILITY_CAP, oldBunt + buntGrowth);
-          growthReport.push({ statName: 'バント', before: oldBunt, after: player.batting.bunt, growth: buntGrowth });
-        }
-      }
-      // 守備適正: 現在ポジションを確定で+4〜8
-      if (player.positionFitness && player.position && player.position !== 'pitcher') {
-        const curPos = player.position;
-        const old = player.positionFitness[curPos] || 0;
-        if (old < 100) {
-          const gain = Math.floor(Math.random() * 5) + 4;
-          player.positionFitness[curPos] = Math.min(100, old + gain);
-          const gained = player.positionFitness[curPos] - old;
-          growthReport.push({ statName: `${POSITION_NAMES_MAP[curPos] || curPos}適正`, before: old, after: player.positionFitness[curPos], growth: gained });
-        }
       }
       break;
     }
@@ -969,8 +963,29 @@ export function executeSubTraining(player, subType, options = {}, staffBonus = n
       break;
     }
     case 'subposition': {
-      // サブポジション練習 - 指定ポジションまたはランダムの適正を上げる（成長3倍）
+      // 本職の守備（もと「守備補強」の中身）: 守備+0〜2（40%）・今の守備位置の適正を確定で+4〜8。
+      // ⚠ 指定ポジションの適正より**先に**やる。後の `syncPositionToFitness` で守備位置が
+      //    変わると（CPU球団）、上げる「今の守備位置」がずれる
+      const defRaw = growthAmount();
+      if (defRaw > 0 && player.fielding) {
+        const oldDef = player.fielding.defense || 50;
+        const def = applyTechStatDecay(oldDef, defRaw, EFFORT_DAMP.defense);
+        if (def > 0) {
+          player.fielding.defense = Math.min(ABILITY_CAP, oldDef + def);
+          growthReport.push({ statName: '守備', before: oldDef, after: player.fielding.defense, growth: def });
+        }
+      }
       if (!player.positionFitness) player.positionFitness = {};
+      if (player.position && player.position !== 'pitcher') {
+        const curPos = player.position;
+        const oldFit = player.positionFitness[curPos] || 0;
+        if (oldFit < 100) {
+          const gain = Math.floor(Math.random() * 5) + 4;
+          player.positionFitness[curPos] = Math.min(100, oldFit + gain);
+          growthReport.push({ statName: `${POSITION_NAMES_MAP[curPos] || curPos}適正`, before: oldFit, after: player.positionFitness[curPos], growth: player.positionFitness[curPos] - oldFit });
+        }
+      }
+      // サブポジション練習 - 指定ポジションまたはランダムの適正を上げる（成長3倍）
       const allPos = ['catcher', 'first', 'second', 'third', 'short', 'left', 'center', 'right'];
       const nonMainPos = allPos.filter(p => p !== player.position);
       let picked = options.targetPosition;
@@ -1336,7 +1351,9 @@ export function executeCampTraining(player, trainingType, newPitchType, staffBon
     }
 
     // 才能依存の能力は練習だけでは伸びにくい（グローバル補正）
+    // ⚠ ミート・パワーは伸びを少し下げる（`CAMP_BAT_GROWTH_MULT`。ふだんの伸び・集中・覚醒の量）
     const talentMult = TALENT_STAT_MULTIPLIERS[targetStat] ?? 1.0;
+    const batGrowthMult = CAMP_BAT_GROWTH_MULT[targetStat] ?? 1.0;
 
     // 体幹/器用さによる成長方向の補正（0.5〜1.5倍）
     const physiqueMult = physiqueMultFor(player, targetStat);
@@ -1371,7 +1388,7 @@ export function executeCampTraining(player, trainingType, newPitchType, staffBon
       //    毎年「制球集中」になる。野手の集中はミート・パワー・選球眼・守備・盗塁に散るので、制球だけが
       //    積み上がり、10年でリーグの制球が 49→69・四球が半分になった（10年の長期シミュ 2026-11-23）
       const focusStatMult = targetStat === 'control' ? TRAINING_MENUS.control.growthMultipliers.control : 1.0;
-      rawGrowth = ((rawBase + rawFocus) * 0.14 * INTENSIVE_FOCUS * focusStatMult
+      rawGrowth = ((rawBase + rawFocus) * 0.14 * INTENSIVE_FOCUS * focusStatMult * batGrowthMult
         * talentMult * aptitudeFactor * physiqueMult * disciplineMult
         * campPotMult * coachingMult * moodMult * (isPhysical ? fitnessMult : 1.0) * stopAgeGate);
       isAwakening = false;
@@ -1388,7 +1405,7 @@ export function executeCampTraining(player, trainingType, newPitchType, staffBon
       //    メニューの係数（制球0.7）も、0.5をまたがない限り**一度も効かない**。
       //    端数の確率で切り上げれば期待値がそのまま残り、係数が素直に効く
       //    （年次成長の `growthSystem` が同じ理由で先に入れている）
-      rawGrowth = ((rawBase + rawFocus) * 0.14 * statMultiplier * talentMult * aptitudeFactor * physiqueMult * disciplineMult * campPotMult * coachingMult * moodMult * physFitMult * battCoachMult * stopAgeGate);
+      rawGrowth = ((rawBase + rawFocus) * 0.14 * statMultiplier * batGrowthMult * talentMult * aptitudeFactor * physiqueMult * disciplineMult * campPotMult * coachingMult * moodMult * physFitMult * battCoachMult * stopAgeGate);
       if ((targetStat === 'stamina' || targetStat === 'bodyStamina') && rawGrowth < 1) rawGrowth = 1;
       // 覚醒判定（経験値 × プロ意識の相乗効果）
       // discipline < 30: 努力しない選手は飛躍しない（係数0）
@@ -1409,7 +1426,7 @@ export function executeCampTraining(player, trainingType, newPitchType, staffBon
         ? (getNestedValue(updatedPlayer, getStatPath(targetStat)) ?? 0)
         : 0;
       awakeningGrowth = isAwakening
-        ? Math.max(1, Math.round(rawAwakening * talentMult * awakeningHighStatDamp(awakeningBase)))
+        ? Math.max(1, Math.round(rawAwakening * talentMult * batGrowthMult * awakeningHighStatDamp(awakeningBase)))
         : 0;
     }
 

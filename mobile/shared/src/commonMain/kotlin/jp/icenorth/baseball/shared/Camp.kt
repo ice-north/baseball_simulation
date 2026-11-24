@@ -71,7 +71,8 @@ private fun broadFor(stat: String, isPitcher: Boolean) =
 
 private val SUB_BY_PHASE = mapOf(
     "physique" to mapOf("sharpen" to "weight", "balanced" to "physique", "patch" to "physique"),
-    "skill" to mapOf("sharpen" to "eye", "balanced" to "stretch", "patch" to "defense_sub"),
+    // ⚠ 守備補強（defense_sub）はサブポジ練習にまとめた（2026-11-24。SUB_MENU_ALIASES）
+    "skill" to mapOf("sharpen" to "eye", "balanced" to "stretch", "patch" to "subposition"),
     "range" to mapOf("sharpen" to "breaking", "balanced" to "breaking", "patch" to "subposition"),
 )
 
@@ -157,8 +158,13 @@ fun clampMenu(key: String?, player: JsonObject): String {
     return if (menu != null && menuFits(menu, pitcher)) menu.key else if (pitcher) "control" else "batting"
 }
 
-fun clampSub(key: String?, player: JsonObject): String =
-    if (key != null && campSubMenusFor(player).any { it.key == key }) key else "physique"
+/** まとめたサブ練習の古い名前 → 今の名前（campTraining.js の SUB_MENU_ALIASES の写し） */
+val SUB_MENU_ALIASES: Map<String, String> = mapOf("defense_sub" to "subposition")
+
+fun clampSub(rawKey: String?, player: JsonObject): String {
+    val key = rawKey?.let { SUB_MENU_ALIASES[it] ?: it }
+    return if (key != null && campSubMenusFor(player).any { it.key == key }) key else "physique"
+}
 
 /** 一人用のキャンプと同じ分け方 */
 val CAMP_GROUPS: List<Pair<String, String>> = listOf("pitcher" to "投手", "catcher" to "捕手", "infield" to "内野手", "outfield" to "外野手")

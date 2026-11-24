@@ -557,7 +557,7 @@ export const CAMP_SUB_MENUS = [
   'physique',
   'weight',
   'stretch',
-  'defense_sub',
+  // ⚠ 'defense_sub'（守備補強）はサブポジ練習にまとめた（2026-11-24）。古い名前は `canonicalSubMenu` で読み替える
   'long_throw',
   'eye',
   'clead_study',
@@ -626,29 +626,30 @@ export const RETRY_ON_REVISION = ['lineup', 'submit', 'campRound'];
  * ⚠ いしだ指摘: キャンプでどれくらい上がるのか、おまかせ（標準＝全体を伸ばす×技術）で
  *    いいのかが分からない。**実測の数字**を置く（`tools/sim-harness/camp-policy-probe.mjs`、
  *    初期セット26人×8回、2026-11-08。確率で丸める・まとめて1回丸める直しの後に測り直した 2026-11-14）。
+ *    技術の3つは 2026-11-24 に測り直した（ミート・パワーを下げ・制球を上げ・守備補強をサブポジ練習にまとめた後。6回）。
  *    練習の式を変えたら測り直して書き直すこと。
  * ⚠ 体力・体幹は数字が大きく出るが、試合への効き方は打撃・制球より緩い
  *    （`ABILITY_HELP` の説明どおり）。合計の大きさで方針を選ばせないこと。
  */
 export const CAMP_POLICY_GUIDE = {
   'balanced:skill': {
-    fielder: 'ミート+3 パワー+2 回復+1 選球眼+1',
-    pitcher: 'スタミナ+4 制球+2 回復+1 球速+1',
+    fielder: '選球眼+2 ミート+2 パワー+1 回復+1',
+    pitcher: 'スタミナ+5 制球+1 回復+1 球速+1',
   },
   'balanced:physique': {
     fielder: '体力+12 体幹+8 盗塁+2 バント+1',
     pitcher: '体力+12 スタミナ+10 体幹+8 球速+2 肩力+2',
   },
   'sharpen:skill': {
-    fielder: 'ミート+2 選球眼+2（いちばん高い能力に集中）',
-    pitcher: '制球+2 守備+1',
+    fielder: '選球眼+1 守備+1 ミート+1（いちばん高い能力に集中）',
+    pitcher: '守備+2 制球+1',
   },
   'sharpen:physique': {
     fielder: '体幹+8 肩力+2 盗塁+2 パワー+2',
     pitcher: '体幹+8 肩力+3 球速+2 守備+1 スタミナ+1',
   },
   'patch:skill': {
-    fielder: 'バント+2 守備+2 ミート+1 盗塁+1（いちばん低い能力を底上げ）',
+    fielder: '守備+2 盗塁+1 選球眼+1 ミート+1・守備位置の適性（いちばん低い能力を底上げ）',
     pitcher: '守備+3 スタミナ+2',
   },
   'patch:physique': {
