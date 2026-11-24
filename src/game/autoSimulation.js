@@ -142,7 +142,7 @@ export const generateAILineup = (teamData, teamName) => {
   // ⚠ **DH の印（`_isDH`）も一緒に外す**。下で印を付け直すのは打順に入る人だけなので、
   //    前の打順の DH が控えに回ると印が残り、守備固めで入ると印付きのまま守備位置を受け取って
   //    「DH が2人・その守備位置が空」になっていた（守備の検索は `!p._isDH` で探す）
-  players.forEach(p => { p.battingOrder = 0; delete p._isDH; });
+  players.forEach(p => { p.battingOrder = 0; delete p._isDH; delete p._neverFielded; });
 
   // 先発投手を先に決定（二刀流選手のフィールド配置に影響するため）
   const rotation = teamData.pitchingRotation;
@@ -384,7 +384,7 @@ export function accrueBatterExperience(playerData, gamePlayer, atBats) {
   playerData.experience = (playerData.experience || 0) + 1 + Math.floor((atBats || 0) / 3);
 
   if (!playerData.positionExperience) playerData.positionExperience = {};
-  if (!gamePlayer._isDH) {
+  if (!gamePlayer._isDH && !gamePlayer._neverFielded) {
     const pos = gamePlayer.position || 'unknown';
     playerData.positionExperience[pos] = (playerData.positionExperience[pos] || 0) + 1;
   }
@@ -1212,7 +1212,10 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false, observer = 
         const runner = bases[i];
         const runnerSpeed = (runner && typeof runner === 'object' && runner.physical?.speed) || 55;
         // 積極進塁（単打で 2塁→本塁 / 1塁→3塁、二塁打で 1塁→本塁）。詳細は baserunning.js 参照
-        if (!extraAdvance && outsMade === 0) {
+        // ⚠ 先を走る走者がその先の塁に止まっていたら、狙いもしない（以前は狙って刺されることがあり、
+        //    セーフでも進めないのにアウトだけ増えていた。2026-11-24 監査）
+        const blockedAhead = newBase + 1 < 3 && !!newBases[newBase + 1];
+        if (!extraAdvance && outsMade === 0 && !blockedAhead) {
           const thrower = fieldingPosition ? (defense?.[fieldingPosition] || null) : null;
           const cutoff = defense?.short || defense?.second || { defense: 60 };
           const { attempt, thrownOut } = tryExtraAdvance({
@@ -1224,9 +1227,8 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false, observer = 
             assistBy = fieldingPosition || null;
             continue; // 刺された → 進塁も得点もしない
           }
-          // 賭けに勝って余分に進塁。ただし先を走る走者がその塁に止まっていたら進まない
-          // （以前は同じ塁に2人が重なり、先の走者が黙って消えていた。手動試合と同じ門番）
-          if (attempt && (newBase + 1 >= 3 || !newBases[newBase + 1])) newBase++;
+          // 賭けに勝って余分に進塁（先の塁が空いているのは上で確かめた）
+          if (attempt) newBase++;
         }
         // 悪送球・中継ミス: 送球が乱れているので走者が余分に1つ進む
         if (extraAdvance) newBase++;
@@ -1598,6 +1600,8 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false, observer = 
     sub.position = 'catcher';
     delete sub._isDH;
     masked.battingOrder = 0;
+    // 守る前に退いたので、捕手の守備経験に数えない（`accrueBatterExperience`）
+    masked._neverFielded = true;
     gameState.removedIds.add(masked.id);
   };
 
