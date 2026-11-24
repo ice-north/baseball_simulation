@@ -1,6 +1,7 @@
 package jp.icenorth.baseball.shared
 
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 
 /**
@@ -122,6 +123,12 @@ data class TeamLabel(
     val short: String? = null,
     val city: String? = null,
     val nickname: String? = null,
+    /**
+     * 球団ロゴ（部品の重ね・小さい版・球団の色）。作っていない球団にもサーバーが自動のロゴを載せる。
+     * ⚠ 形を決めて読まない（`JsonElement` のまま持ち、`LookLogo.kt` の [teamLogoOf] がゆるく読む）。
+     *    ロゴの形がおかしくても、ビュー全体の読み込みを止めないため
+     */
+    val logo: JsonElement? = null,
 )
 
 @Serializable

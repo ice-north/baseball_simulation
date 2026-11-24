@@ -14,6 +14,10 @@ import androidx.compose.material3.Typography
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.staticCompositionLocalOf
@@ -32,6 +36,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.graphics.vector.PathParser
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.AnnotatedString
@@ -62,6 +67,14 @@ import jp.icenorth.baseball.shared.conditionArt
 import jp.icenorth.baseball.shared.conditionIcon
 import jp.icenorth.baseball.shared.emblemArt
 import jp.icenorth.baseball.shared.faceArt
+import jp.icenorth.baseball.shared.logoArt
+import jp.icenorth.baseball.shared.logoLayersFor
+import jp.icenorth.baseball.shared.logoNeedsIcons
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.jsonObject
 
 // ============================================================
 // 新しい見た目（試作）: 球団マーク・選手と指導者の顔・調子の顔・段位の字・見出しと本文の字。
@@ -205,14 +218,32 @@ fun LookCanvas(art: LookArt, modifier: Modifier, crop: Boolean = false) {
 }
 
 private fun DrawScope.drawItem(s: LookItem, path: Path?, measurer: TextMeasurer?) {
+    // 変形つきの図形（球団ロゴの部品）: (ox, oy) だけずらす → (sx, sy) 倍 → r 度回す → (x, y) へ動かす
+    // （SVG の `translate(x y) rotate(r) scale(sx sy) translate(ox oy)` と同じ順）
+    val tf = s.tf?.takeIf { it.size == 7 }
+    if (tf == null) {
+        drawPlainItem(s, path, measurer)
+        return
+    }
+    withTransform({
+        translate(tf[0].toFloat(), tf[1].toFloat())
+        rotate(tf[2].toFloat(), pivot = Offset.Zero)
+        scale(tf[3].toFloat(), tf[4].toFloat(), pivot = Offset.Zero)
+        translate(tf[5].toFloat(), tf[6].toFloat())
+    }) { drawPlainItem(s, path, measurer) }
+}
+
+private fun DrawScope.drawPlainItem(s: LookItem, path: Path?, measurer: TextMeasurer?) {
     val alpha = (s.op ?: 1.0).toFloat()
     val fill = lookColor(s.fill)
     val stroke = lookColor(s.stroke)
     val line = Stroke(width = (s.sw ?: 1.0).toFloat(), cap = capOf(s.cap), join = joinOf(s.join))
-    // 図形は塗ってから縁（SVG と同じ）。字は縁を先に（Web の paint-order: stroke）
+    // 図形は塗ってから縁（SVG と同じ）。字は縁を先に（Web の paint-order: stroke）。
+    // `po` の付いた図形（球団ロゴの部品）も縁を先に描く（縁の内側半分が塗りに隠れる）
     fun paint(block: (Color, androidx.compose.ui.graphics.drawscope.DrawStyle) -> Unit) {
+        if (s.po == 1) stroke?.let { block(it, line) }
         fill?.let { block(it, Fill) }
-        stroke?.let { block(it, line) }
+        if (s.po != 1) stroke?.let { block(it, line) }
     }
     when (s.t) {
         "path" -> if (path != null) paint { c, st -> drawPath(path, c, alpha = alpha, style = st) }
@@ -245,8 +276,49 @@ fun TeamMark(team: String?, size: Dp = 18.dp, modifier: Modifier = Modifier) {
     val look = LocalLook.current
     if (!look.on) return
     val t = look.teamLook(team) ?: return
-    val art = remember(t) { emblemArt(t) }
+    // 球団ロゴ（ビューに載っていれば）。小さく出すときは小さい版の重ね
+    val layers = remember(t.logo, size) { t.logo?.let { logoLayersFor(it, size.value.toDouble()) }.orEmpty() }
+    val needsIcons = remember(layers) { logoNeedsIcons(layers) }
+    val icons = if (needsIcons) rememberLogoIcons() else null
+    val art = remember(t, layers, icons) {
+        // ⚠ 絵の形がまだ届いていない間は、今までの帽子のマークを出す（部品の欠けたロゴを見せない）
+        if (layers.isEmpty() || (needsIcons && icons == null)) emblemArt(t) else logoArt(layers, listOf(t.c1, t.c2, t.c3), icons)
+    }
     LookImage(art, size, modifier.testTag("team-mark"))
+}
+
+/** 球団ロゴの絵の作者の表示（絵の素材の利用条件。Web 版はロゴを作る小窓の下に出している）。⚠ 消さない */
+internal const val LOGO_ICONS_CREDIT = "球団ロゴの絵: game-icons.net（Lorc、Delapouite ほか。CC BY 3.0）"
+
+/**
+ * 球団ロゴの絵の形（assets の `logo-icons.json`、`{ 名前: 形 }`。約280KB）を読む。読めなければ null。
+ * Web 版 `public/look/` と同じファイルを入れてある（`androidApp/build.gradle.kts` の assets）。
+ * ⚠ 絵は game-icons.net（CC BY 3.0）。作者の表示が要る（同じ場所の `LICENSE-game-icons.txt` と [LOGO_ICONS_CREDIT]）
+ */
+internal fun readLogoIcons(context: android.content.Context): Map<String, String>? = runCatching {
+    val text = context.assets.open("logo-icons.json").use { it.readBytes().decodeToString() }
+    Json.parseToJsonElement(text).jsonObject.mapValues { (it.value as JsonPrimitive).content }
+}.getOrNull()
+
+/** 絵の形は、絵を使う大きいロゴを描くときに1回だけ読む。読めなければ null のまま（今までのマークを出す） */
+private object LogoIcons {
+    var icons: Map<String, String>? by mutableStateOf(null)
+        private set
+    private var loading = false
+
+    suspend fun ensure(context: android.content.Context) {
+        if (icons != null || loading) return
+        loading = true
+        icons = withContext(Dispatchers.IO) { readLogoIcons(context) }
+        loading = false
+    }
+}
+
+@Composable
+private fun rememberLogoIcons(): Map<String, String>? {
+    val context = LocalContext.current.applicationContext
+    LaunchedEffect(Unit) { LogoIcons.ensure(context) }
+    return LogoIcons.icons
 }
 
 /** 選手の顔。帽子は [team]（省くと画面の球団）、表情は調子、しわ・ひげ・白髪は年齢 */

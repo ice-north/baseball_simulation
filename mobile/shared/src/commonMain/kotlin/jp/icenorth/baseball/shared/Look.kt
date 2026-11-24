@@ -130,6 +130,8 @@ data class TeamLook(
     val latin: Boolean,
     val mono: String,
     val font: String,
+    /** 球団ロゴ（ビューに載っていれば）。無ければ今までの帽子のマークを描く */
+    val logo: TeamLogo? = null,
 )
 
 /** 所属の分からない人（候補・浪人中の指導者）の帽子。字は入れない */
@@ -242,6 +244,10 @@ fun buildTeamLooks(teamLabels: Map<String, TeamLabel>): Map<String, TeamLook> {
         val mono = t.mono()
         var style = t.style
         if (style == "script" && mono.length > 1) style = "circle"
-        t.name to TeamLook(t.name, t.palette[0], t.palette[1], t.palette[2], style, t.latin, mono, lookFontOf(style, t.latin))
+        // 球団ロゴ（ビューに載っていれば）。色を選んだ球団は、帽子・ユニフォームもその色にする
+        // ⚠ ロゴの載っていない名前の表（古いサーバー）では、今までと同じ結果のまま
+        val logo = teamLogoOf(teamLabels[t.name]?.logo)
+        val colors = logo?.colors ?: t.palette
+        t.name to TeamLook(t.name, colors[0], colors[1], colors[2], style, t.latin, mono, lookFontOf(style, t.latin), logo)
     }
 }

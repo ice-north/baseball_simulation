@@ -7,6 +7,7 @@
 //   **作者の表示が要る**（`public/look/LICENSE-game-icons.txt` と、ロゴを作る画面の下の1行）。
 // - 使う絵の名前は `src/online/look/logoMotifs.js`。足したらこれを回し直す。
 // - 配布 HTML には埋め込まない（新しい見た目を入にした人だけが読む。約290KB）。
+// - アプリも同じファイルを入れる（`mobile/androidApp/build.gradle.kts` の assets）。足したらアプリも作り直す。
 // - 小数は1桁に丸める（元は3桁。丸めても 100px では見分けがつかず、4割ほど軽くなる）。
 import fs from 'node:fs';
 import { LOGO_ICON_NAMES } from '../src/online/look/logoMotifs.js';

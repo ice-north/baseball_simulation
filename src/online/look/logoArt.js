@@ -10,7 +10,8 @@
 // ⚠ 絵の形（`icons`）は別に読み込む（`logoIcons.js`）。まだ届いていない絵は飛ばして描く。
 // ⚠ アーチの字は1字ずつ置いて回す（字を道に沿わせる機能はアプリの Canvas に無い）。
 //    字の幅は `logoParts.js` の表の数で決める（測らない）。
-// ⚠ アプリに写すときは、数字を小数2桁に丸めるところまで同じにする（`r2`）。
+// ⚠ アプリの `LookLogo.kt` に写してある（数字を小数2桁に丸めるところまで同じ。`r2`）。変えたら両方を直し、
+//    `mobile/tools/expect-look.mjs` で期待値を書き出し直す（答え合わせはアプリの `LookTest`）。
 // ============================================================
 import { LOGO_SHAPES, logoColors, colorOf, charWidth, INK } from './logoParts.js';
 import { LOGO_TEXT_UNIT, LOGO_ARC_GAP } from './logoBuild.js';
