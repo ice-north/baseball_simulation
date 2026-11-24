@@ -119,7 +119,7 @@ fun YearSummaryCard(model: AppViewModel) {
         // ② 入退団
         Caption("入退団（入団${s.joined.size}人・退団${s.left.size}人）")
         if (s.joined.isEmpty() && s.left.isEmpty()) Muted("この年の入退団はありません。")
-        (s.joined + s.left).forEach { Text(yearSummaryMoveText(it), fontSize = 13.sp) }
+        (s.joined + s.left).forEach { Text(yearSummaryMoveText(it, view::teamLabel), fontSize = 13.sp) }
         // ③ 主なトピック
         Caption("主なトピック")
         if (s.topics.isEmpty()) Muted("この年に残った話題はありません。")

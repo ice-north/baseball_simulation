@@ -308,7 +308,7 @@ export function buildNationalPage(view, raw, local) {
   }
   // 球界の外から
   recentWorld(view).forEach((w) => {
-    const t = worldText(w, view.teamShort);
+    const t = worldText(w, view.teamShort, view.teamLabel);
     if (t) articles.push(article(w.kind === 'koshien' ? '甲子園' : '日本一決定戦', t.head, t.body, LINK_GAMES));
   });
   // タイトル戦線

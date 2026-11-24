@@ -71,6 +71,7 @@ import jp.icenorth.baseball.shared.weightedScore
 import jp.icenorth.baseball.shared.wishLimit
 import jp.icenorth.baseball.shared.fillsAutomatically
 import jp.icenorth.baseball.shared.wishedCount
+import jp.icenorth.baseball.shared.teamLabel
 import jp.icenorth.baseball.shared.teamShort
 import kotlinx.serialization.json.JsonObject
 import kotlin.math.max
@@ -241,7 +242,7 @@ fun TryoutPanel(
                             Fit(teamFitRank(p, roster, weights))
                             Koshien(p)
                             ListedByChips(p) { model.view?.teamShort(it) ?: it }
-                            originOf(p)?.let { Text(it, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                            originOf(p) { model.view?.teamLabel(it) ?: it }?.let { Text(it, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
                             if (at >= 0) Tag("交渉中 ${at + 1}位", MaterialTheme.colorScheme.primary)
                         }
                     }
@@ -325,10 +326,14 @@ private fun Fit(fit: TeamFit) {
     )
 }
 
-/** 出身（高校・大学・元の球団）。⚠ Web 版 TryoutPlanner.jsx の originOf と同じ順で選ぶ */
-private fun originOf(p: JsonObject): String? {
+/**
+ * 出身（高校・大学・元の球団）。⚠ Web 版 TryoutPlanner.jsx の originOf と同じ順で選ぶ
+ * ⚠ 元の球団は内部名で入っているので、いまの球団名に引き直す（`label`。名前を変えた球団が
+ *    変える前の名前で出ていた。2026-11-24 監査。Web 版も同じ）
+ */
+private fun originOf(p: JsonObject, label: (String) -> String): String? {
     fun of(key: String) = p.at("origin", key).str()?.takeIf { it.isNotBlank() }
-    return of("previousTeam")?.let { "元$it" } ?: of("university") ?: of("highSchool")
+    return of("previousTeam")?.let { "元${label(it)}" } ?: of("university") ?: of("highSchool")
 }
 
 /**

@@ -278,7 +278,7 @@ fun buildNationalPage(view: LeagueView, raw: JsonObject?, local: FrontPage): Fro
     }
     // 球界の外から（甲子園・独立リーグ日本一決定戦。同じ年で、その日から120日。[recentWorld]）
     recentWorld(view).forEach { w ->
-        worldText(w, view::teamShort)?.let { t -> articles += FrontPage.Article(if (w.kind == "koshien") "甲子園" else "日本一決定戦", t.head, t.body, LINK_GAMES) }
+        worldText(w, view::teamShort, view::teamLabel)?.let { t -> articles += FrontPage.Article(if (w.kind == "koshien") "甲子園" else "日本一決定戦", t.head, t.body, LINK_GAMES) }
     }
     // タイトル戦線（打率・本塁打・勝利の先頭）
     val boards = raw?.at("leaders").list().mapNotNull { it.obj() }

@@ -869,12 +869,18 @@ export function personalityScale(coach) {
   });
 }
 
-/** 経歴の一言（「元投手・湘南サンズで8年」「元内野手」） */
-export function originText(coach) {
+/**
+ * 経歴の一言（「元投手・湘南サンズで8年」「元内野手」）。
+ * ⚠ 球団名は**いまの名前で引き直す**（`labelOf` に内部名 `origin.team` を渡す）。保存している
+ *    `origin.teamLabel` は指導者になった時点の名前なので、そのあと球団名を変えると
+ *    「元投手（旧名で8年）」と古い名前が残っていた（2026-11-24 監査）。
+ *    `labelOf` が無いときだけ保存した名前を使う
+ */
+export function originText(coach, labelOf = null) {
   const o = coach?.origin || {};
   const pos = POSITION_WORDS[o.position] || '選手';
   if (o.kind === 'player' && o.team)
-    return `元${pos}（${o.teamLabel || o.team}${o.seasons ? `で${o.seasons}年` : ''}）`;
+    return `元${pos}（${(labelOf ? labelOf(o.team) : o.teamLabel) || o.team}${o.seasons ? `で${o.seasons}年` : ''}）`;
   return `元${pos}`;
 }
 const POSITION_WORDS = {

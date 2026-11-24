@@ -26,6 +26,9 @@ class YearSummaryTest {
         assertNull(yearSummaryRankText(YearSummary(year = 2)))
         assertEquals("入団 新人一郎（投）", yearSummaryMoveText(YearSummaryMove("in", "入団", "新人一郎", "pitcher")))
         assertEquals("プロ入り プロ八郎（中） → 中日", yearSummaryMoveText(YearSummaryMove("out", "プロ入り", "プロ八郎", "center", "中日")))
+        // 相手の球団は内部名で来る。いまの球団名に引き直す（名前を変えた球団が前の名前で出ていた。2026-11-24 監査）
+        val label = { n: String -> if (n == "三河ハリケーンズ") "新名フェニックス" else n }
+        assertEquals("トレード 来た人（投） ← 新名フェニックス", yearSummaryMoveText(YearSummaryMove("in", "トレード", "来た人", "pitcher", "三河ハリケーンズ"), label))
     }
 
     @Test
