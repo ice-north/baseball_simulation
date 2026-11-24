@@ -9,8 +9,13 @@ export const TECHNICAL_STATS = ['meet', 'power', 'eye', 'control', 'defense', 's
 // 体幹(muscle)・器用さ(dexterity)がどの能力の成長に効くか。
 // ⚠ **3箇所に同じ配列が別々に書かれていた**（`applyAgeCurveChanges` /
 //    `campTraining` / 年次成長）。物差しを二重に作らないこと。
+// ⚠ `breaking`（変化球レベル）を器用さ側に入れてある（2026-11-24。いしだ「自然成長をやや
+//    下げる。その代わりに器用さをちょっと増やす」）。これで年次成長の変化球に
+//    `physiqueMultFor` が効く（`PHYSIQUE_W` 0.30 なので 器用0→0.85 / 100→1.15）。
+//    ⚠ `breaking` は `PHYSICAL_STATS` にも `TECHNICAL_STATS` にも**入っていない**ので、
+//      `applyAgeCurveChanges` の対象は増えない（あちらは2つの配列を回している）。
 export const MUSCLE_STATS = ['power', 'arm', 'speed', 'velocity', 'bodyStamina'];
-export const DEXTERITY_STATS = ['meet', 'eye', 'defense', 'control', 'steal', 'bunt'];
+export const DEXTERITY_STATS = ['meet', 'eye', 'defense', 'control', 'steal', 'bunt', 'breaking'];
 
 /**
  * 成長方向にのみ掛ける体格補正（既定 0.5〜1.5倍）。衰退には効かない。

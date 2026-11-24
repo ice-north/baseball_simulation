@@ -211,7 +211,12 @@ export const STAT_GROWTH = {
   //    投手は7年経ってもスライダーLv30のまま、捕手はリード40のままだった
   //    （大学プールだけが `applyUniversityGrowth` で伸ばしていた）。
   //    どちらも「実戦で最も磨かれる」ものなので、実戦成長の対象に入れる。
-  breaking: { peakAge: 30, ref: 50, base: 1.3, cap: 100, threshold: 52, rate: 0.04, decline: 0.20 },
+  // ⚠ `base` は 1.3 → **1.1**（2026-11-24。いしだ「自然成長をやや下げる。その代わりに
+  //    器用さをちょっと増やす」）。キャンプ側の天井（`BREAKING_DAMP`）を入れたのと同じ回で、
+  //    実戦で勝手に積み上がる分も少し削る。下げたぶんは器用さが担う
+  //    （`DEXTERITY_STATS` に `breaking` を入れたので `physiqueMultFor` が効く）。
+  //    年次成長だけでは元から80には届かない（実測: 25→12年で33.6。1.1 で 32.0）
+  breaking: { peakAge: 30, ref: 50, base: 1.1, cap: 100, threshold: 52, rate: 0.04, decline: 0.20 },
   // リードは経験の積み上げ。**加齢で落ちない**（`npbCareer` の加齢処理と同じ扱い）
   lead:     { peakAge: 34, ref: 50, base: 1.1, cap: 95,  threshold: 52, rate: 0.05, decline: 0 },
 };
