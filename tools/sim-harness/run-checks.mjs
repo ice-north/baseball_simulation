@@ -113,9 +113,19 @@ const CHECKS = [
   { name: 'online-staff-moves-check', group: 'check', online: true, slow: 150 },
   // 指導者（監督・コーチ）。種・任せ方・人事・40年の入れ替わり・1年を通して翌年のキャンプまで
   { name: 'online-coach-check', group: 'check', online: true, slow: 200 },
+  // アプリが読む項目（mobile/tools/view-contract.mjs）が本物のサーバーの答えにあるか。開幕直後だけ（約20秒）
+  { name: 'online-view-contract-check', group: 'check', online: true, slow: 22 },
   // 人どうしの関わり（ひとこと・取引の記録・おるすばん・予告先発・練習試合・得点経過）
   { name: 'online-social-check', group: 'check', online: true, slow: 125 },
   { name: 'progression-check', group: 'full', slow: 38 },
+  // 同じものを年度更新のあとのキャンプまで進めて、時期の項目も（約80秒）
+  {
+    name: 'online-view-contract-check-year',
+    group: 'full',
+    online: true,
+    slow: 80,
+    args: [harness('online-view-contract-check'), '--year'],
+  },
   // 固定の種で回した結果（一人用の自動試合・オンラインの開幕40回と参加者のビュー）が記録と同じか。
   // 動きを変えない整理の安全網。狙って結果を変えたら `--update` で書き直す（replay-hashes.json）
   { name: 'replay-hash-check', group: 'check', online: true, slow: 40 },

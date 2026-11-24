@@ -20,7 +20,10 @@
 
 ### Web 版から写しているもの
 
-- `shared/.../Tables.kt` は `tools/gen-tables.mjs` が Web 版の表から書き出す（手で直さない）。
+- `shared/.../Tables.kt` は `tools/gen-tables.mjs` が Web 版の表から書き出す（手で直さない）。能力の説明（`ABILITY_HELP`）・
+  成績の表の区分と列（`BATTING_GROUPS`・`PITCHING_GROUPS`）・組み合わせの注記・能力の絞り込み・控えの括り・段位・疲労の段・調子の顔もここ。
+  列の値の引き方は Web 版の関数から読み、2つ以上の項目を組み合わせる列だけ `Stats.kt` の `StatComputed` に式を置く。
+  値と文字は `tools/expect-stats.mjs` が書き出す期待値（`stats-expected.json`）と `StatsWebTest` で答え合わせする。
 - キャンプの方針（`trainingPolicy.js`）とトライアウトの希望順（`tryoutPlan.js`）は Kotlin に写してあり、
   `tools/expect-logic.mjs` が書き出す期待値（`logic-expected.json`）と `LogicTest` で答え合わせする。
 - 得点経過・最終ログイン・留守中のまとめの文（`social.js`・`awaySummary.js`）は `Social.kt`・`AwaySummary.kt` に写してあり、
@@ -37,6 +40,8 @@
 - アプリは `?action=login / refresh / view / defaults / team / player / games / game / transactions / command / presence` を使う。`presence` はアプリに戻るたび（10分に1回まで）送り、最終ログインとおるすばんの解除に使う。ビューの項目名を変えるとアプリが壊れる。
   - `presence` の返事は `{ ok: true }`。おるすばんを解いたときは `{ ok: true, returned: true }` で、アプリはそのときもう一度ビューを読む（一緒に走らせた読み直しが解ける前のビューを読んでいて、自分が「おるすばん」のまま見えるため）。`returned` が無ければ解いていない扱い（`shared/.../OnlineApi.kt` の `presence`）。
   - 版（`revision`）は、最終ログインを書いただけなら上がらない（ほかの人の画面を読み直させない）。おるすばんを解いたときは上がる。ただしビューの世代（`viewGeneration`）は、書き込みを保存するたび（`presence` が最終ログインを書いたときも）上がる（`server/storage/supabaseStore.mjs` の `online_publish`。公開は世代を必ず1つ上げる）。なので `since` を添えた次の `view` は中身をまるごと返す。
+- ⚠ 下の「名前を変えると黙って出なくなる」項目の正本は `tools/view-contract.mjs`（ビューの約束）。サーバーで項目を足す・変えるときはそこも直す。
+  本物のサーバーの答えにあるかを `online-view-contract-check`（`check`。開幕直後）と `--year`（`check:full`。1年通して）が確かめる。
 - 画面が読む項目のうち、名前を変えると黙って空になるもの（どれも無ければ出さないだけなので、画面の検査では気づきにくい）:
   - ビュー: `careerLeaders`（通算成績ランキング）、`chronicle.proDrafted`（プロ入りした選手。指名順位は `round`（数）と `ikusei`（育成指名なら true）で「4位」「育成2位」と出す）、`lastCamp`（キャンプの結果）、`stage.key`（`season` かどうかでキャンプ直後の案内を出す）、`trades[]` の `fromCpu`・`expires`（CPU球団からの提案とその期限）、`rosterLimit`・`rosterStandard`（選手枠。下の項目）、`yearSummary`（その年のまとめ。`year`・`league`・`rank`・`record`・`standings[]`（`rank`・`label`・`wins`・`losses`・`draws`・`mine`）・`joined[]`/`left[]`（`side`・`how`・`name`・`position`・`other`）・`topics[]`。`server/yearSummary.mjs`。年度更新から開幕した月の間だけ載る）、`roster[].naturalGrowth`（自球団の選手の自然成長。次の年度替わりに主な能力が1つあたり何点動くかの見込みで、選手情報の「自然成長」に `+1.20/年` の形で出す。`server/projection.mjs` の `playerViewWithGrowth`。他球団の名簿（`team`）には載らない）。
   - `team`: `formerCareers`（引退・退団した選手の通算）、`chronicle.moves`（入退団履歴）、`roster[].years`（他球団の選手の年ごとの推移）。
@@ -84,7 +89,7 @@
   - 読む: ビューの `staff.seats`（契約更改の「指導者の異動」の席）、`staff.scheduled[]`（年度更新で動く人事の文）、`staff.events[].stepDown`（契約更改で決めた退任）。
   - 送る: 契約更改の `staffMoves`（`{ manager: leave|pitching|batting, pitching: leave, batting: leave }`。続投は送らない。`Commands.withStaffMove`）。
   - ⚠ 古いサーバーは `staffMoves` を黙って捨てる（`coachOffers` と同じ）。サーバーを先に出してからアプリで使う。
-  - トライアウトの能力の絞り込み（`Tryout.kt` の `ABILITY_FILTERS`）は画面の中だけ。サーバーには送らない。
+  - トライアウトの能力の絞り込み（`Tables.kt` の `ABILITY_FILTERS`）は画面の中だけ。サーバーには送らない。
 - 手続きの任せ方は、ビューの `phase.delegated`（自分がその手続きを指導者に任せているか）と `members` の `ready`・`cpu`・`delegated` を読む。任せた手続きは決定の帯を出さず、`defaults` の案（指導者の案）を読むだけで見せる。待たれている最後の1人が手続きの分野を「任せる」にして保存すると、サーバーはその場で手続きを決めるので、アプリは送る前に確かめる（`shared/.../Staff.kt` の `delegationSettles`。`server/leagueEngine.mjs` の `waitsFor` と同じ見方）。
 
 ### 検査に使う実際の窓口の答え（`shared/src/jvmTest/resources/`）
@@ -93,13 +98,14 @@
 
 | ファイル | 中身 | 作り方 | 使う検査 |
 | --- | --- | --- | --- |
-| `view-running.json` | 開幕3日目（4月4日）のビュー | `node mobile/tools/view-fixture.mjs` のあと、必ず `node mobile/tools/expect-logic.mjs > mobile/shared/src/jvmTest/resources/logic-expected.json` と下の `expect-social.mjs` | `ViewTest`・`LogicTest`・`TipsTest`・`TwoWayTest`・`SocialTest` |
+| `view-running.json` | 開幕3日目（4月4日）のビュー | `node mobile/tools/view-fixture.mjs` のあと、必ず `node mobile/tools/expect-logic.mjs > mobile/shared/src/jvmTest/resources/logic-expected.json` と下の `expect-social.mjs`・`expect-stats.mjs` | `ViewTest`・`LogicTest`・`TipsTest`・`TwoWayTest`・`SocialTest`・`StatsWebTest` |
 | `front/view.json`・`game.json`・`games.json`・`team.json` | 同じリーグの6月12日のビュー、自球団の最新の試合の詳細、今季の自球団の試合、次の相手の名簿 | 同じ `view-fixture.mjs` が一緒に書き出す | `FrontPageTest`（紙面） |
 | `chronicle/view-late.json`・`view-offseason.json`・`team.json`・`view-pro.json` | 1年目の終盤（マジックが出る頃）のビュー、2年目のキャンプのビュー（引退・裏の大会・前の年の表彰）、球団史、プロのその後と便りの出る頃のビュー（年代記・年齢構成・参加の時刻だけ。写しの年を進めて作る） | `node mobile/tools/chronicle-fixtures.mjs`（引退・プロ入りが出ない年は1人分を作って載せる）。そのあと必ず下の `expect-chronicle.mjs` | `ChronicleTest`（年代記の紙面）・`HonorsTest` |
 | `chronicle-expected.json` | Web 版の表彰の行・プロのその後の行・年齢構成の読み・はじめての1週間の時刻の答え（上の年代記のビューから） | `node mobile/tools/expect-chronicle.mjs > mobile/shared/src/jvmTest/resources/chronicle-expected.json`。CI は `--check` | `HonorsTest` |
 | `staff-view.json` | 指導者（監督・コーチ）の入ったビュー（2年目のキャンプ） | `WRITE_APP_FIXTURE=1 node tools/sim-harness/online-coach-check.mjs` | `StaffTest` |
 | `logic-expected.json` | Web 版の計算の答え（`view-running.json` の名簿から） | 上の `expect-logic.mjs`。CI は `--check` | `LogicTest` |
 | `social-expected.json` | Web 版の得点経過・時刻・最終ログイン・留守中のまとめの答え（`view-running.json` の要点から） | `node mobile/tools/expect-social.mjs > mobile/shared/src/jvmTest/resources/social-expected.json`。CI は `--check` | `SocialTest` |
+| `stats-expected.json` | Web 版の成績の列・能力の絞り込みの値と文字、段位・疲労の段・調子の顔の答え（`view-running.json` の名簿と、名簿に出てこない形の選手から） | `node mobile/tools/expect-stats.mjs > mobile/shared/src/jvmTest/resources/stats-expected.json`。CI は `--check` | `StatsWebTest` |
 
 - ⚠ 試合の結果は命令の `requestId` で決まる（同じコードなら同じ答え）。`ViewTest` の紙面の検査は「4月4日の自球団の最新の試合が負け」を前提にしているので、`view-fixture.mjs` はその形になる回まで `requestId` を変えて作り直す。試合の計算を変えて30回で合わなくなったら、検査の期待値をビューの中身から作る形に直すかを決める（`docs/audit/2026-11-08.md` の判断待ち 2）。
 
