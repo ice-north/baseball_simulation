@@ -185,7 +185,9 @@ function campWith(build, seed = undefined) {
   const catcher = { position: 'catcher' };
   const fielder = { position: 'left' };
   assert.ok(offered(pitcher).includes('form_change'), '投手にフォーム改造が出ていない');
-  assert.ok(!offered(fielder).includes('form_change'), '野手にフォーム改造が出ている');
+  // ⚠ **野手にもフォーム改造が出る**（いしだ 2026-11-23）。投手は投球フォーム、
+  //    野手は打撃フォーム（オープン/スクエア/クローズ）。対象の中身は `campTargetKind` が分ける
+  assert.ok(offered(fielder).includes('form_change'), '野手にフォーム改造が出ていない');
   for (const key of CAMP_SUB_MENUS)
     assert.ok(SUB_TRAINING_MENUS[key], `知らないサブ練習がある: ${key}`);
   // ⚠ **野手に守備の伸ばし方を出すこと**。サブポジ練習が抜けると、野手の
