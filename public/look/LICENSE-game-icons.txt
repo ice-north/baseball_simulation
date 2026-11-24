@@ -1,0 +1,15 @@
+logo-icons.json — 球団ロゴの絵（229点）
+
+The icons in logo-icons.json are from Game-icons.net (https://game-icons.net),
+made by Lorc, Delapouite and other contributors
+(full list of authors: https://game-icons.net/about.html#authors),
+and are provided under the Creative Commons Attribution 3.0 Unported license:
+https://creativecommons.org/licenses/by/3.0/
+
+Changes: the path coordinates were rounded to one decimal place. In the game the
+icons are recolored, scaled, rotated, outlined and combined with other shapes.
+
+logo-icons.json の絵は Game-icons.net（Lorc、Delapouite ほか）の作品で、
+クリエイティブ・コモンズ 表示 3.0（CC BY 3.0）で提供されています。
+変更点: パスの座標を小数1桁に丸めました。ゲームの中では色・大きさ・向きを変え、
+ふちを付け、ほかの図形と重ねて使います。

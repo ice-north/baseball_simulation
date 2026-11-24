@@ -17,6 +17,7 @@ import { cleanText, OWNER_COMMENT_MAX } from './social.js';
 import { PACK_STYLE } from './rosterPack.js';
 import { PYRAMID_LEAGUES, PYRAMID_TEAM_COUNT } from './pyramidLeague.js';
 import { REGION_OPTIONS } from './hometown.js';
+import { cleanLogo } from './look/logoData.js';
 
 /** 参加できる上限。球団数と同じ（全球団が人間でも成立する） */
 export const MAX_MEMBERS = PYRAMID_TEAM_COUNT; // 12（2部制）
@@ -193,6 +194,13 @@ export function clearTeamSplitName(team) {
   delete team.displayNickname;
   delete team.displayRegion;
 }
+/**
+ * 球団ロゴ（人が作ったもの）を消して、自動のロゴに戻す。CPUに戻す・別の人が入るときに使う。
+ * ⚠ 名前を付け替えただけでは消さない（ロゴは名前と別に作るもの）
+ */
+export function clearTeamLogo(team) {
+  if (team) delete team.logo;
+}
 export function teamNicknameOf(team) {
   if (team?.displayNickname) return team.displayNickname;
   const shown = team?.displayName || team?.name || '';
@@ -244,7 +252,7 @@ function assertShortFree(league, team, patch) {
  *    球団名が2回出ていた（参加時の呼び名が既定で球団名だったため）。
  * ⚠ 内部名（`name`）は変えない。記録の選手キーまで貫いている。
  */
-export function applyProfile(league, { userId, teamName, cityName, nickname, region, playerName, comment, now = null }) {
+export function applyProfile(league, { userId, teamName, cityName, nickname, region, playerName, comment, logo, now = null }) {
   requireOnline(league, 'リーグがまだありません', 409);
   const member = (league.members || []).find((m) => m.userId === userId);
   requireOnline(member, '参加者ではありません', 403);
@@ -315,6 +323,18 @@ export function applyProfile(league, { userId, teamName, cityName, nickname, reg
     requireOnline(who.length <= 24, '名前が長すぎます', 400);
     member.label = who || member.displayName || team.name;
   }
+  // 球団ロゴと球団の色（`look/logoData.js` の保存の形）。null なら自動のロゴに戻す。
+  // ⚠ 送られてきたものはそのまま保存しない（知らない部品・桁外れの数・長い字を `cleanLogo` で落とす）。
+  //    ロゴはほかの人の画面にも出る
+  if (logo !== undefined) {
+    if (logo === null) {
+      clearTeamLogo(team);
+    } else {
+      const cleaned = cleanLogo(logo);
+      requireOnline(cleaned, 'このロゴは保存できません（部品が無いか、大きすぎます）', 400);
+      team.logo = cleaned;
+    }
+  }
   // オーナーのひとこと（改善案 C1）。順位表・球団の画面・紙面に出す。空なら消す。
   // ⚠ 書いた日も残す（紙面で「開幕前の宣言」と結果を並べられるように）
   if (comment !== undefined) {
@@ -334,6 +354,7 @@ export function applyProfile(league, { userId, teamName, cityName, nickname, reg
     region: teamRegionOf(team),
     label: member.label,
     comment: member.comment?.text || '',
+    logo: team.logo || null,
   };
 }
 
@@ -366,6 +387,8 @@ export function applyJoin(league, { userId, label, teamName, now }) {
   assertShortFree(league, team, { displayCity: undefined, displayNickname: undefined, displayName: shown });
   // ⚠ 前のオーナーが分けて付けた名前（地域名・チーム名・地方）を引き継がない（2026-11-20 監査）
   clearTeamSplitName(team);
+  // 前のオーナーが作ったロゴも引き継がない
+  clearTeamLogo(team);
   team.displayName = shown;
   // ⚠ **種の番号は参加の通し番号**（人数ではない）。球団をCPUに戻すと人数が減るので、
   //    人数で数えると次に入った人が残っている人と同じ種になり、同じidの選手ができる
