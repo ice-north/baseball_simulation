@@ -2,17 +2,9 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { createDecisionLog, observeDecisionLog, decidePitchers } from './game/pitcherDecisions.js';
 
 // Utility imports
-import { BALL_EFFECTS, PITCHING_FORM_EFFECTS, FORM_PITCH_SYNERGY, POSITION_NAMES, POSITION_COLORS, HAND_LABELS, sortBenchByPosition, pitchVelocityDrop, isUnreadablePitch, formatAtBatResult, atBatResultColor, getPitchTypeName, DP_BASE, FORM_SHORT } from './utils/constants.js';
+import { BALL_EFFECTS, FORM_PITCH_SYNERGY, POSITION_NAMES, POSITION_COLORS, HAND_LABELS, sortBenchByPosition, formatAtBatResult, atBatResultColor, getPitchTypeName, FORM_SHORT } from './utils/constants.js';
 
-import {
-  formatInnings,
-  getAbilityColor,
-  getAbilityTextColor,
-  getBestFitPosition,
-  getStaminaPenalty,
-  getInfielderEffectiveArm,
-  getHandednessEffect
-} from './utils/physics.js';
+import { formatInnings, getAbilityColor, getAbilityTextColor, getBestFitPosition, getInfielderEffectiveArm, getHandednessEffect } from './utils/physics.js';
 
 // Data imports
 import { createPlayerStats, createSeasonStats, createCareerStats } from './players.js';
@@ -20,27 +12,24 @@ import { initializeTeamsData, TEAMS_DATA, LEAGUE_SETTINGS, normalizeMaxExtraInni
 import { generateRandomPlayerName } from './data/playerNames.js';
 
 // Game logic imports
-import { calculatePhysicsContact, calculateBattedBallPhysics, judgeFielderReach, calculateDefensiveFitness, getTunnelingEffect, spinAdjustedArsenal } from './simulation-logic.js';
+import { judgeFielderReach, calculateDefensiveFitness, spinAdjustedArsenal } from './simulation-logic.js';
 import { autoSimulateGame } from './game/autoSimulation.js';
-import { contactFoulProbability, isDirectionalFoul } from './game/contactRules.js';
+import { simulatePitch as simulateEnginePitch, pitchArsenalOf, fieldDefenseOf } from './game/pitchEngine.js';
 import { useGameStrategy } from './game/useGameStrategy.js';
-import { callPitchTarget, resolvePitchLocation, swingProbability, ballZoneContactChance, getPitchQualityEffect, getHeightPitchEffect, BALL_ZONE_PENALTY, AIM_LABEL, selectPitchType, infieldDefenseOf, guessSuccessRate, resolveBatterGuess, GUESS_TYPE_LABEL, GUESS_ZONE_LABEL } from './game/pitchCalling.js';
-import { getBatterType, resolveAiBatterGuess, BATTER_TYPE_LABEL, BATTER_TYPE_NOTE } from './game/batterType.js';
+import { AIM_LABEL, GUESS_TYPE_LABEL, GUESS_ZONE_LABEL } from './game/pitchCalling.js';
+import { getBatterType, BATTER_TYPE_LABEL, BATTER_TYPE_NOTE } from './game/batterType.js';
 import { getDeception, deceptionAxis, describeDeception } from './game/deception.js';
-import { getZoneProfile, getZoneMatchupEffect, combineBatterEffects, zoneWeaknessAt,
-  zoneHeatmap, describeZoneProfile } from './game/batterZone.js';
-import { decideSwingPower, getSwingPowerEffect, swingPowerLabel } from './game/swingType.js';
-import { createSequence, pushCall, lastCall, sequenceShift, shiftMeetAdjust, locationReadChance,
-  pushSwingQuality, decayFooled, fooledLevel } from './game/pitchSequence.js';
+import { getZoneProfile, zoneHeatmap, describeZoneProfile } from './game/batterZone.js';
+import { swingPowerLabel } from './game/swingType.js';
+import { createSequence } from './game/pitchSequence.js';
 import { decidePitchObjective, OBJECTIVE_LABEL, OBJECTIVE_NOTE } from './game/pitchSituation.js';
-import { hitByPitchChance, hitByPitchFatigue } from './game/pitchZone.js';
+import { hitByPitchFatigue } from './game/pitchZone.js';
 import PitchZonePlot, { HEAT_HOT, HEAT_COLD } from './components/PitchZonePlot.jsx';
 import { resolveGroundOutAdvance, tryExtraAdvance } from './game/baserunning.js';
 import { stealSuccessRate, stealAttemptRate } from './game/stealing.js';
-import { classifyBuntContact, rollBuntQuality, buntFieldDefense,
-         buntThrowOutChance, squeezeHomeThrowChance } from './game/bunting.js';
+import { classifyBuntContact, rollBuntQuality, buntFieldDefense, buntThrowOutChance, squeezeHomeThrowChance } from './game/bunting.js';
 import { makeRunner, runnerOf, asFlags, forceAdvance, isUnearnedRunner, unearnedAt } from './game/baseState.js';
-import { effectiveArsenalSize, activeArsenal } from './game/arsenal.js';
+import { activeArsenal } from './game/arsenal.js';
 import TutorialHint from './components/TutorialHint.jsx';
 import { setGameSnapshotProvider } from './game/crashRecovery.js';
 import { getUiScale, UISCALE_EVENT } from './game/uiSettings.js';
@@ -54,7 +43,7 @@ import { executeResetGame, executeStartSimMode } from './game/gameControls.js';
 import { executeSetupManagedGame, executeHandleManagedGameEnd } from './game/gameSetup.js';
 
 // AI Manager imports
-import { executeAutoSubstitutePitcher, executeAutoSubstitutePinchHitter, executeAutoDefensiveSubstitution, executeAutoStealingDecision, executeAutoOptimizePitcherUsage } from './game/aiManager.js';
+import { createManagedTacticsMemory, runManagedTactics, noteAtBatEnd, noteHalfInningEnd, staminaOf, setStamina } from './game/managedTactics.js';
 
 // Season progress imports
 
@@ -914,19 +903,34 @@ import { useEscapeToClose } from './components/useEscapeToClose.js';
         return team.players.find(p => p.isStarter && p.position === 'catcher' && !p._isDH) || team.players[7];
       };
 
-      // 監督AI関数（→ aiManager.js に抽出済み、ラッパーのみ）
-      const aiManagerCtx = () => ({
-        autoManagerMode, gameStarted, isSubstituting,
-        getDefenseTeam, getOffenseTeam, getCurrentPitcher, getCurrentBatter,
-        isTopInning, setHomeTeam, setAwayTeam,
-        homeTeam, awayTeam, currentStamina, score, bases, inning,
-        setCurrentStamina, setGameLog
-      });
-      const autoSubstitutePitcher = () => executeAutoSubstitutePitcher(aiManagerCtx());
-      const autoSubstitutePinchHitter = () => executeAutoSubstitutePinchHitter(aiManagerCtx());
-      const autoDefensiveSubstitution = () => executeAutoDefensiveSubstitution(aiManagerCtx());
-      const autoStealingDecision = (runner, situation) => executeAutoStealingDecision(aiManagerCtx(), runner, situation);
-      const autoOptimizePitcherUsage = () => executeAutoOptimizePitcherUsage(aiManagerCtx());
+      // CPU の采配（代打・守備固め・継投）は自動の試合と同じ決まり（cpuTactics.js）。
+      // 帳簿（救援の記録・先発のダメージ・投手ごとのスタミナ）は1試合のあいだこの ref に持つ。
+      // ⚠ 以前は aiManager.js の別の決まりで、「おまかせ」を切ると CPU の球団まで
+      //    一度も投手を代えなかった。いまは CPU の球団はいつも、自分の球団は「おまかせ」のときだけ
+      const tacticsMemoryRef = useRef(createManagedTacticsMemory());
+      // 投げる前に CPU の采配を走らせる。交代があれば true（その球は投げずに交代だけを反映する）
+      const applyCpuTactics = () => {
+        const { changed, updates, messages } = runManagedTactics({
+          memory: tacticsMemoryRef.current, homeTeam, awayTeam, inning, isTopInning, outs, score, bases,
+          controls: {
+            home: homeTeam.name !== userTeamName || autoManagerMode,
+            away: awayTeam.name !== userTeamName || autoManagerMode,
+          },
+        });
+        const patch = (map) => (prev) => (map.size === 0 ? prev : {
+          ...prev,
+          players: prev.players.map(p => (map.has(p.id) ? { ...p, ...map.get(p.id) } : p)),
+        });
+        if (updates.home.size) setHomeTeam(patch(updates.home));
+        if (updates.away.size) setAwayTeam(patch(updates.away));
+        if (messages.length) {
+          setGameLog(prev => {
+            const updated = [...prev, ...messages.map(description => ({ description, isSpecial: true }))];
+            return updated.length > 50 ? updated.slice(-50) : updated;
+          });
+        }
+        return changed;
+      };
 
       // 次の打者に進む（攻撃チームの打順を進める）
       const advanceBatter = () => {
@@ -967,459 +971,20 @@ import { useEscapeToClose } from './components/useEscapeToClose.js';
       //    復活させるなら**描く場所を先に決めてから**にすること。
 
       // [SECTION: GAME_HANDLERS] 投球生成・接触判定・走者進塁・守備記録・成績更新
-      const getCountAdjustment = (balls, strikes) => {
-        if (balls === 3 && strikes <= 1) {
-          return { strikeZone: 0.7, swingRate: 0.6 };
-        }
-        if (strikes === 2) {
-          return { strikeZone: 1.2, swingRate: 1.3 };
-        }
-        return { strikeZone: 1.0, swingRate: 1.0 };
-      };
-
-      /**
-       * 物理演算ベースのコンタクト結果判定（新エンジン）
-       */
-      const determineContactResultPhysics = (selectedBall, predictionCorrect, tempoGroundballBonus = 0, handEffect = {}, actualVelocity = 145, batter = null, pitcher = null, defense = null, catcher = null, lastPitchArg = null, pitchLoc = null) => {
-        const effectiveBatter = batter || { meet: 60, power: 60, eye: 60, speed: 60 };
-        const effectiveCatcher = catcher || { lead: 50 };
-        const safeCount = count || { balls: 0, strikes: 0 };
-
-        // 前球情報（トンネリング用） - 引数で渡された場合はそれを使用、なければgameLogから取得
-        const lastPitch = lastPitchArg !== null ? lastPitchArg : (gameLog.length > 0 ? gameLog[gameLog.length - 1] : null);
-        const currentPitch = {
-          type: selectedBall?.type || 'straight',
-          velocity: actualVelocity,
-          level: selectedBall?.level || 100
-        };
-
-        // トンネリング効果を計算
-        const tunnelingEffect = getTunnelingEffect(lastPitch, currentPitch, effectiveCatcher.lead);
-
-        // 【新物理モデル】タイミングウィンドウベースのコンタクト計算
-        const physicsResult = calculatePhysicsContact(
-          pitcher,
-          effectiveBatter,
-          predictionCorrect,
-          currentPitch,
-          tunnelingEffect,
-          handEffect
-        );
-
-        // 崩されたか（芯品質）を打席の記憶に残す。次の球の振り方に効く。
-        // ※ pitchSeqRef は ref なので別関数からでも安全に参照できる
-        pushSwingQuality(pitchSeqRef.current.seq,
-          physicsResult.isContact ? physicsResult.meetQuality : null);
-
-        // 空振り判定（物理モデルから）
-        if (!physicsResult.isContact) {
-          return {
-            type: 'swinging_strike',
-            description: `空振り（窓${physicsResult.timingWindow.toFixed(1)}ms/誤差${physicsResult.timingError.toFixed(1)}ms）`,
-            timingWindow: physicsResult.timingWindow,
-            timingError: physicsResult.timingError,
-            pitchType: ballEffects[currentPitch.type]?.name || 'ストレート',
-            velocity: Math.round(actualVelocity)
-          };
-        }
-
-        // ===== ファウル判定（大幅強化）=====
-        // ミート品質が低いほどファウルになりやすい
-        const foulRate = contactFoulProbability(physicsResult.meetQuality, safeCount.strikes);
-
-        const pitchTypeName = ballEffects[currentPitch.type]?.name || 'ストレート';
-        const roundedVelocity = Math.round(actualVelocity);
-
-        if (Math.random() < foulRate) {
-          if (safeCount.strikes === 2) {
-            return { type: 'foul_2strike', description: 'ファウル', pitchType: pitchTypeName, velocity: roundedVelocity };
-          }
-          return { type: 'foul', description: 'ファウル', pitchType: pitchTypeName, velocity: roundedVelocity };
-        }
-
-        // 物理演算で打球パラメータを計算
-        const battedBall = calculateBattedBallPhysics(effectiveBatter, pitcher, currentPitch, physicsResult, pitchLoc, lastPitch);
-
-        // 角度によるファウル判定（強化）
-        if (isDirectionalFoul(battedBall.direction)) {
-          if (safeCount.strikes === 2) {
-            return { type: 'foul_2strike', description: 'ファウル', pitchType: pitchTypeName, velocity: roundedVelocity };
-          }
-          return { type: 'foul', description: 'ファウル', pitchType: pitchTypeName, velocity: roundedVelocity };
-        }
-
-        // 時間競合モデルで守備判定
-        const fieldingResult = judgeFielderReach(battedBall, defense, effectiveBatter);
-
-        // 結果を変換して返す
-        // ⚠ **自動シミュレーションと同じ情報を持たせること**。以前は 'out' にしか
-        //   fieldingPosition が載っておらず、采配モードだけ
-        //   「積極進塁で使う外野手の肩」と「守備成績の記録先」が分からなかった。
-        const fp = fieldingResult.fieldingPosition;
-        const ep = fieldingResult.errorPosition;
-        const resultMap = {
-          'homerun': { type: 'homerun', description: fieldingResult.description, hit: true },
-          'triple': { type: 'triple', description: fieldingResult.description, hit: true, fieldingPosition: fp },
-          'double': { type: 'double', description: fieldingResult.description, hit: true, fieldingPosition: fp },
-          'single': { type: 'single', description: fieldingResult.description, hit: true,
-            isError: fieldingResult.isError, errorPosition: ep, fieldingPosition: fp,
-            // 中継ミス: 安打のあとの失策。走者が余分に1つ進む（自動試合と同じ）
-            // ⚠ 内野の悪送球（`isThrowingError` だけが立つ）も1つ余分に進む。
-            //    自動試合は `extraAdvance || isThrowingError` で見ているので、
-            //    こちらも同じにする（以前は采配の試合だけ進まなかった）
-            hitWithError: !!fieldingResult.hitWithError,
-            extraAdvance: !!fieldingResult.extraAdvance || !!fieldingResult.isThrowingError },
-          'out': {
-            type: 'out',
-            description: fieldingResult.description,
-            hit: false,
-            // 打席結果を「中飛」「右直」と書くのに使う（バッジの表記を揃えるため）
-            fieldingPosition: fp,
-            isOutfieldFly: fieldingResult.isOutfieldFly,
-            // 内野ゴロは走者を進める（ゴロGO・進塁打）。フライ・ライナーは進まない
-            isGroundOut: battedBall.launchAngle < 10 && !fieldingResult.isOutfieldFly,
-            tagupThrowbackChance: fieldingResult.tagupThrowbackChance
-          }
-        };
-
-        const result = resultMap[fieldingResult.result] || resultMap['out'];
-
-        // 打球データを結果に付加（統計ログ用）
-        return {
-          ...result,
-          exitVelocity: battedBall.exitVelocity,
-          launchAngle: battedBall.launchAngle,
-          distance: battedBall.distance,
-          meetQuality: battedBall.meetQuality,
-          v_swing: physicsResult.v_swing,
-          timingWindow: physicsResult.timingWindow,
-          timingError: physicsResult.timingError
-        };
-      };
-
-      // 共通投球シミュレーション関数（通常試合・自動シミュレーション共用）
-      const simulateSinglePitch = (batter, pitcher, catcher, defense, count, currentStamina, sequence = null) => {
-        // 前球（打席内の配球メモリ。自動シミュレーションと共有 / pitchSequence.js）
-        const lastPitch = lastCall(sequence);
-        // この場面で捕手が求める結果（併殺狙い / 三振狙い / 通常。pitchSituation.js）
-        const objective = decidePitchObjective(bases, outs);
-        // スタミナを1減らす
-        const newStamina = Math.max(0, currentStamina - 1);
-
-        // スタミナによる能力補正を取得
-        const { velocityPenalty, controlPenalty } = getStaminaPenalty(newStamina, pitcher.stamina);
-
-        // countのデフォルト値設定
-        const safeCount = count || { balls: 0, strikes: 0 };
-        const adjustment = getCountAdjustment(safeCount.balls, safeCount.strikes);
-
-        // まず球種を選択（全ての球種から選ぶ）
-        const totalPitchTypes = pitcher.pitches.length;
-
-        // 打者の狙い球（自動シミュレーションと共有。pitchCalling.js）。
-        // 従来はリード係数が0.02しかなく、3球種の投手でリード100でも
-        // 的中率が 0.313→0.273 と13%しか下がらなかった。
-        const predictionCorrect = Math.random() < guessSuccessRate({
-          catcherLead: catcher.lead ?? 50,
-          // 持ち球の「幅」で読まれにくさが決まる（arsenal.js）
-          arsenalSize: effectiveArsenalSize(pitcher.pitches),
-          batterEye: batter.eye,
-          // 崩された直後は球種を読むどころではない（pitchSequence.js）
-          fooled: fooledLevel(sequence),
-          // 出どころが見えなければ球種も判断できない（deception.js）
-          deception: pitcher.deception ?? 0,
-        });
-
-        // 捕手のリードで球種を選ぶ（自動シミュレーションと共有。pitchCalling.js）。
-        // 従来はここだけがスコア選択で、自動側は変化球を完全ランダムに選んでいた。
-        let pitchChoice;
-        let selectedBall;
-        {
-          const chosen = selectPitchType({
-            arsenal: pitcher.pitches,
-            catcherLead: catcher.lead ?? 50,
-            form: pitcher.form || 'threeQuarter',
-            strikes: safeCount.strikes,
-            ballEffects,
-            // 奥行き: 速球のあとは変化球、変化球のあとは速球
-            lastWasBreaking: lastPitch ? lastPitch.isBreaking : null,
-            // 場面: 走者一塁ならゴロ系、走者三塁なら空振り系の決め球
-            objective: objective.goal,
-            // 到達球速で曲がりの効き(breakEfficiency)が変わるので投手の速球を渡す
-            velocity: (pitcher.velocity || 140) + velocityPenalty,
-            // 崩した直後は球速帯を替えずに畳み掛けてよい
-            fooled: fooledLevel(sequence),
-            // 守備の堅いチームではゴロ・凡打を狙う球の値打ちが上がる
-            infieldDefense: infieldDefenseOf(defense),
-          });
-          pitchChoice = Math.max(0, pitcher.pitches.indexOf(chosen));
-        }
-
-        // プレイヤーが球種を指定していればそれを使う（'auto' は捕手のリードに任せる）
-        const aimedTypeIndex = pitchTypeIndexRef.current;
-        if (aimedTypeIndex !== 'auto' && pitcher.pitches[aimedTypeIndex]) {
-          pitchChoice = Number(aimedTypeIndex);
-        }
-        selectedBall = pitcher.pitches[pitchChoice];
-
-        // スタミナペナルティのみ。変化球のばらつきは pitchShape.shapeSigma に一本化
-        // （旧 ballControlPenalty。自動シミュとは係数が違っていた）
-        const effectiveControl = Math.max(0, pitcher.control + controlPenalty);
-
-        // ===== 配球 → 投球位置 → スイング判定 =====
-        // 自動シミュレーションと同じ共有モデル（src/game/pitchCalling.js）を使う。
-        // 以前は采配モードだけ「ゾーン率=0.25+制球*0.65（制球60で64%）」という
-        // 独自式で、自動モードの48%と全く違う世界になっていた。
-        const isBreakingPitch = selectedBall.type !== 'straight';
-        // プレイヤーが狙いを指定していればそれを使う（'auto' は捕手AIに任せる）
-        const aimChoice = pitchAimRef.current;
-        const aim = (aimChoice && aimChoice !== 'auto') ? aimChoice : callPitchTarget({
-          balls: safeCount.balls, strikes: safeCount.strikes, batterEye: batter.eye,
-          catcherLead: catcher.lead ?? 50,
-          pitcherControl: effectiveControl, objective,
-        });
-        // 投球フォームの効果を適用（球速は配球の「奥行き」に使うので位置決定より前に出す）
-        const pitchingFormEffect = PITCHING_FORM_EFFECTS[pitcher.form] || PITCHING_FORM_EFFECTS.threeQuarter;
-        let baseVelocity = Math.round(pitcher.velocity * (pitchingFormEffect.velocityMult || 1.0)) + velocityPenalty;
-        // 球種ごとの球速減は自動シミュと共有（constants.js）
-        baseVelocity -= pitchVelocityDrop(selectedBall.type, selectedBall.level ?? 50);
-        const actualVelocity = Math.round(baseVelocity - (Math.random() * 8));
-
-        const loc = resolvePitchLocation({
-          aim, control: effectiveControl, catcherDefense: catcher.defense ?? 50,
-          // 捕手は打者の弱点コースを要求する（狙いの配分は変えない）
-          batterZone: batter.zone, catcherLead: catcher.lead ?? 50,
-          // 前球との関係（対角へ動かす／同じ引き出しを続けない）
-          sequence, velocity: actualVelocity, isBreaking: isBreakingPitch,
-          // 場面: 併殺が欲しければ低め、三振が欲しければ高め
-          objective: objective.goal,
-          // 球種に合ったコースと、変化球レベルによる決まりやすさ
-          pitchType: selectedBall.type, pitchLevel: selectedBall.level ?? 50,
-          pitcherThrows: pitcher.throws, batterBats: batter.bats,
-        });
-        const isInStrikeZone = loc.inZone;
-
-        // 揺さぶれた球は打ちにくく、同じ所へ続けた球は打たれやすい（リーグ平均で±0）
-        const shiftMeet = shiftMeetAdjust(sequenceShift(lastPitch,
-          { col: loc.col, row: loc.row, velocity: actualVelocity }));
-        // 同じ引き出しが続くと打者に読まれる（効果は球種の読みと同じ）
-        // 打者の狙い球（コース）。捕手の要求の偏りと引き出しの繰り返しで読む
-        const locationRead = Math.random()
-          < locationReadChance(sequence, loc.col, loc.row, isBreakingPitch, batter.eye, loc.readSignal);
-
-        // そのセルが打者にとってどれだけ苦手か。スイング判断・打撃補正・振り方で共有する
-        const weakness = zoneWeaknessAt(loc, batter.zone);
-
-        // 采配: 自チームの攻撃中はプレイヤーが狙い球を張れる。
-        // 張った次元はAIの読み合いを置き換える（当たれば+1 / 外せば-1）。
-        const userIsBatting = (isTopInning ? awayTeam.name : homeTeam.name) === userTeamName;
-        const gType = userIsBatting ? batGuessTypeRef.current : 'auto';
-        const gZone = userIsBatting ? batGuessZoneRef.current : 'auto';
-        const committed = gType !== 'auto' || gZone !== 'auto';
-        // ナックルは読み合いが成立しない（誰にもどこへ来るか分からない）。
-        // 球種を張っても当たり外れが付かず、コースだけが残る
-        const unreadable = isUnreadablePitch(selectedBall.type);
-        const guess = committed
-          ? resolveBatterGuess(unreadable ? 'auto' : gType, gZone,
-              { isBreaking: isBreakingPitch, col: loc.col, row: loc.row })
-          : { delta: 0 };
-        // プレイヤーが張らない打者（＝相手チーム、または「おまかせ」）は
-        // 打者の型（野村の4分類）に従って自分で狙う。batterType.js
-        const aiG = resolveAiBatterGuess({
-          type: batter.type || 'D', player: batter.player,
-          balls: safeCount.balls, strikes: safeCount.strikes,
-          isBreaking: isBreakingPitch, col: loc.col,
-          guessRight: !unreadable && predictionCorrect,
-          sequence, batterEye: batter.eye,
-        });
-        // プレイヤーが張った次元はAIの読みを使わない
-        const anyCommit = gType !== 'auto' || gZone !== 'auto';
-        const aiLevel = anyCommit ? 0 : aiG.level;
-        const aiZone = gZone === 'auto' && locationRead ? 1 : 0;
-        const guessLevel = Math.max(-2, Math.min(2, guess.delta + aiLevel + aiZone));
-        const dirBias = anyCommit ? 0 : aiG.dirBias;
-        pushCall(sequence, {
-          col: loc.col, row: loc.row, isBreaking: isBreakingPitch,
-          velocity: actualVelocity, type: selectedBall.type,
-        });
-        let swingProb = swingProbability({
-          inZone: loc.inZone, quality: loc.quality, strikes: safeCount.strikes,
-          batterEye: batter.eye, pitcherControl: effectiveControl,
-          isBreaking: isBreakingPitch, breakingLevel: selectedBall.level || 50,
-          // 打者は自分の得意コースをより振る
-          zoneWeakness: weakness,
-          // 崩された打者はゾーンを広げる（pitchCalling.js）
-          fooled: fooledLevel(sequence),
-          // 高めの速球は振ってもらえ、低めの速球は手が出ない（`heightSwingBias`）
-          row: loc.row,
-        });
-        // 捕手のリードは打者の狙いを外す（スイング判断を鈍らせる）
-        swingProb *= 1 - (catcher.lead / 100) * 0.08;
-        swingProb *= adjustment.swingRate;
-        // B型は張っていないコースを見送る（プレイヤーが張っている場合は適用しない）
-        if (!anyCommit) swingProb *= (aiG.swingMult ?? 1);
-        // 采配: 自チームが攻撃中のとき打撃方針を反映（待て=見送り増/積極=打ちにいく）
-        if ((isTopInning ? awayTeam.name : homeTeam.name) === userTeamName) {
-          const _bam = battingApproachRef.current === 'take' ? 0.55
-            : battingApproachRef.current === 'aggressive' ? 1.3 : 1.0;
-          swingProb *= _bam;
-        }
-        // 采配: エンドランは打者を必ず打ちにいかせる（走者を守るため空振りしにくく）
-        // ※ throwPitch のローカル変数ではなく ref を直接参照する（simulateSinglePitch は
-        //   throwPitch と別関数のためローカル変数は参照できない）。
-        if (forceSwingRef.current) swingProb = Math.max(swingProb, 0.92);
-
-        const doesSwing = Math.random() < swingProb;
-
-        const pitchTypeName = ballEffects[selectedBall.type].name;
-
-        // 投球位置（試合画面のコース表示用）。セル内のどこに来たかは描画時に
-        // 揺らすのではなく**ここで一度だけ決める**。再レンダリングのたびに
-        // 点が動いてしまうため。
-        const pitchLoc = {
-          col: loc.col, row: loc.row, inZone: loc.inZone, quality: loc.quality,
-          // 表示のマーカー形状は球種で決まるので、生のキーを持たせる
-          // （gameLog の pitchType は日本語の表示名なので逆引きできない）
-          type: selectedBall.type,
-          jx: Math.random(), jy: Math.random(),
-        };
-
-        if (!doesSwing) {
-          decayFooled(sequence);
-          // あまりにも内角へ外れた球は打者に当たる（pitchZone.js）
-          // 死球は疲労が大きく溜まる。隠れたコストにしないよう投球ログにも出す
-          const hbpFat = hitByPitchFatigue(actualVelocity, batter.player?.physical?.bodyStamina ?? 50);
-          const result = !isInStrikeZone && Math.random() < hitByPitchChance(loc.col, loc.row)
-            ? { type: 'hit_by_pitch', description: `死球（疲労+${hbpFat}）`, hbpFatigue: hbpFat }
-            : isInStrikeZone
-              ? { type: 'called_strike', description: '見逃しストライク' }
-              : { type: 'ball', description: 'ボール' };
-          return { result: { ...result, pitchType: pitchTypeName, velocity: actualVelocity, pitchLoc }, newStamina };
-        }
-
-        // 振り方: 得意コース・打者有利カウントならフルスイング、
-        // 苦手コース・2ストライクなら当てにいく（swingType.js）。
-        // 采配モードでは自チームの打撃方針（待て/おまかせ/積極）がここに乗る。
-        const swingPower = decideSwingPower({
-          weakness, balls: safeCount.balls, strikes: safeCount.strikes,
-          // 前の球で崩されていれば当てにいく（pitchSequence.js）
-          fooled: fooledLevel(sequence),
-          meet: batter.meet, power: batter.power,
-          approach: userIsBatting ? battingApproachRef.current : 'balanced',
-        });
-        pitchLoc.swing = swingPowerLabel(swingPower);
-
-        // コース適性 + 振り方 + 前球からの揺さぶり（どれもリーグ平均では±0）
-        const zoneMatchup = combineBatterEffects(
-          combineBatterEffects(
-            combineBatterEffects(getZoneMatchupEffect(loc, batter.zone),
-              // 高めの速球・低めの変化球は空振りを取れる（逆は打たれる）
-              getHeightPitchEffect(loc.row, isBreakingPitch)),
-            getSwingPowerEffect(swingPower)),
-          { meet: shiftMeet, power: shiftMeet * 0.6 });
-
-        if (!isInStrikeZone) {
-          // ボール球でもバットに当たる（引っ掛けゴロ、泳いでフライ等）。
-          // 品質を落として物理エンジンに通すので、ほとんどが凡打になる。
-          if (Math.random() < ballZoneContactChance(batter.eye)) {
-            const handEffect = getHandednessEffect(pitcher.throws, batter.bats);
-            const bz = combineBatterEffects(BALL_ZONE_PENALTY, zoneMatchup);
-            const weakBatter = { ...batter, dirBias,
-              meet: Math.max(1, batter.meet + bz.meet),
-              power: Math.max(1, batter.power + bz.power) };
-            const result = determineContactResultPhysics(selectedBall, guessLevel, 0, handEffect, actualVelocity, weakBatter, pitcher, defense, catcher, lastPitch, loc);
-            return { result: { ...result, pitchType: pitchTypeName, velocity: Math.round(actualVelocity), isBallZone: true, pitchLoc }, newStamina };
-          }
-          pushSwingQuality(sequence, null);
-          return {
-            result: { type: 'swinging_strike', description: '空振り（ボール球）', pitchType: pitchTypeName, velocity: actualVelocity, pitchLoc },
-            newStamina
-          };
-        }
-
-        // 左右の相性効果を取得
-        const handEffect = getHandednessEffect(pitcher.throws, batter.bats);
-
-        // 【新物理モデル】空振り判定も含めて全てdetermineContactResultPhysicsに委ねる。
-        // 甘く入った失投(meatball)は長打され、際どいコース(edge)は打ち損じる。
-        const q = combineBatterEffects(getPitchQualityEffect(loc.quality), zoneMatchup);
-        const zoneBatter = { ...batter, dirBias,
-          meet: Math.max(1, Math.min(100, batter.meet + q.meet)),
-          power: Math.max(1, Math.min(100, batter.power + q.power)) };
-        // コースを読み切った場合も球種を読んだのと同じ効果
-        const result = determineContactResultPhysics(selectedBall, guessLevel, 0, handEffect, actualVelocity, zoneBatter, pitcher, defense, catcher, lastPitch, loc);
-        return { result: { ...result, pitchType: pitchTypeName, velocity: Math.round(actualVelocity), pitchLoc }, newStamina };
-      };
-
+      // 1球の計算は自動の試合と同じもの（src/game/pitchEngine.js）を使う。
+      // ⚠ 以前は采配の試合だけ別の写し（simulateSinglePitch）を持っていて、
+      //    スタミナの効き方・カウントの補正・守備の値・打者の疲労と方針が
+      //    自動の試合と食い違っていた（2026-11-24 に自動の側へそろえた）。
+      //    ここでは人の指示（球種・コース・狙い球・打撃の指示・エンドラン）を渡し、
+      //    答えを画面の投球ログの形に直すだけにする。
       const simulatePitch = () => {
-        // 現在の選手データを取得
         const currentBatter = getCurrentBatter();
         const currentPitcher = getCurrentPitcher();
         const currentCatcher = getCurrentCatcher();
-
-        // コンディション補正
-        const batterCondMod = conditionBattingMod(currentBatter.condition);
-        const pitcherCondMod = CONDITION_PITCHING_MODIFIER[currentPitcher.condition ?? CONDITION_LEVELS.NORMAL] || 0;
-
-        // 精神力によるチャンス/ピンチ補正（得点圏にランナー）
-        const isClutchSituation = bases[1] || bases[2];
-        const batterMentalMod = isClutchSituation ? Math.round(((currentBatter.personality?.mental ?? 50) - 50) / 10) : 0;
-        const pitcherMentalMod = isClutchSituation ? Math.round(((currentPitcher.personality?.mental ?? 50) - 50) / 10) : 0;
-
-        // 選手データから必要な情報を展開
-        const batter = {
-          name: currentBatter.name,
-          meet: currentBatter.batting.meet + batterCondMod.meet + batterMentalMod,
-          power: currentBatter.batting.power + batterCondMod.power + batterMentalMod,
-          eye: currentBatter.batting.eye,
-          speed: currentBatter.physical.speed,
-          steal: currentBatter.batting.steal,
-          bats: currentBatter.batting.bats,
-          // コース適性（内外角・高低の得手不得手）。自動シミュレーションと同じ導出
-          zone: getZoneProfile(currentBatter),
-          // 打者の型と選手実体。simulateSinglePitch は別関数なので
-          // currentBatter を直接は参照できない（ここで詰めて渡す）
-          type: getBatterType(currentBatter),
-          player: currentBatter,
-        };
-
-        const pitcher = {
-          name: currentPitcher.name,
-          velocity: currentPitcher.pitching.velocity,
-          control: currentPitcher.pitching.control + pitcherCondMod + pitcherMentalMod,
-          stamina: currentPitcher.pitching.stamina,
-          throws: currentPitcher.physical.throws,
-          // 封印した球は投げない（arsenal.js）。回転数を変化量へ織り込む
-          // （ここで一度だけ。simulation-logic.js の getEffectiveBreakLevel 参照）
-          pitches: spinAdjustedArsenal(activeArsenal(currentPitcher.pitching.arsenal),
-            currentPitcher.pitching.spinRate ?? 50),
-          form: currentPitcher.pitching.form,
-          spinRate: currentPitcher.pitching.spinRate ?? 50,
-          // 球の出どころの見づらさ（deception.js）。-1=丸見え 〜 +1=見えない
-          deception: deceptionAxis(getDeception(currentPitcher))
-        };
-
-        const catcher = {
-          name: currentCatcher.name,
-          lead: currentCatcher.catching.lead,
-          arm: currentCatcher.physical.arm,
-          defense: currentCatcher.fielding?.defense ?? 50,
-          throws: currentCatcher.physical.throws
-        };
-        
-        // 守備データ（守備チームの選手データから構築、守備位置適正を反映）
         const defenseTeam = getDefenseTeam();
-        const defense = {};
-        defenseTeam.players.forEach(player => {
-          const fitness = player.positionFitness?.[player.position] ?? 50;
-          const fitMult = 0.5 + (fitness / 100) * 0.5;
-          defense[player.position] = {
-            defense: Math.round(player.fielding.defense * fitMult),
-            speed: Math.round(player.physical.speed * fitMult),
-            arm: Math.round(player.physical.arm * fitMult),
-            throws: player.physical.throws
-          };
-        });
+        const offenseTeam = isTopInning ? awayTeam : homeTeam;
+        const userIsBatting = offenseTeam.name === userTeamName;
+        const userIsPitching = defenseTeam.name === userTeamName;
 
         // 打席ごとの配球メモリ。打者が変わったらリセットする
         const seqKey = `${currentBatter.id}-${currentBatter.name}`;
@@ -1427,13 +992,84 @@ import { useEscapeToClose } from './components/useEscapeToClose.js';
           pitchSeqRef.current = { key: seqKey, seq: createSequence() };
         }
 
-        // 共通関数を呼び出し
-        const { result, newStamina } = simulateSinglePitch(batter, pitcher, catcher, defense, count, currentStamina, pitchSeqRef.current.seq);
+        const pitchArsenal = pitchArsenalOf(currentPitcher);
+        const typeIndex = pitchTypeIndexRef.current;
+        const aimChoice = pitchAimRef.current;
+        const approach = battingApproachRef.current;
+        const control = {
+          // 守っているときだけ人が球種・コースを選べる（'auto' は捕手のリード）
+          pitchIndex: userIsPitching && typeIndex !== 'auto' && pitchArsenal.arsenal[typeIndex] ? Number(typeIndex) : null,
+          aim: userIsPitching && aimChoice && aimChoice !== 'auto' ? aimChoice : null,
+          // 攻めているときだけ人が狙い球と打撃の指示を出せる
+          guessType: userIsBatting ? batGuessTypeRef.current : 'auto',
+          guessZone: userIsBatting ? batGuessZoneRef.current : 'auto',
+          swingMult: userIsBatting ? (approach === 'take' ? 0.55 : approach === 'aggressive' ? 1.3 : 1.0) : null,
+          approach: userIsBatting ? approach : null,
+          // エンドランは打者を必ず打ちにいかせる
+          swingFloor: forceSwingRef.current ? 0.92 : null,
+        };
+        // 塁は走者の要約（baseState.js）。1球の計算は走者の足を physical.speed で読む
+        const pitchBases = bases.map(b => (b ? { physical: { speed: runnerOf(b)?.speed ?? 55 } } : false));
 
-        // スタミナを更新
-        setCurrentStamina(newStamina);
+        const { result: r, info } = simulateEnginePitch({
+          batterPlayer: currentBatter, pitcherPlayer: currentPitcher, catcherPlayer: currentCatcher,
+          defense: fieldDefenseOf(defenseTeam, currentPitcher),
+          count: count || { balls: 0, strikes: 0 }, pitcherStamina: staminaOf(tacticsMemoryRef.current, currentPitcher),
+          bases: pitchBases, outs, sequence: pitchSeqRef.current.seq,
+          offenseStrategy: offenseTeam.strategy, defenseStrategy: defenseTeam.strategy,
+          pitchArsenal, control,
+        });
+        // スタミナを1減らす（自動の試合と同じく、投げた後に減る。投手ごとに持つ）
+        {
+          const left = Math.max(0, staminaOf(tacticsMemoryRef.current, currentPitcher) - 1);
+          setStamina(tacticsMemoryRef.current, currentPitcher, left);
+          setCurrentStamina(left);
+        }
 
-        return result;
+        const pitchType = info.pitch?.type || 'straight';
+        const velocity = Math.round(info.velocity || 0);
+        // 投球位置（試合画面のコース表示用）。セル内のどこに来たかは描画時に
+        // 揺らすのではなく**ここで一度だけ決める**。再レンダリングのたびに点が動くため
+        const loc = info.loc || {};
+        const pitchLoc = {
+          col: loc.col, row: loc.row, inZone: loc.inZone, quality: loc.quality,
+          // 表示のマーカー形状は球種で決まるので、生のキーを持たせる
+          type: pitchType,
+          jx: Math.random(), jy: Math.random(),
+        };
+        if (info.swung) pitchLoc.swing = swingPowerLabel(info.swingPower);
+        const contact = info.contact || {};
+        const strikes = (count || {}).strikes || 0;
+        const description = (() => {
+          switch (r.type) {
+            case 'ball': return 'ボール';
+            case 'called_strike': return '見逃しストライク';
+            case 'swinging_strike':
+              if (!loc.inZone) return '空振り（ボール球）';
+              return info.timingWindow != null
+                ? `空振り（窓${info.timingWindow.toFixed(1)}ms/誤差${info.timingError.toFixed(1)}ms）` : '空振り';
+            case 'foul': return 'ファウル';
+            case 'double_play': return `${contact.description || 'ゴロ'}（併殺打）`;
+            default: return contact.description || '';
+          }
+        })();
+        // 死球は疲労が大きく溜まる。隠れたコストにしないよう投球ログにも出す
+        const hbpFatigue = r.type === 'hit_by_pitch'
+          ? hitByPitchFatigue(r.velocity, currentBatter.physical?.bodyStamina ?? 50) : undefined;
+        return {
+          ...r,
+          // 2ストライクからのファウルはカウントが進まない（投球の処理が type で分ける）
+          type: r.type === 'foul' && strikes >= 2 ? 'foul_2strike' : r.type,
+          description: r.type === 'hit_by_pitch' ? `死球（疲労+${hbpFatigue}）` : description,
+          hbpFatigue,
+          hit: ['single', 'double', 'triple', 'homerun'].includes(r.type),
+          pitchType: ballEffects[pitchType]?.name || 'ストレート',
+          velocity, pitchLoc,
+          isBallZone: loc.inZone === false && !!info.contact,
+          exitVelocity: contact.exitVelocity, launchAngle: contact.launchAngle,
+          distance: contact.distance, meetQuality: contact.meetQuality,
+          timingWindow: info.timingWindow, timingError: info.timingError,
+        };
       };
 
       // 守備成績（守備機会＝刺殺+補殺 / 失策）を記録する。
@@ -1538,16 +1174,15 @@ import { useEscapeToClose } from './components/useEscapeToClose.js';
 
         // 采配フラグを 1 球分だけ有効。値は先にスナップショット、消費（= false に戻す）は
         // simulatePitch() 呼び出し後 (strategy.consumeOneShot()) に行う。
-        // 理由: simulateSinglePitch は forceSwingRef.current を直接参照するので、
+        // 理由: simulatePitch は forceSwingRef.current を直接参照するので、
         //       呼び出し時点ではまだ true のまま残っていないといけない。
         const strat = strategy.snapshot();
         const doForceSteal = strat.forceSteal;
         const doIntentionalWalk = strat.intentionalWalk;
 
-        // 打席の最初（カウント0-0）で代打チェック
-        if (count.balls === 0 && count.strikes === 0) {
-          autoSubstitutePinchHitter();
-        }
+        // CPU の采配（打席の頭の代打・継投、半イニングの後の継投・守備固め）。
+        // 交代したらこの球は投げない（次の球は交代した後の選手で投げる）
+        if (count.balls === 0 && count.strikes === 0 && applyCpuTactics()) return;
 
         // 現在の選手データを取得（チーム対応）
         const currentBatter = getCurrentBatter();
@@ -1587,29 +1222,12 @@ import { useEscapeToClose } from './components/useEscapeToClose.js';
           deception: deceptionAxis(getDeception(currentPitcher))
         };
         
-        const catcher = {
-          name: currentCatcher.name,
-          lead: currentCatcher.catching.lead,
-          arm: currentCatcher.physical.arm,
-          defense: currentCatcher.fielding?.defense ?? 50,
-          throws: currentCatcher.physical.throws
-        };
         
-        // 守備データ（守備位置適正を反映）
-        const defense = {};
-        defenseTeam.players.forEach(player => {
-          const fitness = player.positionFitness?.[player.position] ?? 50;
-          const fitMult = 0.5 + (fitness / 100) * 0.5;
-          defense[player.position] = {
-            defense: Math.round(player.fielding.defense * fitMult),
-            speed: Math.round(player.physical.speed * fitMult),
-            arm: Math.round(player.physical.arm * fitMult),
-            throws: player.physical.throws
-          };
-        });
-        
+        // 守備データ（自動の試合と同じ作り。出場中の野手とマウンドの投手だけ）
+        const defense = fieldDefenseOf(defenseTeam, currentPitcher);
+
         let result = simulatePitch();
-        // simulateSinglePitch が読み終わったので采配のワンショットフラグを消費
+        // simulatePitch が読み終わったので采配のワンショットフラグを消費
         strategy.consumeOneShot();
         // 采配: 敬遠指示があればこの1球で四球にする（ボール扱い）
         if (doIntentionalWalk) {
@@ -1756,7 +1374,9 @@ import { useEscapeToClose } from './components/useEscapeToClose.js';
             }
             break;
           case 'double_play':
-            // ダブルプレー処理
+            // 併殺打（自動の試合と同じ処理。判定は1球の計算 pitchEngine.js が行う）。
+            // 一塁でのアウトの刺殺を記録する
+            recordFielding('first', { chance: 1 });
             newOuts += 2;  // 2アウト追加
             newBases[0] = false;  // 一塁ランナー消える
             atBatOver = true;
@@ -1869,34 +1489,8 @@ import { useEscapeToClose } from './components/useEscapeToClose.js';
               recordFielding('first', { chance: 1 });
             }
 
-            // 併殺打判定（一塁ランナーがいて内野ゴロの場合）
-            let isDoublePlay = false;
-            // **内野ゴロのアウトなら距離は問わない**（自動シミュと同じ条件）。
-            // 外野へ抜けた打球はそもそも 'out' にならないので、距離を足すと
-            // 二重の門番になって併殺が実NPBの1/4しか出なくなる
-            if (newBases[0] && result.launchAngle != null && result.launchAngle < 10
-                && !result.isOutfieldFly && newOuts < 3) {
-              const ssDefense = defense.short?.defense || 50;
-              const sbDefense = defense.second?.defense || 50;
-              const ifAvg = (ssDefense + sbDefense) / 2;
-              // 一塁走者の足が速いと二塁が間に合わない（自動シミュと同じ式）
-              const dpRunnerSpeed = runnerOf(newBases[0])?.speed ?? 55;
-              const dpBase = DP_BASE + (ifAvg - 50) * 0.35 - (dpRunnerSpeed - 55) * 0.30;
-              if (Math.random() * 100 < dpBase) {
-                isDoublePlay = true;
-                recordFielding('first', { chance: 1 });   // 一塁でのアウト
-                newOuts++;
-                newBases[0] = false;
-                {
-                  const currentPitcherPlayer = getCurrentPitcher();
-                  const defenseTeamType = isTopInning ? 'home' : 'away';
-                  updatePitcherStats(currentPitcherPlayer.id, defenseTeamType, {
-                    outs: 1
-                  });
-                }
-                setLastResult({ ...result, description: result.description + '（併殺打）' });
-              }
-            }
+            // 併殺打は1球の計算（pitchEngine.js）が 'double_play' として返す。
+            // ⚠ 以前はここで采配の試合だけの写しの判定をしていた
 
             // 内野ゴロでの走者進塁（ゴロGO・進塁打）。詳細は baserunning.js 参照
         if (result.isGroundOut && !result.isOutfieldFly && newOuts < 3) {
@@ -1916,7 +1510,7 @@ import { useEscapeToClose } from './components/useEscapeToClose.js';
             if (isTopInning) newScore.away++; else newScore.home++;
             recordRunsToCurrentPitcher(1, outs, unearned);
             // 内野ゴロの間の生還は打点（併殺の場合は付かない）
-            if (!isDoublePlay) updateBatterStats(getCurrentBatter().id, isTopInning ? 'away' : 'home', { rbis: 1 });
+            updateBatterStats(getCurrentBatter().id, isTopInning ? 'away' : 'home', { rbis: 1 });
             setLastResult({ ...result, description: (result.description || 'アウト') + '（進塁打）' });
           }
           if (adv.secondToThird) { newBases[2] = newBases[1]; newBases[1] = false; }
@@ -1955,19 +1549,17 @@ import { useEscapeToClose } from './components/useEscapeToClose.js';
         }
         
         atBatOver = true;
-        if (isDoublePlay) {
-          addAtBatResult(getCurrentBatter().id, isTopInning ? 'away' : 'home', '併殺');
-        } else {
-          // スコアブックと同じ表記にする（遊ゴロ / 中飛 / 右直）。
-          // 元は description から「アウト」を削るだけで、ゴロは3文字・
-          // ライナーは4文字・フライは3文字とバラバラだった
-          const desc = result.description || '';
-          const pc = POSITION_NAMES[result.fieldingPosition] || '';
-          const outLabel = desc.includes('ゴロ') ? (desc.replace('アウト', '') || 'ゴロ')
-            : desc.includes('ライナー') ? (pc ? `${pc}直` : '直線')
-            : desc.includes('フライ') ? (pc ? `${pc}飛` : '飛球')
-            : (desc.replace('アウト', '').replace('（ポップフライ）', '') || 'アウト');
-          addAtBatResult(getCurrentBatter().id, isTopInning ? 'away' : 'home', outLabel);
+        {
+        // スコアブックと同じ表記にする（遊ゴロ / 中飛 / 右直）。
+        // 元は description から「アウト」を削るだけで、ゴロは3文字・
+        // ライナーは4文字・フライは3文字とバラバラだった
+        const desc = result.description || '';
+        const pc = POSITION_NAMES[result.fieldingPosition] || '';
+        const outLabel = desc.includes('ゴロ') ? (desc.replace('アウト', '') || 'ゴロ')
+          : desc.includes('ライナー') ? (pc ? `${pc}直` : '直線')
+          : desc.includes('フライ') ? (pc ? `${pc}飛` : '飛球')
+          : (desc.replace('アウト', '').replace('（ポップフライ）', '') || 'アウト');
+        addAtBatResult(getCurrentBatter().id, isTopInning ? 'away' : 'home', outLabel);
         }
         break;
     }
@@ -1975,7 +1567,7 @@ import { useEscapeToClose } from './components/useEscapeToClose.js';
     // ワイルドピッチ/パスボール判定
     if (!atBatOver && newOuts < 3 && (bases[0] || bases[1] || bases[2])) {
       const pitcherControl = pitcher.control / 100;
-      const catcherDefense = defense.catcher.defense / 100;
+      const catcherDefense = (defense.catcher?.defense ?? 50) / 100;
       const velocity = result.velocity || pitcher.velocity;
       
       // 基本発生率（制球力で変動）
@@ -1993,7 +1585,7 @@ import { useEscapeToClose } from './components/useEscapeToClose.js';
           if (Math.random() < wildPitchRate) {
             // ãƒ¯ã‚¤ãƒ«ãƒ‰ãƒ”ãƒƒãƒç™ºç”Ÿ
             
-            const catcherArm = defense.catcher.arm / 100;
+            const catcherArm = (defense.catcher?.arm ?? 50) / 100;
             // 刺されるかは走る走者本人の足で決まる（識別できない旧形式は打者で近似）
             const throwoutChance = (at) =>
               Math.max(0, catcherArm * 0.40 - (runnerOf(newBases[at])?.speed ?? batter.speed) / 100 * 0.20);
@@ -2060,36 +1652,16 @@ import { useEscapeToClose } from './components/useEscapeToClose.js';
             const r1Steal = runner1?.steal ?? batter.steal;
             const stealRate2 = stealSuccessRate({
               runnerSpeed: r1Speed, runnerSteal: r1Steal,
-              catcherArm: defense.catcher.arm, pitcherControl: pitcher.control,
+              catcherArm: defense.catcher?.arm ?? 50, pitcherControl: pitcher.control,
               pitcherThrows: pitcher.throws, toBase: 2,
             });
+            // 走るかどうかは自動の試合と同じ決まり（stealing.js。球団の走塁の方針も見る）。
+            // ⚠ 以前は「おまかせ」のときだけ別の倍率（aiManager.js）を掛けていた
             let stealAttempt = stealAttemptRate({
               successRate: stealRate2, runnerSteal: r1Steal, outs: newOuts, toBase: 2,
+              strategy: (isTopInning ? awayTeam : homeTeam).strategy?.baseRunning || 'normal',
             });
 
-            // 監督AI：盗塁判断（Phase 3）
-            if (autoManagerMode) {
-              const batterAvg = batter.stats?.batting?.atBats > 0
-                ? batter.stats.batting.hits / batter.stats.batting.atBats
-                : (batter.batting?.contact || 50) / 200; // 成績がない場合は能力値から推定
-              const isPitcher = batter.position === 'pitcher';
-              const isWeakBatter = batterAvg < 0.200 || isPitcher;
-              const isStrongBatter = batterAvg > 0.300 && batter.batting?.power > 50;
-
-              const batterType = isPitcher ? 'pitcher' : isWeakBatter ? 'weak' : isStrongBatter ? 'strong' : 'normal';
-              const scoreDiff = Math.abs(score.home - score.away);
-              const isCloseGame = scoreDiff <= 3;
-
-              const stealMultiplier = autoStealingDecision(runner1, {
-                scoreDiff,
-                isCloseGame,
-                outs: newOuts,
-                batterType,
-                runnerSteal: r1Steal
-              });
-
-              stealAttempt *= stealMultiplier;
-            }
 
             // 采配: 盗塁指示/エンドランがあれば強制的に試行（成否は走力・肩で決まる）
             if (doForceSteal) { stealAttempt = 1; }
@@ -2127,36 +1699,14 @@ import { useEscapeToClose } from './components/useEscapeToClose.js';
     const r2Steal = runner2?.steal ?? batter.steal;
     const stealRate3 = stealSuccessRate({
       runnerSpeed: r2Speed, runnerSteal: r2Steal,
-      catcherArm: defense.catcher.arm, pitcherControl: pitcher.control,
+      catcherArm: defense.catcher?.arm ?? 50, pitcherControl: pitcher.control,
       pitcherThrows: pitcher.throws, toBase: 3,
     });
     let stealThirdAttempt = stealAttemptRate({
       successRate: stealRate3, runnerSteal: r2Steal, outs: newOuts, toBase: 3,
+      strategy: (isTopInning ? awayTeam : homeTeam).strategy?.baseRunning || 'normal',
     });
 
-    // 監督AI：盗塁判断（Phase 3）
-    if (autoManagerMode) {
-      const batterAvg = batter.stats?.batting?.atBats > 0
-        ? batter.stats.batting.hits / batter.stats.batting.atBats
-        : (batter.batting?.contact || 50) / 200;
-      const isPitcher = batter.position === 'pitcher';
-      const isWeakBatter = batterAvg < 0.200 || isPitcher;
-      const isStrongBatter = batterAvg > 0.300 && batter.batting?.power > 50;
-
-      const batterType = isPitcher ? 'pitcher' : isWeakBatter ? 'weak' : isStrongBatter ? 'strong' : 'normal';
-      const scoreDiff = Math.abs(score.home - score.away);
-      const isCloseGame = scoreDiff <= 3;
-
-      const stealMultiplier = autoStealingDecision(runner2, {
-        scoreDiff,
-        isCloseGame,
-        outs: newOuts,
-        batterType,
-        runnerSteal: r2Steal
-      });
-
-      stealThirdAttempt *= stealMultiplier; // 三塁盗塁
-    }
 
     if (Math.random() < stealThirdAttempt) {
               if (Math.random() < stealRate3) {
@@ -2187,8 +1737,8 @@ if (newOuts === 3) {
   newOuts = 0;
   newBases = [false, false, false];
   
-  // イニング終了時にスタミナ+3回復
-  setCurrentStamina(prev => Math.min(pitcher.stamina, prev + 3));
+  // 半イニングの後のスタミナ回復（+3）・継投・守備固めは次の球の前に CPU の采配で行う
+  noteHalfInningEnd(tacticsMemoryRef.current);
   
   // イニングの得点を記録
   const currentInn = inning - 1; // 0-indexed
@@ -2252,26 +1802,10 @@ if (newOuts === 3) {
             if (isTopInning) {
               setIsTopInning(false);
               resetEarnedRunTracking(); // 自責点判定はイニング単位
-              // イニング切り替え後に守備固めと投手起用最適化をチェック（順次実行）
-              setTimeout(() => {
-                autoDefensiveSubstitution();
-                // 守備固めの後、投手起用最適化を実行
-                setTimeout(() => {
-                  autoOptimizePitcherUsage();
-                }, 200);
-              }, 100);
             } else {
               setIsTopInning(true);
               resetEarnedRunTracking(); // 自責点判定はイニング単位
               setInning(inning + 1);
-              // イニング切り替え後に守備固めと投手起用最適化をチェック（順次実行）
-              setTimeout(() => {
-                autoDefensiveSubstitution();
-                // 守備固めの後、投手起用最適化を実行
-                setTimeout(() => {
-                  autoOptimizePitcherUsage();
-                }, 200);
-              }, 100);
             }
           }
         }
@@ -2307,6 +1841,12 @@ if (newOuts === 3) {
           newCount = { balls: 0, strikes: 0 };
           // 次の打者に進む
           advanceBatter();
+          // 先発のダメージ・救援の対戦打者数（CPU の継投の判断に使う。自動の試合と同じ帳簿）
+          noteAtBatEnd(tacticsMemoryRef.current, {
+            defenseSide: isTopInning ? 'home' : 'away', pitcherId: getCurrentPitcher()?.id,
+            kind: result.type === 'ball' || result.type === 'hit_by_pitch' ? 'walk' : result.type,
+            runs: isTopInning ? newScore.away - score.away : newScore.home - score.home,
+          });
         }
         
         // アウトが増えた場合フラグを立てる（1アウトモード用）
@@ -2318,11 +1858,6 @@ if (newOuts === 3) {
         setOuts(newOuts);
         setBases(newBases);
         setScore(newScore);
-
-        // 投球後に監督AIによる自動交代をチェック
-        setTimeout(() => {
-          autoSubstitutePitcher();
-        }, 100);
       };
 
       // バント実行ハンドラー（手動操作モード用）
@@ -2348,8 +1883,12 @@ if (newOuts === 3) {
           buntType = 'sacrifice';
         }
 
-        // スタミナ消費（1球分）
-        setCurrentStamina(prev => Math.max(0, prev - 1));
+        // スタミナ消費（1球分。投手ごとに持つ）
+        {
+          const left = Math.max(0, staminaOf(tacticsMemoryRef.current, currentPitcher) - 1);
+          setStamina(tacticsMemoryRef.current, currentPitcher, left);
+          setCurrentStamina(left);
+        }
         {
           const defenseTeamType = isTopInning ? 'home' : 'away';
           updatePitcherStats(currentPitcher.id, defenseTeamType, {
@@ -2578,7 +2117,12 @@ if (newOuts === 3) {
         if (atBatOver) {
           newCount = { balls: 0, strikes: 0 };
           advanceBatter();
+          noteAtBatEnd(tacticsMemoryRef.current, {
+            defenseSide: isTopInning ? 'home' : 'away', pitcherId: currentPitcher?.id,
+            kind: 'out', runs: isTopInning ? newScore.away - score.away : newScore.home - score.home,
+          });
         }
+        if (halfInningEnded) noteHalfInningEnd(tacticsMemoryRef.current);
 
         setCount(newCount);
         setOuts(newOuts);
@@ -2597,7 +2141,10 @@ if (newOuts === 3) {
         setIsAutoSimulating
       };
       // [SECTION: GAME_CONTROLS] → gameControls.js に抽出済み（ラッパーのみ）
-      const resetGame = () => executeResetGame(gameControlsCtx);
+      const resetGame = () => {
+        tacticsMemoryRef.current = createManagedTacticsMemory();
+        executeResetGame(gameControlsCtx);
+      };
       const startSimMode = (mode) => executeStartSimMode(gameControlsCtx, mode);
 
       // 残り投球数がある場合は自動的に投球を続ける
@@ -2650,7 +2197,11 @@ if (newOuts === 3) {
         setManagedGameInfo, managedGameInfoRef, setScreenMode
       };
       // [SECTION: GAME_SETUP] → gameSetup.js に抽出済み（ラッパーのみ）
-      const setupManagedGame = (gameInfo) => executeSetupManagedGame(gameSetupCtx, gameInfo);
+      const setupManagedGame = (gameInfo) => {
+        // CPU の采配の帳簿は1試合ごとに作り直す
+        tacticsMemoryRef.current = createManagedTacticsMemory();
+        executeSetupManagedGame(gameSetupCtx, gameInfo);
+      };
 
       // 試合中の両チームの投手とリードを記録する（試合開始で帳簿を作り直す）。
       // ⚠ 以前の采配モードは「先発が5回以上なら先発の勝ち」「最少アウトの投手＝最後の投手」
@@ -2660,6 +2211,12 @@ if (newOuts === 3) {
       useEffect(() => {
         if (gameStarted) decisionLogRef.current = createDecisionLog();
       }, [gameStarted]);
+      // 画面のスタミナの棒は、いま守っている投手のもの（スタミナは投手ごとに帳簿に持つ）
+      useEffect(() => {
+        if (!gameStarted) return;
+        const p = getCurrentPitcher();
+        if (p?.pitching) setCurrentStamina(staminaOf(tacticsMemoryRef.current, p));
+      }, [gameStarted, isTopInning, homeTeam, awayTeam]);
       useEffect(() => {
         if (!gameStarted) return;
         observeDecisionLog(decisionLogRef.current, {
@@ -2842,8 +2399,8 @@ if (newOuts === 3) {
                     </div>
                     <p className="text-xs text-gray-400 mt-2 text-center">
                       {autoManagerMode
-                        ? '投手のスタミナが20%以下になると自動的に交代します'
-                        : '選手交代は手動で行います'}
+                        ? '代打・継投・守備固めを、相手の球団と同じ決まりでベンチが決めます'
+                        : '自分の球団の選手交代は手動で行います（相手の球団はベンチが決めます）'}
                     </p>
                   </div>
 
@@ -3453,7 +3010,7 @@ if (newOuts === 3) {
                   </button>
                   <span className="w-px h-7 bg-gray-700 mx-1" />
                   <button onClick={() => setAutoManagerMode(!autoManagerMode)}
-                    title="采配をベンチに任せる（代打・継投・作戦を自動で決める）"
+                    title="采配をベンチに任せる（代打・継投・守備固めを相手の球団と同じ決まりで決める）"
                     className={`px-3 py-1.5 rounded text-sm font-semibold transition ${
                       autoManagerMode ? 'seg-on' : 'seg'
                     }`}>

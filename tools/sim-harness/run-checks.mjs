@@ -32,6 +32,8 @@ const CHECKS = [
   { name: 'save-check', group: 'quick', slow: 4 },
   { name: 'review-check', group: 'quick', slow: 1 },
   { name: 'oneplayer-fix-check', group: 'quick', slow: 20 },
+  // 采配の試合が自動の試合の正本（1球・CPU の采配）で動く
+  { name: 'managed-game-check', group: 'quick', slow: 2 },
   { name: 'sim-integrity-check', group: 'quick', slow: 4 },
   { name: 'season-check', group: 'quick', slow: 8 },
   { name: 'draft-check', group: 'quick', slow: 8 },
@@ -176,6 +178,7 @@ const SEPARATE = [
   'online-size-budget-check', // check:online:size（保存とビューの大きさの上限。1年と少し進めるので約3分）
   'online-ui-check', // check:online:ui（開発サーバー2つが要る）
   'singleplayer-ui-check', // check:ui
+  'managed-game-ui-check', // check:ui:managed（一人用の采配の試合を2試合通す）
   'singleplayer-yearend-ui-check', // check:ui:yearend（5モードで1年目のオフから2年目の開幕まで）
 ];
 

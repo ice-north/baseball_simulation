@@ -236,8 +236,10 @@ const SWING_ZONE_W = 0.20;
  * ゾーン内スイングはカウントが進むほど増える（追い込まれたら守りに入る）。
  * 以前は「2ストライクで振らなくなる」逆向きの式だった。
  */
-export function decideSwing({ approachMult = 1, ...opts } = {}) {
-  return Math.random() < clamp(swingProbability(opts) * approachMult, 0.02, 0.97);
+export function decideSwing({ approachMult = 1, swingFloor = null, ...opts } = {}) {
+  const p = swingProbability(opts) * approachMult;
+  // swingFloor: 采配のエンドラン（必ず打ちにいく）。自動の試合は渡さない
+  return Math.random() < clamp(swingFloor != null ? Math.max(p, swingFloor) : p, 0.02, 0.97);
 }
 
 /**
