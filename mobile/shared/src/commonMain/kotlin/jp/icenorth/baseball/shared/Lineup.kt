@@ -147,16 +147,11 @@ data class LineupDraft(
 }
 
 /** 守備の組（投手・捕手・内野・外野）。画面で位置の色を分けるのに使う。Web 版 FIELDER_GROUPS と同じ分け方 */
-fun positionGroup(pos: String?): String = when (pos) {
-    "pitcher" -> "pitcher"
-    "catcher" -> "catcher"
-    "first", "second", "third", "short" -> "infield"
-    "left", "center", "right" -> "outfield"
-    else -> ""
-}
+fun positionGroup(pos: String?): String =
+    if (pos == "pitcher") "pitcher" else FIELDER_GROUPS.firstOrNull { pos in it.positions }?.id ?: ""
 
-/** 控え野手の組（捕手・内野手・外野手。Web 版 groupBench と同じ） */
-val FIELDER_GROUP_LABELS = listOf("catcher" to "捕手", "infield" to "内野手", "outfield" to "外野手")
+/** 控え野手の組（捕手・内野手・外野手。Web 版 groupBench と同じ。表は Tables.kt の FIELDER_GROUPS） */
+val FIELDER_GROUP_LABELS: List<Pair<String, String>> = FIELDER_GROUPS.map { it.id to it.label }
 
 /**
  * 本職以外に守れる位置（適性 min 以上、高い順。Web 版 playablePositions から本職を除いたもの）。
@@ -169,9 +164,12 @@ fun Player.subPositions(min: Int = SUBSTITUTE_MIN_FITNESS, except: String? = pos
 fun List<Player>.candidatesFor(pos: String): List<Player> =
     sortedWith(compareByDescending<Player> { it.fitness(pos) }.thenBy { it.fatigue ?: 0 })
 
-/** 疲労の段（Web 版 getFatigueTone）。0=なし 1=黄（41〜、成長が鈍り始める） 2=赤（81〜） */
+/**
+ * 疲労の段（Web 版 getFatigueTone）。0=なし 1=黄（成長が鈍り始める） 2=赤。
+ * 境目は Tables.kt の FATIGUE_WARN_FROM・FATIGUE_HEAVY_FROM（Web 版の摩耗の段から書き出す）
+ */
 fun fatigueTone(fatigue: Int?): Int = when {
-    (fatigue ?: 0) > 80 -> 2
-    (fatigue ?: 0) > 40 -> 1
+    (fatigue ?: 0) >= FATIGUE_HEAVY_FROM -> 2
+    (fatigue ?: 0) >= FATIGUE_WARN_FROM -> 1
     else -> 0
 }

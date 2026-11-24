@@ -3134,6 +3134,20 @@ small.online-gain:not(:where(.online-sp *)) {
 .online-scoreboard.is-compact tbody td {
   font-size: 14px;
 }
+/* 延長戦（10回から）: 列が増えるぶん枠を詰めて、320px でも横に送らずに見せる
+   （以前は11回の試合で盤が横にはみ出していた。2026-11-24 監査） */
+.online-scoreboard.is-compact[data-extra] th,
+.online-scoreboard.is-compact[data-extra] td {
+  min-width: 0;
+  padding: 1px 0;
+}
+.online-scoreboard.is-compact[data-extra] thead th {
+  font-size: 10px;
+}
+.online-scoreboard.is-compact[data-extra] tbody td {
+  font-size: 12px;
+  border-width: 1px;
+}
 .online-scoreboard.is-compact .online-scoreboard-team {
   min-width: 40px;
   font-size: 12px;

@@ -1,5 +1,5 @@
 // ============================================================
-// Web 版の表（練習メニュー・采配の選択肢・投手の役割・しきい値など）から
+// Web 版の表（練習メニュー・采配の選択肢・投手の役割・しきい値・能力の説明・成績の列など）から
 // アプリの Kotlin の表（shared/.../Tables.kt）を書き出す。
 //
 // ⚠ **表を手で写さないこと**。Web 側で選択肢やしきい値を変えたとき、写しだけ古くなる。
@@ -21,6 +21,11 @@ const pyramid = await import(at('src/online/pyramidLeague.js'));
 const api = await import(at('src/online/api.js'));
 const social = await import(at('src/online/social.js'));
 const tryoutPlan = await import(at('src/online/tryoutPlan.js'));
+const playerInfo = await import(at('src/online/playerInfo.js'));
+const recordStats = await import(at('src/online/recordStats.js'));
+const statsView = await import(at('src/online/statsView.js'));
+const lineupEdit = await import(at('src/online/lineupEdit.js'));
+const condition = await import(at('src/game/condition.js'));
 
 // ⚠ Kotlin の文字列では `$` が式の始まりになるので逃がす
 const q = (s) => JSON.stringify(String(s)).replaceAll('$', '\\$');
@@ -168,6 +173,169 @@ for (const [k, v] of Object.entries({ TEAMS_PER_LEAGUE: pyramid.TEAMS_PER_LEAGUE
   if (!Number.isInteger(v)) throw new Error(`${k} が読めない`);
   out(`const val ${k}: Int = ${v}`);
 }
+
+// ------------------------------------------------------------------
+// ここから下は以前アプリに手で写していた表（2026-11-24 に生成へ。以前は検査が正規表現で Kotlin を読んで照らしていた）
+// ------------------------------------------------------------------
+// 能力の一言の説明（Web 版 playerInfo.js の ABILITY_HELP。選手の詳細で項目を押すと出す）。
+// ⚠ 見出しは Web 版の名前（「肩力」「盗塁技術」「捕手リード」）。アプリの短い表示名とは別
+out('/** 能力の一言の説明（何に・どう効くか）。Web 版 src/online/playerInfo.js の ABILITY_HELP */');
+out('val ABILITY_HELP: Map<String, String> = linkedMapOf(');
+for (const [k, v] of Object.entries(playerInfo.ABILITY_HELP)) out(`    ${q(k)} to ${q(v)},`);
+out(')');
+// 投手×捕手の組み合わせの「少ない組」の境目と注記（Web 版 recordStats.js）
+if (!Number.isInteger(recordStats.BATTERY_MIN_OUTS)) throw new Error('BATTERY_MIN_OUTS が読めない');
+out(`const val BATTERY_MIN_OUTS: Int = ${recordStats.BATTERY_MIN_OUTS}`);
+out(`val BATTERY_NOTE: String = ${q(recordStats.BATTERY_NOTE)}`);
+
+// --- 値の引き方を Web 版の関数から読む ---------------------------------
+// 関数に「触った項目を書き留める」偽の選手を渡し、1つの項目だけを読む関数かを調べる。
+// 1つだけなら、その項目に数を入れた選手で答えが合うか（負・無しは「無い」になるか）まで確かめる。
+// それ以外（2つ以上を組み合わせる列）は、アプリ側に同じ名前の式（Stats.kt の StatComputed）を置き、
+// 値は expect-stats.mjs の答え合わせ（StatsWebTest）で比べる。
+const readPath = (get) => {
+  const seen = [];
+  const probe = (at) =>
+    new Proxy(Object.create(null), {
+      get(_, key) {
+        if (typeof key === 'symbol') return undefined;
+        const next = [...at, key];
+        seen.push(next);
+        return probe(next);
+      },
+    });
+  try {
+    get(probe([]));
+  } catch {
+    /* 偽の選手で計算が止まるのはかまわない（触った項目は書き留めてある） */
+  }
+  const leaves = seen.filter((p) => !seen.some((o) => o.length > p.length && p.every((k, i) => o[i] === k)));
+  const unique = [...new Set(leaves.map((p) => p.join('.')))];
+  return unique.length === 1 ? unique[0].split('.') : null;
+};
+const withValue = (path, value) => {
+  const player = {};
+  let at = player;
+  path.slice(0, -1).forEach((k) => (at = at[k] = {}));
+  at[path.at(-1)] = value;
+  return player;
+};
+const tryGet = (get, player) => {
+  try {
+    return get(player);
+  } catch {
+    return Symbol('止まった');
+  }
+};
+/** 1つの項目だけを読み、0以上の数だけを返す（負・無しは null）関数なら、その項目 */
+const knownPath = (get) => {
+  const path = readPath(get);
+  if (!path) return null;
+  const at = (v) => tryGet(get, withValue(path, v));
+  const ok = at(12.5) === 12.5 && at(0) === 0 && at(-1) == null && tryGet(get, {}) == null;
+  return ok ? path : null;
+};
+const STAT_FORMATS = { count: 'Count', rate: 'Rate', decimal: 'Decimal', percent: 'Percent', innings: 'Innings', condition: 'Condition', ability: 'Ability', velocity: 'Velocity', stamina: 'Stamina' };
+const ABILITY_FORMATS = ['ability', 'velocity', 'stamina'];
+const kotlinGetter = (column) => {
+  const path = knownPath(column.get);
+  if (!path) return `StatComputed.${column.id}`;
+  const [a, b, c, d] = path;
+  if (a === 'seasonStats' && path.length === 3) return `statRaw(${q(b)}, ${q(c)})`;
+  if (a === 'performance' && c === 'metrics' && path.length === 4) return `statMetric(${q(b)}, ${q(d)})`;
+  if (a === 'catcherStats' && path.length === 2) return `statCaught(${q(b)})`;
+  if (path.length === 2 || path.length === 1) return `statField(${path.map(q).join(', ')})`;
+  throw new Error(`${column.id} の読み方（${path.join('.')}）をアプリに書けない`);
+};
+/**
+ * アプリでの列の id。⚠ 能力の列は「区分:項目」にそろえる（Web 版の調子・疲労の「ability」も）。
+ * アプリは区分をまたいで同じ id の列に並べ替えを引き継ぐので、同じ能力は同じ id にしておく。
+ */
+const kotlinColumnId = (column) => {
+  if (!ABILITY_FORMATS.includes(column.format)) return column.id;
+  const path = knownPath(column.get);
+  if (!path || path.length !== 2) throw new Error(`能力の列 ${column.id} の読み方が分からない`);
+  return path.join(':');
+};
+const statColumn = (column) => {
+  const format = STAT_FORMATS[column.format];
+  if (!format) throw new Error(`列 ${column.id} の書式 ${column.format} をアプリが知らない`);
+  if (!['asc', 'desc'].includes(column.direction)) throw new Error(`列 ${column.id} の向き ${column.direction}`);
+  return `StatColumn(${q(kotlinColumnId(column))}, ${q(column.label)}, StatFormat.${format}, ${column.direction === 'asc'}, ${kotlinGetter(column)})`;
+};
+// 選手成績の表の列（Web 版 statsView.js の STAT_GROUPS と同じ並び・同じ読み方）
+for (const [category, name] of [['batting', 'BATTING_GROUPS'], ['pitching', 'PITCHING_GROUPS']]) {
+  out(`/** 選手成績の表の区分と列（Web 版 src/online/statsView.js の STAT_GROUPS.${category}） */`);
+  out(`val ${name}: List<StatGroup> = listOf(`);
+  for (const group of statsView.STAT_GROUPS[category]) {
+    out(`    StatGroup(`);
+    out(`        ${q(group.id)}, ${q(group.label)},`);
+    out(`        listOf(`);
+    for (const column of group.columns) out(`            ${statColumn(column)},`);
+    out(`        ),`);
+    out(`    ),`);
+  }
+  out(')');
+}
+// 主要成績一覧の列（Web 版 overviewGroup）と、既定の並べ替えの列（defaultSort）
+for (const [category, suffix] of [['batting', 'BATTING'], ['pitching', 'PITCHING']]) {
+  const ids = statsView.overviewGroup(category).columns.map(kotlinColumnId);
+  out(`val OVERVIEW_${suffix}_IDS: List<String> = listOf(${ids.map(q).join(', ')})`);
+  const sort = statsView.defaultSort(category);
+  if (sort.direction !== 'desc') throw new Error('既定の並べ替えが多い順でなくなった。Stats.kt の defaultSortColumn を直す');
+  out(`const val DEFAULT_SORT_${suffix}: String = ${q(kotlinColumnId(sort.column))}`);
+}
+// 能力で絞り込む条件（Web 版 tryoutPlan.js の ABILITY_FILTERS）。値は画面の数のまま（球速は km/h、スタミナは 0〜200）
+out('/** 能力で絞り込む条件に使える能力（Web 版 src/online/tryoutPlan.js の ABILITY_FILTERS） */');
+out('val ABILITY_FILTERS: List<AbilityFilterDef> = listOf(');
+for (const def of tryoutPlan.ABILITY_FILTERS) {
+  const path = readPath(def.get);
+  const single = path && tryGet(def.get, withValue(path, 47)) === 47 && tryGet(def.get, {}) === undefined;
+  const get = single ? `filterField(${path.map(q).join(', ')})` : `AbilityFilterComputed.${def.key}`;
+  out(`    AbilityFilterDef(${q(def.key)}, ${q(def.label)}, ${q(def.side)}, ${q(def.unit || '')}, ${get}),`);
+}
+out(')');
+if (!Number.isInteger(tryoutPlan.ABILITY_FILTER_MAX)) throw new Error('ABILITY_FILTER_MAX が読めない');
+out(`const val ABILITY_FILTER_MAX: Int = ${tryoutPlan.ABILITY_FILTER_MAX}`);
+
+// 控えの括り（Web 版 lineupEdit.js の FIELDER_GROUPS）。画面の守備位置の色分けにも使う
+out('data class FielderGroup(val id: String, val label: String, val positions: List<String>)');
+out('val FIELDER_GROUPS: List<FielderGroup> = listOf(');
+for (const g of lineupEdit.FIELDER_GROUPS) out(`    FielderGroup(${q(g.id)}, ${q(g.label)}, listOf(${g.positions.map(q).join(', ')})),`);
+out(')');
+// 能力の段位（Web 版 constants.js の getAbilityRank。0〜100にそろえた値が「この値以上」で上の段）
+{
+  const ranks = [];
+  for (let v = 100; v >= 0; v -= 1) {
+    const rank = constants.getAbilityRank(v);
+    if (rank !== constants.getAbilityRank(v - 0.5) || v === 0) ranks.push([v, rank]);
+  }
+  ranks.at(-1)[0] = 0;
+  // 境目の間（小数）でも同じ段になるか確かめる
+  for (let v = 0; v <= 100; v += 0.25) {
+    const want = ranks.find(([min]) => v >= min)[1];
+    if (constants.getAbilityRank(v) !== want) throw new Error(`段位の境目が整数でない（${v}）。gen-tables.mjs を直す`);
+  }
+  out(`val ABILITY_RANKS: List<Pair<Int, Char>> = listOf(${ranks.map(([min, r]) => `${min} to '${r}'`).join(', ')})`);
+}
+// 疲労の段（Web 版 constants.js の getFatigueTone。黄・赤になる最初の疲労）
+{
+  const from = (tone) => {
+    for (let f = 0; f <= 300; f += 1) if (constants.getFatigueTone(f) === tone) return f;
+    throw new Error(`疲労の段 ${tone} が見つからない`);
+  };
+  const warn = from('warn');
+  const heavy = from('heavy');
+  const toneOf = (f) => (f >= heavy ? 'heavy' : f >= warn ? 'warn' : '');
+  for (let f = 0; f <= 300; f += 1)
+    if (constants.getFatigueTone(f) !== toneOf(f)) throw new Error(`疲労の段が2つの境目で表せない（${f}）`);
+  out(`const val FATIGUE_WARN_FROM: Int = ${warn}`);
+  out(`const val FATIGUE_HEAVY_FROM: Int = ${heavy}`);
+}
+// 調子（0〜4）の顔（Web 版 condition.js の CONDITION_ICONS）と言葉（statsView.js の CONDITION_TEXT）
+out(`val CONDITION_ICONS: Map<Int, String> = mapOf(${Object.entries(condition.CONDITION_ICONS).map(([k, v]) => `${Number(k)} to ${q(v)}`).join(', ')})`);
+out(`val CONDITION_TEXT: List<String> = listOf(${statsView.CONDITION_TEXT.map(q).join(', ')})`);
+
 const text = lines.join('\n') + '\n';
 const file = path.join(root, 'mobile/shared/src/commonMain/kotlin/jp/icenorth/baseball/shared/Tables.kt');
 if (process.argv.includes('--check')) {

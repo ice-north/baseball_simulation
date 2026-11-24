@@ -944,11 +944,21 @@ export class LeagueService {
       try {
         migrated = this.ensureMigrated(bundle);
       } catch (error) {
+        // ⚠ 番人（終わった年の試合を読まない形）に触れた・複製できなかったときは握りつぶさず投げ直す。
+        //    保存側が全部を読み直してやり直す（`runWithLightRead`）。握りつぶすと、2年目以降は
+        //    版が上がるたびに移行が `structuredClone` で落ち続け、誰かが操作するまで進まなかった
+        if (error?.name === 'DataCloneError' || error?.name === 'NeedsFullWorld') throw error;
         console.error('online migrate failed:', error.message);
         return { unchanged: true, value: { advanced: false } };
       }
       const l = bundle.league;
       const now = this.clock();
+      // 止めて理由を画面に出す（管理者が「再開」するまで定期処理は進めない）
+      const stopLeague = (message) => {
+        l.status = 'error';
+        l.nextAdvanceAt = null;
+        l.error = message;
+      };
       // ⚠ **締め切り超過の手続きを先に片付ける**。手続き中は status が
       //    running でないので、下の判定だけだと永遠に動かない。
       // ⚠ 自動決定に失敗して止めた後（status が error）は、管理者が再開するまで
@@ -958,9 +968,7 @@ export class LeagueService {
         //    管理者が「再開」すると次の定期処理から数え直す
         if (await exhausted(attemptKey(l, `phase:${l.phase.id}`, l.phase.deadline))) {
           console.error('online auto resolve did not finish:', l.phase.id);
-          l.status = 'error';
-          l.nextAdvanceAt = null;
-          l.error = `締め切りの自動決定が${ATTEMPT_LIMIT}回続けて時間内に終わりませんでした。状態を確認して管理者が再開してください`;
+          stopLeague(`締め切りの自動決定が${ATTEMPT_LIMIT}回続けて時間内に終わりませんでした。状態を確認して管理者が再開してください`);
           l.revision++;
           l.updatedAt = this.clock();
           return { value: { advanced: false, autoResolveFailed: true, attemptsExhausted: true } };
@@ -982,9 +990,7 @@ export class LeagueService {
           //    （誰も原因に気づけない）。止めて理由を画面に出す。
           //    管理者が「再開」すると待機に戻り、次の定期処理でやり直す。
           console.error('online auto resolve failed:', error.stack);
-          l.status = 'error';
-          l.nextAdvanceAt = null;
-          l.error = `締め切りの自動決定に失敗しました（${error.message}）。提出内容を確認して管理者が再開してください`;
+          stopLeague(`締め切りの自動決定に失敗しました（${error.message}）。提出内容を確認して管理者が再開してください`);
           l.revision++;
           l.updatedAt = this.clock();
           return { value: { advanced: false, autoResolveFailed: true } };
@@ -1013,16 +1019,11 @@ export class LeagueService {
       //      それ以上          … 止めて管理者に見てもらう（本当の障害）
       const late = Date.parse(now) - Date.parse(due);
       if (late > STALL_AFTER_MS) {
-        l.status = 'error';
-        l.nextAdvanceAt = null;
-        l.error =
-          '定期進行が長く止まっていました。状態を確認して管理者が再開してください';
+        stopLeague('定期進行が長く止まっていました。状態を確認して管理者が再開してください');
       } else if (await exhausted(attemptKey(l, 'day', due))) {
         // ⚠ 打ち切られて終わらない試行を繰り返さない（`ATTEMPT_LIMIT`）。止めたことも公開するので印は消える
         console.error('online tick did not finish:', due);
-        l.status = 'error';
-        l.nextAdvanceAt = null;
-        l.error = `日次処理が${ATTEMPT_LIMIT}回続けて時間内に終わりませんでした。状態を確認して管理者が再開してください`;
+        stopLeague(`日次処理が${ATTEMPT_LIMIT}回続けて時間内に終わりませんでした。状態を確認して管理者が再開してください`);
       } else {
         const working = cloneLeague(l);
         try {
@@ -1031,9 +1032,7 @@ export class LeagueService {
           );
           bundle.league = working;
         } catch (error) {
-          l.status = 'error';
-          l.nextAdvanceAt = null;
-          l.error = '日次処理に失敗しました。管理者が状態を確認してください';
+          stopLeague('日次処理に失敗しました。管理者が状態を確認してください');
           console.error('online tick failed:', error.stack);
         }
       }

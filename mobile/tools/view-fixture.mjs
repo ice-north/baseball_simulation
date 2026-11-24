@@ -1,6 +1,7 @@
 // アプリの検査に使う実際の窓口の答えを作り直す。
 //   node mobile/tools/view-fixture.mjs
 //   node mobile/tools/expect-logic.mjs > mobile/shared/src/jvmTest/resources/logic-expected.json   # 続けて必ず
+//   node mobile/tools/expect-stats.mjs > mobile/shared/src/jvmTest/resources/stats-expected.json   # これも
 //
 // 書き出すもの（どれも mobile/shared/src/jvmTest/resources/ の下）:
 //   view-running.json … 開幕3日目（4月4日。宮崎-那覇の3連戦のあと）のビュー。検証モードは切ってから取る。

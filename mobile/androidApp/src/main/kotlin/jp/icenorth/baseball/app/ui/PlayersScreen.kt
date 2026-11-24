@@ -323,7 +323,7 @@ private fun TeamStats(model: AppViewModel, view: LeagueView, raw: JsonObject, te
     }
 
     val lookOn = LocalLook.current.on
-    val baseline = remember(raw) { leagueBaseline(raw) }
+    val baseline = remember(raw, team) { leagueBaseline(raw, team) }
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
         Row(Modifier.fillMaxWidth().padding(start = 12.dp), verticalAlignment = Alignment.CenterVertically) {
             ChoiceRow(listOf("bat" to "打撃", "pit" to "投球"), if (batting) "bat" else "pit") { batting = it == "bat" }

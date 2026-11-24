@@ -50,13 +50,13 @@ assert.equal(
   '先発を飛ばす疲労がサーバーとずれた',
 );
 const simulation = await readFile(
-  new URL('../../src/game/autoSimulation.js', import.meta.url),
+  new URL('../../src/game/cpuTactics.js', import.meta.url),
   'utf8',
 );
 assert.match(
   simulation,
   new RegExp(`fatigueGate = Math\\.max\\(${RELIEF_REST_FATIGUE}, `),
-  '救援を使わない疲労が試合の判断（autoSimulation の fatigueGate）とずれた',
+  '救援を使わない疲労が試合の判断（cpuTactics の fatigueGate）とずれた',
 );
 assert.deepEqual(
   [...STARTER_ORDER].sort(),

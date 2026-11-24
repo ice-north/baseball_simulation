@@ -4,12 +4,10 @@ import kotlinx.serialization.json.JsonObject
 
 /**
  * 投手×捕手の組み合わせ（選手シート）。サーバーの期間の `battery`（server/recordedViews.mjs `batteryFor`）。
- * Web 版 src/online/BatteryStats.jsx と同じ数字・同じ文言（online-stats-view-check が照合する）。
+ * Web 版 src/online/BatteryStats.jsx と同じ数字・同じ文言。
  * ⚠ このゲームに「相性」の仕組みは無い。回数が少ない組は運の差が大きいので薄く出す。
  */
-const val BATTERY_MIN_OUTS: Int = 90
-
-val BATTERY_NOTE: String = "${BATTERY_MIN_OUTS / 3}回未満の組は薄く出しています。回数が少ないうちは運の差が大きく出ます。読まれ率は、打者に狙い球を当てられた球の割合で、低いほどリードが効いています。"
+// 「少ない組」の境目（BATTERY_MIN_OUTS）と注記（BATTERY_NOTE）は Tables.kt（gen-tables.mjs が Web 版 recordStats.js から書き出す）
 
 data class BatteryLine(
     val key: String,

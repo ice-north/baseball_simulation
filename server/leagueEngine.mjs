@@ -2250,8 +2250,8 @@ const ROTATION_DEFAULT = 5;
  * ⚠ トライアウトは年度更新（引退）より前にあるので、捕手1人の球団はその人が引退すると
  *    翌年のトライアウトまで1年ずっと捕手なしになる（10年の長期シミュで起きた。野手がマスクを
  *    かぶるので試合は壊れないが、リードと捕手の守備がずっと野手の値になる）。
- *    放出された選手（`releasedPlayersPool`）の捕手から、居なければ対人リーグの外で捕手を
- *    2人以上持つ球団から、いちばん良い捕手を入れる。入団の履歴に残す。
+ *    放出された選手（`releasedPlayersPool`）の捕手から、居なければ対人リーグの外（大学を除く）で
+ *    捕手を3人以上持つ球団の3人目より後ろから、いちばん良い捕手を入れる。入団の履歴に残す。
  * ⚠ 名簿の上限（28人）に届いている球団には足さない（引退の後なので、まず起きない）
  * @returns 補った `{ team, player }` の一覧
  */
@@ -2270,8 +2270,16 @@ export function fillMissingCatchers(league, now) {
     const outside = pooled.length
       ? []
       : Object.entries(TEAMS_DATA)
-          .filter(([n, t]) => !inLeague.has(n) && (t.players || []).filter(isCatcher).length >= 2)
-          .flatMap(([n, t]) => t.players.filter(isCatcher).map((p) => ({ p, from: n })));
+          // ⚠ 大学は在学生の名簿が正本（CLAUDE.md）なので取らない。2人目までの捕手も取らない
+          //    （以前は在学中の大学生や、外の球団の正捕手を入れることがあった。2026-11-24 監査）
+          .filter(([n, t]) => !inLeague.has(n) && !t.universityData && !t.universityTeamId)
+          .flatMap(([n, t]) =>
+            (t.players || [])
+              .filter(isCatcher)
+              .sort((a, b) => score(b) - score(a))
+              .slice(2)
+              .map((p) => ({ p, from: n })),
+          );
     const best = [...pooled, ...outside].sort((a, b) => score(b.p) - score(a.p))[0];
     if (!best) continue;
     const { p, from } = best;

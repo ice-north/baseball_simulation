@@ -32,6 +32,8 @@ const CHECKS = [
   { name: 'save-check', group: 'quick', slow: 4 },
   { name: 'review-check', group: 'quick', slow: 1 },
   { name: 'oneplayer-fix-check', group: 'quick', slow: 20 },
+  // 采配の試合が自動の試合の正本（1球・CPU の采配）で動く
+  { name: 'managed-game-check', group: 'quick', slow: 2 },
   { name: 'sim-integrity-check', group: 'quick', slow: 4 },
   { name: 'season-check', group: 'quick', slow: 8 },
   { name: 'draft-check', group: 'quick', slow: 8 },
@@ -115,9 +117,19 @@ const CHECKS = [
   { name: 'online-staff-moves-check', group: 'check', online: true, slow: 150 },
   // 指導者（監督・コーチ）。種・任せ方・人事・40年の入れ替わり・1年を通して翌年のキャンプまで
   { name: 'online-coach-check', group: 'check', online: true, slow: 200 },
+  // アプリが読む項目（mobile/tools/view-contract.mjs）が本物のサーバーの答えにあるか。開幕直後だけ（約20秒）
+  { name: 'online-view-contract-check', group: 'check', online: true, slow: 22 },
   // 人どうしの関わり（ひとこと・取引の記録・おるすばん・予告先発・練習試合・得点経過）
   { name: 'online-social-check', group: 'check', online: true, slow: 125 },
   { name: 'progression-check', group: 'full', slow: 38 },
+  // 同じものを年度更新のあとのキャンプまで進めて、時期の項目も（約80秒）
+  {
+    name: 'online-view-contract-check-year',
+    group: 'full',
+    online: true,
+    slow: 80,
+    args: [harness('online-view-contract-check'), '--year'],
+  },
   // 固定の種で回した結果（一人用の自動試合・オンラインの開幕40回と参加者のビュー）が記録と同じか。
   // 動きを変えない整理の安全網。狙って結果を変えたら `--update` で書き直す（replay-hashes.json）
   { name: 'replay-hash-check', group: 'check', online: true, slow: 40 },
@@ -131,7 +143,7 @@ const CHECKS = [
   },
   // アプリの共通部（mobile/shared）に写した表と計算の期待値が、Web 版と食い違っていないか（どれも0.2秒未満）。
   // ⚠ 写し元（src/）だけを変えたときに気づくため、mobile を触らなくても毎回回す（android.yml は paths で絞っている）
-  ...['gen-tables', 'expect-logic', 'expect-social', 'expect-chronicle', 'expect-paper'].map((tool) => ({
+  ...['gen-tables', 'expect-logic', 'expect-social', 'expect-chronicle', 'expect-paper', 'expect-look', 'expect-stats'].map((tool) => ({
     name: `app-${tool}`,
     group: 'quick',
     slow: 1,
@@ -166,6 +178,7 @@ const SEPARATE = [
   'online-size-budget-check', // check:online:size（保存とビューの大きさの上限。1年と少し進めるので約3分）
   'online-ui-check', // check:online:ui（開発サーバー2つが要る）
   'singleplayer-ui-check', // check:ui
+  'managed-game-ui-check', // check:ui:managed（一人用の采配の試合を2試合通す）
   'singleplayer-yearend-ui-check', // check:ui:yearend（5モードで1年目のオフから2年目の開幕まで）
 ];
 

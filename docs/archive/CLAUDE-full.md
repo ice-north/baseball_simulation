@@ -1370,9 +1370,9 @@ CLAUDE.md の各所で潰してきたのと同じ型の誤り:
   正しいのは「実装に合わせて直す」か「もう無いと明記する」のどちらか
 
 ## 主要ファイル
-- `src/App.jsx` (~4240行) - メインアプリ、試合シミュレーション、画面遷移（下記セクション参照）
-- `src/game/autoSimulation.js` (~3000行) - 自動シミュレーション・buildDefense
-- `src/game/aiManager.js` (~650行) - 監督AI（自動投手交代・代打・守備固め・盗塁判定）
+- `src/App.jsx` (~520行) - メインアプリ、画面遷移。采配の試合は 2026-11-24 に `src/game/useManagedGame.jsx`（state と処理）と `src/components/ManagedGameScreen.jsx`（画面）へ移した（下記セクション参照）
+- `src/game/autoSimulation.js` (~1850行) - 自動シミュレーション・buildDefense
+- aiManager.js（2026-11-24 に削除）- 采配の試合の監督AI（自動投手交代・代打・守備固め・盗塁判定）。いまは自動の試合と同じ `src/game/cpuTactics.js` を `src/game/managedTactics.js` から呼ぶ
 - `src/game/lineupGenerator.js` (~690行) - AIオーダー編成・投手ローテーション生成・`ensureAllTeamsReady`
 - `src/game/gameControls.js` (~105行) - resetGame・multiPitch・simMode
 - `src/game/gameSetup.js` (~680行) - setupManagedGame・handleManagedGameEnd
@@ -1426,13 +1426,13 @@ App.jsxは大きいファイルなので、作業に関連するセクション�
 | RENDER | メインreturn（試合画面UI・管理シェル） |
 
 ### 編集作業ガイド
-- **試合ロジック修正**: `src/App.jsx` THROW_PITCH (L611-2030) + `src/game/aiManager.js`
+- **試合ロジック修正**: `src/App.jsx` THROW_PITCH (L611-2030) + aiManager.js（2026-11-24 に削除 → `src/game/cpuTactics.js`）
 - **画面遷移修正**: `ManagementScreen.jsx` + `GameFlowScreens.jsx`
 - **UI修正**: `src/App.jsx` RENDER (L2131-END) + `GameUIComponents.jsx`
 - **日程進行修正**: `src/components/DateProgressScreen.jsx`（`handleProgressDate`）+ `src/season/dateProgression.js`
 - **選手交代修正**: `src/App.jsx` GAME_HANDLERS (L341-595)
 - **試合セットアップ**: `src/game/gameSetup.js`
-- **監督AI修正**: `src/game/aiManager.js`
+- **監督AI修正**: aiManager.js（2026-11-24 に削除 → `src/game/cpuTactics.js`・`src/game/managedTactics.js`）
 
 ## ゲームフロー
 ```
