@@ -9,7 +9,7 @@ import { getRegionalSurname, REGIONAL_SHARE } from '../data/prefectureNames.js';
 import { homeBlockOf, blockOfUniversity, HOME_UNIV_PREF } from '../data/regions.js';
 import { generateCatcherLead, taperLow, ALL_PITCH_TYPES, FORM_PITCH_SYNERGY, createEmptyStats, blankSeasonStats } from '../utils/constants.js';
 import { generatePositionFitness, generateRandomArsenal, generateTwoWayPositionFitness } from './playerFactory.js';
-import { getUniversityGrowthMultiplier, UNIVERSITY_TEAMS, getUniversityTeamsByRank } from '../university/universityTeamsData.js';
+import { getUniversityGrowthMultiplier, UNIVERSITY_TEAMS } from '../university/universityTeamsData.js';
 import { assignHighSchool } from '../data/highSchoolData.js';
 import { getVelocityCap, getVelocityCatchupMult } from '../utils/physics.js';
 import { dexterityMult } from './growthUtils.js';
@@ -1648,7 +1648,6 @@ export function warmUpPlayerPipeline(gameYear) {
   for (let i = 0; i < WARMUP_YEARS; i++) {
     const simYear = gameYear - WARMUP_YEARS + i;
     const enrollYear = simYear + 1;
-    const yearsFromStart = i;
 
     // 1. 高校生プール生成
     const idBase = (simYear + 10000) * 100000 + 50000;
