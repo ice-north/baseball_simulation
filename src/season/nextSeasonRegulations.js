@@ -175,7 +175,11 @@ const renameTeams = (renames) => {
   // チームランキング（年度更新で取った今の順位）も新しい名前で引けるようにする
   (WORLD_DATA._teamRanking || []).forEach(entry => { if (to.has(entry.name)) entry.name = to.get(entry.name); });
   // 選手の経歴・前所属（どの世界の球団に居る選手も・トライアウトのプールも）
-  for (const team of Object.values(TEAMS_DATA)) relabelRenamedTeams(team?.players, to);
+  for (const team of Object.values(TEAMS_DATA)) {
+    relabelRenamedTeams(team?.players, to);
+    // プロに進んだ OB の記録（チームランキングの「OB名鑑」・殿堂の一覧で選手の小窓に出す経歴）
+    relabelRenamedTeams(team?.npbAlumni, to);
+  }
   relabelRenamedTeams(releasedPlayersPool, to);
   return to;
 };

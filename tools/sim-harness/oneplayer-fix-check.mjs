@@ -566,6 +566,9 @@ for (const [count, games] of [[4, 144], [4, 150], [6, 145], [5, 148], [7, 150]])
   const outsideTeam = Object.values(TEAMS_DATA).find((t) => !names.includes(t.name) && t.players?.length);
   assert.ok(outsideTeam, '前提: 並行世界の球団に選手がいる');
   outsideTeam.players[0].careerHistory = [...(outsideTeam.players[0].careerHistory || []), careerOf(user)];
+  // プロに進んだ OB の記録（team.npbAlumni）の経歴も直す（監査 2026-11-24 15回目）
+  const alumnus = { playerId: 'rename-ob', name: 'OBの人', careerHistory: [careerOf(cpu)] };
+  userTeam.npbAlumni = [...(userTeam.npbAlumni || []), alumnus];
   const pooled = { id: 'rename-pool', name: 'プールの人', previousTeam: cpu, careerHistory: [careerOf(cpu)] };
   releasedPlayersPool.push(pooled);
   const poolBefore = releasedPlayersPool.length;
@@ -593,6 +596,7 @@ for (const [count, games] of [[4, 144], [4, 150], [6, 145], [5, 148], [7, 150]])
     '自チームの選手の経歴に変える前の球団名が残る（高校の経歴は触らない）');
   assert.equal(outsideTeam.players[0].careerHistory.at(-1).label, '改名ズ', 'ほかの世界へ移った選手の経歴に変える前の名前が残る');
   assert.equal(pooled.previousTeam, '新愛媛', 'プールの選手の前所属が変える前の名前のまま');
+  assert.equal(alumnus.careerHistory[0].label, '新愛媛', 'プロへ進んだ OB の経歴に変える前の名前が残る');
   assert.equal(pooled.careerHistory[0].label, '新愛媛');
   assert.deepEqual([...(renamedMap || new Map())], [[user, '改名ズ'], [cpu, '新愛媛']], 'OB名鑑を直すための改名の知らせが来ない');
   {
