@@ -129,14 +129,17 @@ r.assert('参照するファイルパスが実在', missingPaths.length === 0,
 
 // --- 4) App.jsx のセクションマーカー ---------------------------------
 // ⚠ 行番号を文書に書かせないための仕組み。マーカーが消えたら検知する
-const appjsx = fs.readFileSync(path.join(ROOT, 'src/App.jsx'), 'utf8');
+// ⚠ 2026-11-24 に采配の試合の state と処理を src/game/useManagedGame.jsx へ移した。
+//    GAME_HANDLERS・THROW_PITCH・GAME_CONTROLS・GAME_SETUP はそちらにある（App には MANAGED_GAME）
+const appjsx = ['src/App.jsx', 'src/game/useManagedGame.jsx']
+  .map(f => fs.readFileSync(path.join(ROOT, f), 'utf8')).join('\n');
 const markers = [...appjsx.matchAll(/\/\/ \[SECTION: ([A-Z_]+)\]/g)].map(m => m[1]);
 // ⚠ SEASON_PROGRESS は外した（2026-11-10。日程表からしか呼ばれないラッパーだったので
 //    `seasonProgress.js` ごと除いた。日程進行の本体は DateProgressScreen）
-const wantSections = ['APP_STATE', 'GAME_HANDLERS', 'THROW_PITCH', 'GAME_CONTROLS',
+const wantSections = ['APP_STATE', 'MANAGED_GAME', 'GAME_HANDLERS', 'THROW_PITCH', 'GAME_CONTROLS',
                       'GAME_SETUP', 'RENDER'];
 const lostMarkers = wantSections.filter(x => !markers.includes(x));
-r.assert('App.jsxのSECTIONマーカー', lostMarkers.length === 0,
+r.assert('App.jsx・useManagedGame.jsxのSECTIONマーカー', lostMarkers.length === 0,
   `${markers.length}個検出${lostMarkers.length ? ' / 欠落: ' + lostMarkers.join(', ') : ''}`);
 
 // ⚠ 行番号を書き戻していないか（腐りの再発）
