@@ -1250,6 +1250,8 @@ import { useEscapeToClose } from './components/useEscapeToClose.js';
           zoneWeakness: weakness,
           // 崩された打者はゾーンを広げる（pitchCalling.js）
           fooled: fooledLevel(sequence),
+          // 高めの速球は振ってもらえ、低めの速球は手が出ない（`heightSwingBias`）
+          row: loc.row,
         });
         // 捕手のリードは打者の狙いを外す（スイング判断を鈍らせる）
         swingProb *= 1 - (catcher.lead / 100) * 0.08;

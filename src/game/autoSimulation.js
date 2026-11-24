@@ -1003,6 +1003,8 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false, observer = 
     const swung = decideSwing({
       inZone: loc.inZone, quality: loc.quality, strikes: count.strikes, batterEye: batter.eye,
       pitcherControl: effectiveControl, isBreaking, breakingLevel: selectedPitch.level || 50,
+      // 高めの速球は振ってもらえ、低めの速球は手が出ない（`heightSwingBias`）
+      row: loc.row,
       // 打者は自分の得意コースをより振る
       zoneWeakness: weakness,
       // B型は張っていないコースを見送る

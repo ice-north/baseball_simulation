@@ -48,6 +48,8 @@ const CHECKS = [
   { name: 'natural-growth-check', group: 'quick', slow: 6 },
   // 打撃フォーム（オープン/スクエア/クローズ）と体格が内外角の得手不得手を動かす
   { name: 'batter-stance-check', group: 'quick', slow: 2 },
+  // 高さと球種の噛み合い（高めの速球は振らせて当てさせない・低めの速球は手が出ない）
+  { name: 'pitch-height-check', group: 'quick', slow: 1 },
   { name: 'doc-check', group: 'quick', slow: 1 },
   // 社会人・独立の最初の名簿に投手が4人以上いるか（投手0人で試合が壊れた）
   { name: 'corporate-roster-check', group: 'quick', slow: 1 },

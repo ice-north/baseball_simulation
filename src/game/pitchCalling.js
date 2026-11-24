@@ -190,6 +190,8 @@ const FOOLED_PROTECT = 0.03;  // ゾーン内も「守って」振る
 export function swingProbability({
   inZone, quality, strikes = 0, batterEye = 50, pitcherControl = 50,
   isBreaking = false, breakingLevel = 50, zoneWeakness = 0, fooled = 0,
+  // ⚠ 高さは**球種と噛み合わせて**見る（`heightSwingBias`）。渡さない呼び出しは真ん中扱い
+  row = 2,
 } = {}) {
   const f = clamp(fooled, 0, 1);
   let p;
@@ -218,6 +220,8 @@ export function swingProbability({
   // 実データでは打者のホットゾーンのスイング率はコールドゾーンより約10pt高い。
   // weakness は -1(得意) 〜 +1(苦手)。母集団の平均は0なのでリーグ成績は動かない。
   p *= 1 - clamp(zoneWeakness, -1, 1) * SWING_ZONE_W;
+  // 【高めの速球は振ってもらえ、低めの速球は手が出ない】いしだ 2026-11-24
+  p *= 1 + heightSwingBias(row, isBreaking);
 
   return clamp(p, 0.02, 0.97);
 }
@@ -318,20 +322,46 @@ export function resolveBatterGuess(typeGuess, zoneGuess, { isBreaking, col, row 
  *
  *   高めの速球  … 打者がバットの下を振る（三振が取れる古典的な球）
  *   低めの変化球 … 落ちる球。バットの上を振る
- *   低めの速球  … 抜け球と同じで、いちばん打たれる
  *   高めの変化球 … 「抜けたスライダー」。長打になる
+ *   低めの速球  … **甘くはない**（下記）
  *
- * 対称なので母集団の平均は0＝リーグ成績は動かず、
- * 「どの高さにどの球種を要求するか」という配球の判断だけが効く。
- * これが無いと三振狙いの高め要求がフライを増やすだけで空振りを取れない。
+ * ⚠ いしだ 2026-11-24「低めのストレートは、意図と違いますね。低めに決まったストレートは
+ *    高めとはまた違う。高めは空振りを誘い、低めは手が出ない→スイングしにくいということ」。
+ *    それまでは「低めの速球＝抜け球と同じでいちばん打たれる」として +6/+4 の大盤振る舞いを
+ *    していた。**決まった低めの速球は良い球**で、打たれるのは浮いた速球のほう。
+ *    高めと低めで**効き方の種類が違う**ので、効き目を2つに分ける。
+ *      高めの速球 … 振ってもらえる（`heightSwingBias`）が、当たりは悪い（ここ）＝空振りが増える
+ *      低めの速球 … 当たりは少し甘いだけ（ここ）で、そもそも**手が出ない**（`heightSwingBias`）
  *
  * @param {number} row 0=高めボール 〜 4=低めボール
  * @param {boolean} isBreaking 変化球か
  */
 export function getHeightPitchEffect(row, isBreaking) {
   const r = Math.max(-1, Math.min(1, row - 2));   // -1=高め / +1=低め
-  const v = isBreaking ? r : -r;                  // 変化球は低いほど / 速球は高いほど有効
-  return { meet: -v * 6, power: -v * 4 };
+  // 変化球は低いほど有効（対称。落ちる球 ↔ 抜けたスライダー）
+  if (isBreaking) return { meet: -r * 6, power: -r * 4 };
+  // 速球は**非対称**。高めは当たりが悪く、低めは少し甘いだけ
+  if (r < 0) return { meet: -6, power: -4 };
+  return r > 0 ? { meet: 1, power: 1 } : { meet: 0, power: 0 };
+}
+
+// 高さと球種でスイング率をどれだけ動かすか。
+// ⚠ 打者の得意コース（`SWING_ZONE_W` 0.20）より小さくする。球種と高さの組み合わせが
+//    打者の個性より強く出ると、どの打者も同じ球を振る／見送ることになる。
+const HEIGHT_SWING_W = 0.12;
+/**
+ * 高さと球種によるスイング率の偏り（`swingProbability` に掛ける）。
+ *
+ * ⚠ いしだ 2026-11-24「高めは空振りを誘い、低めは手が出ない→スイングしにくい」。
+ *    **速球だけ**に効かせる。高めの速球は釣られて振り（当たりは悪い＝空振り）、
+ *    低めの速球は見送られる。変化球は0のまま（落ちる球に手が出るかは
+ *    `fooled`・釣り球の経路が既に見ている）。
+ * @returns 掛ける倍率そのものではなく**ずれ**（0 で変化なし）
+ */
+export function heightSwingBias(row, isBreaking) {
+  if (isBreaking) return 0;
+  const r = Math.max(-1, Math.min(1, row - 2));   // -1=高め / +1=低め
+  return -r * HEIGHT_SWING_W;
 }
 
 /** ボール球を打ったときの打球品質ペナルティ（泳いだ・引っ掛けた当たり） */
