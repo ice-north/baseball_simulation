@@ -46,7 +46,7 @@ const val TRADE_MIN_FITNESS = SUBSTITUTE_MIN_FITNESS
 private const val ROTATION_SIZE = 5
 
 /** 中継ぎを比べるときに数える人数 */
-private const val BULLPEN_SIZE = 4
+internal const val BULLPEN_SIZE = 4
 
 /** 守る力を重く見る位置ほど大きい（捕手・遊撃・二塁・中堅） */
 private val DEFENSE_WEIGHT = mapOf(
@@ -115,7 +115,7 @@ data class TeamUsage(
 data class SlotScore(val score: Double, val holder: Player?)
 
 /** 名簿の野手を、力の高い組み合わせから順に1人1か所・1か所1人で守備位置に当てる（空いた位置は力0） */
-private fun fielderAssignment(roster: List<Player>): MutableMap<String, SlotScore> {
+internal fun fielderAssignment(roster: List<Player>): MutableMap<String, SlotScore> {
     val out = mutableMapOf<String, SlotScore>()
     val fielderSlots = TRADE_SLOTS.filter { !it.pitcher }.map { it.key }
     val pairs = roster.filter { it.isActive && !it.isPitcher }.flatMap { p -> fielderSlots.mapNotNull { s -> slotStrength(p, s)?.let { Triple(p, s, it) } } }
@@ -131,7 +131,7 @@ private fun fielderAssignment(roster: List<Player>): MutableMap<String, SlotScor
 }
 
 /** 名簿の投手を、先発の力の上位 [ROTATION_SIZE] 人（ローテ）と、残りを救援の力の高い順（ブルペン）に分ける */
-private fun pitchingStaff(roster: List<Player>): Pair<List<Player>, List<Player>> {
+internal fun pitchingStaff(roster: List<Player>): Pair<List<Player>, List<Player>> {
     val pitchers = roster.filter { it.isActive && it.isPitcher }
     val rotation = pitchers.sortedByDescending { slotStrength(it, "sp") ?: 0.0 }.take(ROTATION_SIZE)
     val pen = (pitchers - rotation.toSet()).sortedByDescending { slotStrength(it, "rp") ?: 0.0 }
