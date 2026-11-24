@@ -944,6 +944,10 @@ export class LeagueService {
       try {
         migrated = this.ensureMigrated(bundle);
       } catch (error) {
+        // ⚠ 番人（終わった年の試合を読まない形）に触れた・複製できなかったときは握りつぶさず投げ直す。
+        //    保存側が全部を読み直してやり直す（`runWithLightRead`）。握りつぶすと、2年目以降は
+        //    版が上がるたびに移行が `structuredClone` で落ち続け、誰かが操作するまで進まなかった
+        if (error?.name === 'DataCloneError' || error?.name === 'NeedsFullWorld') throw error;
         console.error('online migrate failed:', error.message);
         return { unchanged: true, value: { advanced: false } };
       }
