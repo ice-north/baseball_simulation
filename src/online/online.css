@@ -4706,7 +4706,8 @@ small.online-gain:not(:where(.online-sp *)) {
   box-shadow: inset 0 2px 0 var(--accent);
 }
 
-/* --- 一人用の画面を中に入れるところ（`OnlineLineup` の PC版） ------------- */
+/* --- 一人用と同じ字の大きさに戻す包み（`.online-sp`。いまはスポーツ新聞 `SportsPaper.jsx`） --- */
+/* ⚠ もとは一人用の編成画面を入れていたところ（`OnlineLineup` の PC版。いまは無い） */
 /* ⚠ `.online` の文字の大きさ・行の高さを一人用と同じに戻す（Tailwind の既定と同じ）。
       15px/1.6 のままだと、一人用の画面の行が少しずつ高くなってカードからはみ出す */
 .online-sp {
