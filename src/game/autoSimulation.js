@@ -1186,13 +1186,15 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false, observer = 
     let unearnedRunsScored = 0;
     let outsMade = 0;
     let assistBy = null;
+    // 生還した走者（失点を走者を出した投手に付けるため。打者は本塁打のときだけ）
+    const scored = [];
     const isUnearnedRunner = (r) => !!(r && r._reachedOnError);
 
     if (hitType === 'homerun') {
       runsScored = 1 + bases.filter(b => b).length;
       unearnedRunsScored = bases.reduce((n, b) => n + (isUnearnedRunner(b) ? 1 : 0), 0)
         + (isUnearnedRunner(batter) ? 1 : 0);
-      return { bases: [false, false, false], runsScored, unearnedRunsScored, outsMade: 0, assistBy: null };
+      return { bases: [false, false, false], runsScored, unearnedRunsScored, outsMade: 0, assistBy: null, scored: [...bases.filter(b => b), batter] };
     }
 
     const advancement = hitType === 'single' ? 1 : hitType === 'double' ? 2 : 3;
@@ -1235,6 +1237,7 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false, observer = 
 
         if (newBase >= 3) {
           runsScored++;
+          scored.push(bases[i]);
           if (isUnearnedRunner(bases[i])) unearnedRunsScored++;
         } else {
           newBases[newBase] = bases[i]; // プレイヤー参照を維持（_reachedOnError も追随）
@@ -1246,13 +1249,25 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false, observer = 
     // 以前は `advancement < 3` で分けていたので、三塁打の打者が必ず生還していた）
     newBases[advancement - 1] = batter || true;
 
-    return { bases: newBases, runsScored, unearnedRunsScored, outsMade, assistBy };
+    return { bases: newBases, runsScored, unearnedRunsScored, outsMade, assistBy, scored };
   };
 
   // 得点を投手の自責点に計上する（失点は呼び出し側で別途加算済み）。
   //   非自責となるのは
   //     (a) 失策で出塁した走者が生還した分
   //     (b) 失策が無ければ既に3アウトだった後の得点（そのイニングは以降すべて非自責）
+  /** 球団の投手（登板した全員）の、その試合の投球成績の合計（観測の「この打席の失点」） */
+  const teamPitchingSum = (team, key) =>
+    team.players.reduce((n, p) => n + (p.gameStats?.pitching?.[key] || 0), 0);
+  /** 走者の失点を付ける投手（走者を出した投手。分からなければ `fallback`＝マウンドの投手） */
+  //    ⚠ 投手は id で持つ（走者は選手そのものなので、投手の参照を持たせると選手の写しに投手まで入る）
+  const chargedPitcherOf = (runner, fallback) => {
+    const id = runner && typeof runner === 'object' ? runner._chargedToId : null;
+    if (id == null || id === fallback?.id) return fallback;
+    const defense = gameState.isTopInning ? gameState.homeTeam : gameState.awayTeam;
+    const found = defense?.players?.find(p => p.id === id);
+    return found?.gameStats?.pitching ? found : fallback;
+  };
   const creditRuns = (pitcher, runsScored, unearnedRunsScored = 0) => {
     if (!pitcher || runsScored <= 0) return;
     const ps = pitcher.gameStats.pitching;
@@ -1264,12 +1279,15 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false, observer = 
   // 走者1人の生還: 攻撃側の得点・投手の失点・自責の内訳（`unearned` が 1 なら非自責）。
   // 打点は付かない場面（暴投・捕逸など）があるので呼ぶ側で足す。
   // ⚠ 1人ずつの生還はここを通す（以前は同じ4行が7か所に写してあった）。複数人の生還（安打）は打席の終わりでまとめて足す
-  const scoreRun = (pitcher, unearned) => {
+  // ⚠ 失点・自責は**その走者を出した投手**に付ける（`runner._chargedToId`。打席の頭で付ける）。
+  //    以前はいつもマウンドの投手に付け、引き継いだ走者の生還が救援投手の失点になっていた（2026-11-24 監査）
+  const scoreRun = (pitcher, unearned, runner = null) => {
     if (gameState.isTopInning) gameState.score.away++;
     else gameState.score.home++;
-    if (!pitcher?.gameStats?.pitching) return;
-    pitcher.gameStats.pitching.runsAllowed++;
-    creditRuns(pitcher, 1, unearned);
+    const charged = chargedPitcherOf(runner, pitcher);
+    if (!charged?.gameStats?.pitching) return;
+    charged.gameStats.pitching.runsAllowed++;
+    creditRuns(charged, 1, unearned);
   };
 
   // 四球・死球の押し出し（`baseState.forceAdvance`。詰まっている走者だけが1つ進む）。
@@ -1279,7 +1297,7 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false, observer = 
   const forceAdvanceOnWalk = (batter, pitcher) => {
     const { bases, scored } = forceAdvance(gameState.bases, batter);
     for (const runner of scored) {
-      scoreRun(pitcher, runner?._reachedOnError ? 1 : 0);
+      scoreRun(pitcher, runner?._reachedOnError ? 1 : 0, runner);
       batter.gameStats.batting.rbis++;
     }
     for (let i = 0; i < 3; i++) gameState.bases[i] = bases[i];
@@ -1344,7 +1362,7 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false, observer = 
               } else {
                 // 生還（失策絡みなので非自責）
                 if (runnerObj && typeof runnerObj === 'object') runnerObj._reachedOnError = true;
-                scoreRun(getCurrentPitcher(defenseTeam), 1);
+                scoreRun(getCurrentPitcher(defenseTeam), 1, runnerObj);
               }
               if (catcher?.gameStats?.fielding) {
                 catcher.gameStats.fielding.errors++;
@@ -2064,7 +2082,7 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false, observer = 
       if (b[1]) {
         if (b[2]) {   // 満塁の押し出し
           batter.gameStats.batting.rbis++;
-          scoreRun(pitcher, b[2]?._reachedOnError ? 1 : 0);
+          scoreRun(pitcher, b[2]?._reachedOnError ? 1 : 0, b[2]);
         }
         b[2] = b[1];
       }
@@ -2106,6 +2124,8 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false, observer = 
     //    `const pitcher` のまま打席を進めており、全打席の約6%で交代済みの投手が投げていた
     //    （左のワンポイントは狙った左打者ではなく次の打者と対戦していた）
     pitcher = getCurrentPitcher(defenseTeam) || pitcher;
+    // 塁に出たら、この打者の生還の失点はこの投手に付く（`chargedPitcherOf`。救援が引き継いでも）
+    batter._chargedToId = pitcher?.id ?? null;
     observeDecisions();   // この打者に投げる投手を登板順に記録（登板時の点差つき）
     const catcher = getCurrentCatcher(defenseTeam);
     const defense = buildDefense(defenseTeam);
@@ -2117,8 +2137,9 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false, observer = 
       batterId: batter.id, batterName: batter.name, pitcherId: pitcher.id, pitcherName: pitcher.name,
       // 捕手の成績（マスクをかぶった時の投手成績）のため。失点・自責点はこの打席で増えたぶん
       catcherId: catcher?.id ?? null,
-      runsBefore: pitcher.gameStats.pitching.runsAllowed || 0,
-      earnedBefore: pitcher.gameStats.pitching.earnedRuns || 0,
+      // ⚠ 球団の投手全員の合計で見る（引き継いだ走者の生還は前の投手に付くので、この打席の失点が漏れる）
+      runsBefore: teamPitchingSum(defenseTeam, 'runsAllowed'),
+      earnedBefore: teamPitchingSum(defenseTeam, 'earnedRuns'),
       calls: 0, reads: 0,
       offense: offenseTeam.name, defense: defenseTeam.name,
       inning: gameState.inning, pinchHit: batter.id !== scheduledBatterId,
@@ -2195,7 +2216,7 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false, observer = 
         if (buntDecision === 'squeeze') {
           if (buntResult.squeezeRunnerSafe && gameState.bases[2]) {
             batter.gameStats.batting.rbis++;
-            scoreRun(pitcher, gameState.bases[2]?._reachedOnError ? 1 : 0);
+            scoreRun(pitcher, gameState.bases[2]?._reachedOnError ? 1 : 0, gameState.bases[2]);
             atBatDamagePoints += 10;
             gameState.bases[2] = false;
           } else if (!buntResult.squeezeRunnerSafe && gameState.bases[2]) {
@@ -2293,7 +2314,7 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false, observer = 
             const r = gameState.bases[b];
             gameState.bases[b] = false;
             if (b === 2) {
-              scoreRun(getCurrentPitcher(defenseTeam), (r && r._reachedOnError) ? 1 : 0);
+              scoreRun(getCurrentPitcher(defenseTeam), (r && r._reachedOnError) ? 1 : 0, r);
             } else {
               gameState.bases[b + 1] = r;
             }
@@ -2416,9 +2437,10 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false, observer = 
             });
             if (adv.scoreFromThird) {
               const unearned = gameState.bases[2]?._reachedOnError ? 1 : 0;
+              const runner = gameState.bases[2];
               gameState.bases[2] = false;
               batter.gameStats.batting.rbis++;
-              scoreRun(pitcher, unearned);
+              scoreRun(pitcher, unearned, runner);
               atBatDamagePoints += 10; // 失点=10ダメージ
             }
             if (adv.secondToThird) {
@@ -2435,12 +2457,13 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false, observer = 
               if (Math.random() >= throwbackChance) {
                 // 送球間に合わず得点
                 const sfUnearned = gameState.bases[2]?._reachedOnError ? 1 : 0;
+                const sfRunner = gameState.bases[2];
                 gameState.bases[2] = false;
                 batter.gameStats.batting.rbis++;
                 // 犠牲フライは打数に入れない（上で足した1を戻し、犠飛として数える）
                 batter.gameStats.batting.atBats--;
                 batter.gameStats.batting.sacrificeFlies = (batter.gameStats.batting.sacrificeFlies || 0) + 1;
-                scoreRun(pitcher, sfUnearned);
+                scoreRun(pitcher, sfUnearned, sfRunner);
                 atBatDamagePoints += 10; // 失点=10ダメージ
               } else {
                 gameState.bases[2] = false;
@@ -2484,7 +2507,7 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false, observer = 
             batter._reachedOnError = true;   // 失策出塁の走者＝この走者の生還は非自責
             gameState.inningErrorOuts++;     // 失策が無ければアウトだった＝想定アウトを1つ加算
           }
-          const { bases: newBases, runsScored, unearnedRunsScored, outsMade, assistBy } =
+          const { bases: newBases, runsScored, outsMade, assistBy, scored } =
             advanceRunners(result.type, gameState.bases, defense, batter, !!result.extraAdvance,
               result.fieldingPosition || null, gameState.outs);
           batter.gameStats.batting.atBats++;
@@ -2519,10 +2542,14 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false, observer = 
           if (gameState.isTopInning) gameState.score.away += runsScored;
           else gameState.score.home += runsScored;
 
-          pitcher.gameStats.pitching.runsAllowed += runsScored;
+          // 失点は走者を出した投手に1人ずつ付ける（`chargedPitcherOf`）。
           // 自責点: 失策で出塁した走者の生還は除外。さらに失策が無ければ既に3アウトだった場合、
           // そのイニングの以降の得点は全て非自責（公式のイニング再構成ルール）。
-          creditRuns(pitcher, runsScored, unearnedRunsScored);
+          for (const runner of scored) {
+            const charged = chargedPitcherOf(runner, pitcher);
+            charged.gameStats.pitching.runsAllowed += 1;
+            creditRuns(charged, 1, runner?._reachedOnError ? 1 : 0);
+          }
           // 捕殺（走者を本塁/塁上で刺した）→ アウトを加算し、送球した野手に記録
           if (outsMade > 0) {
             gameState.outs += outsMade;
@@ -2555,8 +2582,8 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false, observer = 
       const completed = delta.atBats + delta.walks + delta.hitByPitch + delta.sacrificeBunts + delta.sacrificeFlies > 0;
       // endBases: 打席の後の塁（オンラインの打席速報が読む）
       observer.plateAppearance({ ...observed, delta, completed, scoreAfter: { ...gameState.score }, endBases: basesMask(gameState.bases), outs: pitcher.gameStats.pitching.outs - (observed.resultStartOuts ?? pitcher.gameStats.pitching.outs),
-        runs: (pitcher.gameStats.pitching.runsAllowed || 0) - observed.runsBefore,
-        earnedRuns: (pitcher.gameStats.pitching.earnedRuns || 0) - observed.earnedBefore });
+        runs: teamPitchingSum(defenseTeam, 'runsAllowed') - observed.runsBefore,
+        earnedRuns: teamPitchingSum(defenseTeam, 'earnedRuns') - observed.earnedBefore });
     }
 
     // 先発投手のダメージポイント積算（先発のみに適用）
@@ -2587,8 +2614,8 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false, observer = 
     // 塁が空になるこのタイミングで、失策出塁フラグも全選手からクリアしておく
     // （次のイニング以降に持ち越さないため）。
     gameState.inningErrorOuts = 0;
-    gameState.homeTeam.players.forEach(p => { if (p._reachedOnError) delete p._reachedOnError; });
-    gameState.awayTeam.players.forEach(p => { if (p._reachedOnError) delete p._reachedOnError; });
+    gameState.homeTeam.players.forEach(p => { if (p._reachedOnError) delete p._reachedOnError; delete p._chargedToId; });
+    gameState.awayTeam.players.forEach(p => { if (p._reachedOnError) delete p._reachedOnError; delete p._chargedToId; });
 
     const inningLabel = `${gameState.inning}回${gameState.isTopInning ? '表' : '裏'}`;
     const offenseTeam = gameState.isTopInning ? gameState.awayTeam.name : gameState.homeTeam.name;
