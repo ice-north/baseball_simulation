@@ -72,6 +72,7 @@ import jp.icenorth.baseball.shared.ownSlotScores
 import jp.icenorth.baseball.shared.surplusPlayers
 import jp.icenorth.baseball.shared.tradeCandidates
 import jp.icenorth.baseball.shared.gettingTradeValues
+import jp.icenorth.baseball.shared.givingTradeValues
 import jp.icenorth.baseball.shared.tradeOdds
 import jp.icenorth.baseball.shared.tradeStrengthGap
 import jp.icenorth.baseball.shared.tradeOddsBounds
@@ -750,7 +751,11 @@ private fun PlayersStep(
                     MeritTags(merits.players.map { MeritTag("${it.name}: ${it.tags.first().text}", it.tags.first().tone) } + merits.tags)
                 }
                 if (rule != null && draft.get.isNotEmpty()) {
-                    OddsMeter(myPlayers.filter { it.id in draft.give }.map { it.tradeValue }, gettingTradeValues(theirPlayers, theirPlayers.filter { it.id in draft.get }), rule, compact = true, gap = strengthGapOf(rule, myPlayers, theirs?.let { theirPlayers }, draft.give, draft.get))
+                    // ⚠ 出す選手は相手で出番があるかを乗せた値段（Web 版・サーバーと同じ [givingTradeValues]）
+                    val givingValues = remember(theirs, theirPlayers, myPlayers, draft.give, draft.get) {
+                        givingTradeValues(theirs?.let { theirPlayers.filter { it.id !in draft.get } }, myPlayers.filter { it.id in draft.give })
+                    }
+                    OddsMeter(givingValues, gettingTradeValues(theirPlayers, theirPlayers.filter { it.id in draft.get }), rule, compact = true, gap = strengthGapOf(rule, myPlayers, theirs?.let { theirPlayers }, draft.give, draft.get))
                 }
                 problems.forEach { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error) }
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -804,6 +809,11 @@ private fun ConfirmStep(
     val myPlayers = remember(view.roster, league) { league.withValues(view.roster) }
     val giving = myPlayers.filter { it.id in draft.give }
     val getting = theirPlayers.filter { it.id in draft.get }
+    // ⚠ 出す選手の値段は、相手で出番があるかを乗せたもの（Web 版の見込みメーター・サーバーの
+    //    `cpuDecisionFor` と同じ [givingTradeValues]。もらう選手を抜いた相手の名簿で測る）。1回だけ計算する
+    val givingValues = remember(theirs, theirPlayers, myPlayers, draft.give, draft.get) {
+        givingTradeValues(theirs?.let { theirPlayers.filter { it.id !in draft.get } }, myPlayers.filter { it.id in draft.give })
+    }
     val usage = remember(view.lineup) { TeamUsage.from(view.lineup) }
     val submit = {
         if (counter != null) {
@@ -847,13 +857,13 @@ private fun ConfirmStep(
             ConfirmSide("もらう（${view.teamLabel(partner)}）", draft.get, if (theirs == null) null else getting, model, partner, league.tier)
             theirError?.let { LoadFailed(it, retryTheirs, title = "相手の名簿を読めませんでした") }
             if (rule != null && counter == null) Section("${view.teamLabel(partner)}の見込み") {
-                OddsMeter(giving.map { it.tradeValue }, gettingTradeValues(if (theirs == null) null else theirPlayers, getting), rule, gap = strengthGapOf(rule, myPlayers, theirs?.let { theirPlayers }, draft.give, draft.get))
+                OddsMeter(givingValues, gettingTradeValues(if (theirs == null) null else theirPlayers, getting), rule, gap = strengthGapOf(rule, myPlayers, theirs?.let { theirPlayers }, draft.give, draft.get))
             }
             if (theirs != null) Section("${view.teamShort(partner)}へのメリット") {
                 // 弱い持ち場の順位は相手以外の球団（自球団を含む。PC版と同じ）の中で
                 val merits = remember(theirPlayers, giving, draft.get, league.teams) { tradeMerits(theirPlayers, giving, draft.get, league.teams - partner) }
                 val odds = if (rule != null && counter == null) cpuOddsOf(
-                    giving.map { it.tradeValue }, gettingTradeValues(theirPlayers, getting), rule,
+                    givingValues, gettingTradeValues(theirPlayers, getting), rule,
                     strengthGapOf(rule, myPlayers, theirPlayers, draft.give, draft.get),
                 ) else null
                 MeritBody(merits, odds)

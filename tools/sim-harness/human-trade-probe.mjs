@@ -4,18 +4,23 @@
 //   node tools/sim-harness/human-trade-probe.mjs none 11    … しない（標準案だけ）
 // 人2人のリーグを標準案で回し、開幕前・1年目の60日目・2年目の開幕にトレードを探す。
 // 2年目に各球団が約73試合を終えたところの順位（* が人の球団）と、持ち場の力の合計
-// （`squadStrength`）を出す。1本で約10分。
+// （`squadStrength`）を出す。1本で約3分（2026-11-24）。
 // 2026-11-14 の実測（種 11/22/33/44、2年目の人の勝率の平均）:
 //   値段だけで受けていた頃 .69（最高 .81）／戦力の開きを見る今 .54／トレードしない .53
+// 2026-11-24 の実測（CPUの判断をサーバーの `cpuDecisionFor` そのものにした。出番の上乗せ +50%・
+//   1人ずつ順に足す数え方・逆提案の測り直しこみ。種 11/22/33/44。1本 約3分）:
+//   2年目の人の勝率の平均 .589（.583/.562・.569/.427・.667/.597・.671/.639）、成立したトレード 計148件
+//   （1リーグ 34〜39件）／トレードしない（種11だけ）.415。
+//   ⚠ それまでのこの道具は出番の上乗せを掛けておらず、サーバーより受ける交換を少なく見ていた
 import './lib/bootstrap.mjs';
 import {
   createLeague, defaultPhasePlan, submitPhase, advanceLeagueDay, loadLeagueWorld, captureLeagueWorld, openTrade,
+  cpuDecisionFor,
 } from '../../server/leagueEngine.mjs';
 import { TEAMS_DATA } from '../../src/teams-data.js';
 import { tradeJudgeForLeague } from '../../server/tradeJudge.mjs';
-import { tradeFactorFor } from '../../server/coachEngine.mjs';
-import { cpuTradeDecision, assertTradeAllowed } from '../../src/online/trades.js';
-import { squadStrength, tradeStrengthGap } from '../../src/online/tradeSearch.js';
+import { assertTradeAllowed } from '../../src/online/trades.js';
+import { squadStrength } from '../../src/online/tradeSearch.js';
 
 const MODE = process.argv[2] || 'trade'; // trade | none
 const SEED = Number(process.argv[3] || 20261028);
@@ -55,7 +60,6 @@ function tradeRound(label) {
       for (const to of names()) {
         if (humans.has(to)) continue;
         const theirs = TEAMS_DATA[to].players;
-        const factor = tradeFactorFor(league, to);
         for (const want of theirs) {
           for (const offer of offers) {
             if (offer.length === 2 && theirs.length >= 26) continue;
@@ -63,13 +67,9 @@ function tradeRound(label) {
             const gain = squadStrength(after) - base;
             if (gain <= 1 || (best && gain <= best.gain)) continue;
             try { assertTradeAllowed({ players: mine }, { players: theirs }, offer.map((p) => p.id), [want.id]); } catch { continue; }
-            const d = cpuTradeDecision({
-              valueOf: (p) => judge.valueOf(p) * factor(p),
-              valueOfOwn: (p) => judge.valueOf(p, to) * factor(p),
-              lossOf: (ps) => judge.setValuesOf(ps, to).map((v, i) => v * factor(ps[i])),
-              strengthGap: (give, get) => tradeStrengthGap(mine, theirs, give, get),
-              fromPlayers: mine, toPlayers: theirs, offerIds: offer.map((p) => p.id), wantIds: [want.id],
-            });
+            // ⚠ CPUの判断は**サーバーの関数そのもの**（`cpuDecisionFor`。出番の上乗せ・まとめて抜けた穴・
+            //    戦力の開き）。値段の式をここに写すと、サーバーを変えたときに測るものが食い違う
+            const d = cpuDecisionFor(league, TEAMS_DATA[member.teamName], to, offer.map((p) => p.id), [want.id], judge);
             if (d.action === 'accept') best = { gain, to, offer, want };
           }
         }

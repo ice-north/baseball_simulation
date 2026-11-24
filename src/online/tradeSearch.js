@@ -462,6 +462,47 @@ export const playingTimeFactor = (roster, player) =>
   1 + PLAYING_TIME_BONUS * playingTimeShare(roster, player);
 
 /**
+ * 何人かまとめて受け取るときの、1人ずつの出番の度合い（並びは `players` と同じ）。
+ * ⚠ **1人ずつ順に名簿へ足して、その人が足した分だけを数える**。1人ずつ `roster` と比べると、
+ *    同じ持ち場に2人出したとき2人とも「一番になれる」と数え、上乗せが二重に付いた
+ *    （遊撃30の球団へ遊撃70を2人で、本当の上積み40に対して80ぶん。監査 2026-11-24）。
+ * ⚠ 足す順は**持ち場での力の高い順**（同じなら id の小さい順）。渡された並びに頼らない
+ *    （画面とサーバーで並びが違っても同じ答えにするため）。アプリの `playingTimeShares` と同じ。
+ */
+export function playingTimeShares(roster, players) {
+  const list = players || [];
+  const order = list
+    .map((p, i) => ({ p, i, own: bestSlot(p)?.strength ?? 0 }))
+    .sort((a, b) => b.own - a.own || Number(a.p.id) - Number(b.p.id));
+  const out = new Array(list.length).fill(0);
+  let base = [...(roster || [])];
+  let before = squadStrength(base);
+  for (const { p, i, own } of order) {
+    const next = [...base, p];
+    const after = squadStrength(next);
+    out[i] = own > 0 ? Math.max(0, Math.min(1, (after - before) / own)) : 0;
+    base = next;
+    before = after;
+  }
+  return out;
+}
+
+/**
+ * CPU球団が受け取る選手（提案した側が出す選手）の値段（並びは `give` と同じ）。
+ * `valueOf` の値段に、その球団で出番があるかの上乗せ（`PLAYING_TIME_BONUS`）を掛ける。
+ * `rosterAfter` は**この交換で出ていく選手を抜いた**受け取る側の名簿。
+ * ⚠ サーバーの `cpuDecisionFor`・Web の見込みメーター・アプリの `givingTradeValues` が同じこれを使う。
+ *    値段の読めない選手（数でない）はそのまま返す。
+ */
+export function givingTradeValues(rosterAfter, give, valueOf) {
+  const shares = playingTimeShares(rosterAfter, give);
+  return (give || []).map((p, i) => {
+    const v = valueOf(p);
+    return Number.isFinite(v) ? v * (1 + PLAYING_TIME_BONUS * shares[i]) : v;
+  });
+}
+
+/**
  * CPU球団が受ける「戦力の開き」の上限（`squadStrength` の点）。
  *
  * ⚠ **値段の釣り合いだけでは足りない**（いしだ 2026-11-14「2年目に人の球団が勝ちすぎる」）。

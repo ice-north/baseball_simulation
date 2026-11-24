@@ -344,6 +344,38 @@ fun playingTimeFactor(roster: List<Player>, player: Player): Double =
     1.0 + PLAYING_TIME_BONUS * playingTimeShare(roster, player)
 
 /**
+ * 何人かまとめて受け取るときの、1人ずつの出番の度合い（並びは [players] と同じ。Web 版 `playingTimeShares` と同じ）。
+ * ⚠ 1人ずつ順に名簿へ足して、その人が足した分だけを数える（同じ持ち場に2人出しても上乗せを二重にしない）。
+ *    足す順は持ち場での力の高い順（同じなら id の小さい順）。
+ */
+fun playingTimeShares(roster: List<Player>, players: List<Player>): List<Double> {
+    val order = players.indices.map { i -> Triple(i, players[i], bestSlot(players[i])?.second ?: 0.0) }
+        .sortedWith(compareByDescending<Triple<Int, Player, Double>> { it.third }.thenBy { it.second.id })
+    val out = MutableList(players.size) { 0.0 }
+    var base = roster
+    var before = squadStrength(base)
+    for ((i, p, own) in order) {
+        val next = base + p
+        val after = squadStrength(next)
+        out[i] = if (own > 0.0) ((after - before) / own).coerceIn(0.0, 1.0) else 0.0
+        base = next
+        before = after
+    }
+    return out
+}
+
+/**
+ * CPU球団が受け取る選手（こちらが出す選手）の値段（並びは [give] と同じ。Web 版 `givingTradeValues`・
+ * サーバーの `cpuDecisionFor` と同じ）。[Player.tradeValue] に、その球団で出番があるかの上乗せを掛ける。
+ * [rosterAfter] は**この交換でもらう選手を抜いた**相手の名簿。読めないとき（null）は上乗せしない。
+ */
+fun givingTradeValues(rosterAfter: List<Player>?, give: List<Player>): List<Double?> {
+    if (rosterAfter == null) return give.map { it.tradeValue }
+    val shares = playingTimeShares(rosterAfter, give)
+    return give.mapIndexed { i, p -> p.tradeValue?.let { it * (1.0 + PLAYING_TIME_BONUS * shares[i]) } }
+}
+
+/**
  * CPU球団が受ける「戦力の開き」の上限（[squadStrength] の点。Web 版 `STRENGTH_GAP_LIMIT` と同じ）。
  * 提案した側の伸びがCPUの伸びをこれより上回る交換は、値段が釣り合っても断る。
  * 画面はサーバーが渡す決まり（[CpuTradeRule.gapLimit]）を使う。
