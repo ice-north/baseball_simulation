@@ -265,7 +265,9 @@ private fun DrawScope.drawPlainItem(s: LookItem, path: Path?, measurer: TextMeas
             val layout = textMeasurer.measure(text, style)
             val topLeft = Offset(s.x!!.toFloat() - layout.size.width / 2f, s.y!!.toFloat() - layout.firstBaseline)
             stroke?.let { drawText(layout, it, topLeft, alpha = alpha, drawStyle = line) }
-            fill?.let { drawText(layout, it, topLeft, alpha = alpha) }
+            // ⚠ 塗りは `Fill` を必ず渡す。省くと（null）字の筆が前の「縁」のままで、塗りも縁の太さの線で描かれる
+            //    （字の中が抜けて、縁の色がほとんど見えなくなる。測った字は使い回すので、次の描画にも残る）
+            fill?.let { drawText(layout, it, topLeft, alpha = alpha, drawStyle = Fill) }
         }
     }
 }
