@@ -16,7 +16,8 @@ import { bootstrapWorld, TEAMS_DATA } from './lib/world.mjs';
 import { getTransferCandidates, transferManagerTo } from '../../src/game/managerTransfer.js';
 import { generateExpansionRoster, generateTryoutCandidates, updateReleasedPoolAfterTryout } from '../../src/season/tryoutSystem.js';
 import { releasedPlayersPool } from '../../src/teams-data.js';
-import { executeTeamCampTraining } from '../../src/season/campTraining.js';
+import { executeTeamCampTraining, executeSubTraining, campSubKey } from '../../src/season/campTraining.js';
+import { battingStanceOf } from '../../src/game/batterZone.js';
 import { LEAGUE_SETTINGS } from '../../src/teams-data.js';
 import { ensureCompleteLineup } from '../../src/game/lineup.js';
 import { autoSimulateGame, generateAILineup, setRecommendedLineup } from '../../src/game/autoSimulation.js';
@@ -892,4 +893,58 @@ for (const [count, games] of [[4, 144], [4, 150], [6, 145], [5, 148], [7, 150]])
   assert.equal(pitcher.experience, 10 + 1 + 6, `采配した試合で投手の経験値が積まれない（${pitcher.experience}）`);
 }
 
-console.log('■ 一人用の進行の再発防止: OK（采配した試合でも経験値を積む・DH は守備位置に数えない / オフの CHAMPION はプレーオフの優勝球団 / 翌年の球団名の変更は改名で名簿を引き継ぐ・使えない名前は確定しない / 翌年の球団数の変更で leagueConfig も揃う・ロードで直す / 控えに回った元の DH に印が残らず DH が2人にならない / DH制の采配試合で相手の先発が予告どおり / 1球団の設定で日程づくりが終わらない / 翌年のレギュレーションの確定で次の画面へ / 監督移籍で自チームが先頭 / 派遣中はキャンプ練習なし / 日程は4月〜10月9日で全試合を置く / 同じ日に同じ球団は1試合・入りきる試合数だけ選べる / DH制の先発と打順が食い違わない / 戦力外の選手を二重に加齢しない / マジックは点灯してから出す / 名簿を離れた選手もその年の成績に残る / FA枠は解雇された選手から引く / 大学の部の入れ替えのあとも先頭は自チーム）');
+// --- 一人用のキャンプ: サブポジ練習で自分の球団の守備位置を動かさない（オンラインの人の球団と同じ） ---
+// ⚠ 方針「短所を埋める×技術」はサブポジ練習で、対象が無いと一番高いほかの位置を上げ、
+//    後の `syncPositionToFitness` で遊撃手が二塁へ黙って移っていた（200人中90人）。
+//    CampScreen は自分の球団に `keepPosition` を渡す。CPU球団（渡さない）は今までどおり合わせる
+{
+  const shortstop = () => ({
+    id: 'ss', name: '検査遊撃', position: 'short', physical: { dexterity: 50 }, fielding: { defense: 50 },
+    positionFitness: { catcher: 30, first: 30, second: 79, third: 30, short: 80, left: 30, center: 30, right: 30 },
+  });
+  const kept = shortstop();
+  executeSubTraining(kept, 'subposition', { keepPosition: true }, null);
+  assert.ok(kept.positionFitness.second > kept.positionFitness.short, '検査の前提: 二塁の適性が遊撃を越えていない');
+  assert.equal(kept.position, 'short', '一人用の自分の球団の遊撃手がサブポジ練習で二塁へ移った');
+  const cpu = shortstop();
+  executeSubTraining(cpu, 'subposition', {}, null);
+  assert.equal(cpu.position, 'second', 'CPU球団は適性に合わせて守備位置が動くはず（keepPosition を渡していない）');
+}
+
+// --- 一人用のキャンプ: 選んだ打撃フォーム・投球フォームは、変わったあとのクールでまた変わらない ---
+// ⚠ 画面の選択（サブ練習と対象）はクールをまたいで残る。対象＝いまの形だと `executeSubTraining` は
+//    別の形を抽選し、ミート・制球の減点も重なっていた。CampScreen は `campSubKey` を通す（オンラインと同じ）
+{
+  const batter = {
+    id: 'bt', name: '検査打者', position: 'left', battingStance: 'open',
+    physical: { dexterity: 50 }, batting: { meet: 50, power: 50, bats: 'right' },
+  };
+  const pitcher = {
+    id: 'pt', name: '検査投手', position: 'pitcher', physical: { dexterity: 50 },
+    pitching: { form: 'overhand', control: 50, arsenal: [{ type: 'straight', level: 50 }] },
+  };
+  const stances = [];
+  const forms = [];
+  let stanceTries = 0;
+  let formTries = 0;
+  for (let round = 1; round <= 4; round += 1) {
+    const bKey = campSubKey('form_change', batter, 'closed');
+    if (bKey === 'form_change') stanceTries += 1;
+    executeSubTraining(batter, bKey, { targetStance: 'closed', keepPosition: true }, null);
+    stances.push(battingStanceOf(batter));
+    const pKey = campSubKey('form_change', pitcher, 'sidearm');
+    if (pKey === 'form_change') formTries += 1;
+    executeSubTraining(pitcher, pKey, { targetForm: 'sidearm', keepPosition: true }, null);
+    forms.push(pitcher.pitching.form);
+  }
+  assert.deepEqual(stances, ['closed', 'closed', 'closed', 'closed'], `打撃フォームが選んだ形から動いた: ${stances}`);
+  assert.deepEqual(forms, ['sidearm', 'sidearm', 'sidearm', 'sidearm'], `投球フォームが選んだ形から動いた: ${forms}`);
+  assert.equal(stanceTries, 1, '打撃フォーム改造が2回以上回った（減点が重なる）');
+  assert.equal(formTries, 1, '投球フォーム改造が2回以上回った（減点が重なる）');
+  // 対象が無い（「未選択」）なら基礎体力。オンラインと同じ
+  assert.equal(campSubKey('form_change', batter, undefined), 'physique');
+  assert.equal(campSubKey('switch_hit', batter, 'right'), 'physique', 'いまと同じ打席を選んだのに打席変更が回る');
+  assert.equal(campSubKey('switch_hit', batter, 'left'), 'switch_hit');
+}
+
+console.log('■ 一人用の進行の再発防止: OK（一人用のキャンプでサブポジ練習が自分の守備位置を動かさない・選んだフォームに変わったあと次のクールでまた変わらない / 采配した試合でも経験値を積む・DH は守備位置に数えない / オフの CHAMPION はプレーオフの優勝球団 / 翌年の球団名の変更は改名で名簿を引き継ぐ・使えない名前は確定しない / 翌年の球団数の変更で leagueConfig も揃う・ロードで直す / 控えに回った元の DH に印が残らず DH が2人にならない / DH制の采配試合で相手の先発が予告どおり / 1球団の設定で日程づくりが終わらない / 翌年のレギュレーションの確定で次の画面へ / 監督移籍で自チームが先頭 / 派遣中はキャンプ練習なし / 日程は4月〜10月9日で全試合を置く / 同じ日に同じ球団は1試合・入りきる試合数だけ選べる / DH制の先発と打順が食い違わない / 戦力外の選手を二重に加齢しない / マジックは点灯してから出す / 名簿を離れた選手もその年の成績に残る / FA枠は解雇された選手から引く / 大学の部の入れ替えのあとも先頭は自チーム）');

@@ -2,8 +2,6 @@ import { numberLeagueTeams, captainsOfYear, updateTeamFace } from './teamFace.mj
 import './engine-bootstrap.mjs';
 import { schedulePlayoffReplay, PLAYOFF_REPLAY } from './playoffReplay.mjs';
 import { selectHonors } from './seasonAwards.mjs';
-// 打撃フォーム（野手のフォーム改造の対象）。既定は名前とIDから決まる
-import { battingStanceOf } from '../src/game/batterZone.js';
 import {
   recordMilestones,
   recordKoshien,
@@ -91,6 +89,7 @@ import {
   menuFitsPlayer,
   subMenuFitsPlayer,
   canonicalSubMenu,
+  campSubKey,
   SUB_TRAINING_MENUS,
   calcSecondAffinity,
 } from '../src/season/campTraining.js';
@@ -185,7 +184,6 @@ import {
   CAMP_BATS,
   CAMP_STANCES,
   campTargetKind,
-  currentBats,
   onlineFielderFatigueFor,
 } from '../src/online/shared.js';
 import {
@@ -407,29 +405,9 @@ function campTargetOptions(key, value, player) {
   return {};
 }
 
-/**
- * 実際に回すサブ練習。フォーム改造（投手）と打席変更は、**対象が無いか、もうその形なら基礎体力**。
- * ⚠ 一人用は対象が無ければ抽選する。オンラインは4クールを同じ指示で回すので、抽選だと
- *    クールごとにフォームが変わり続け、変わったあとも次のクールでまた別の形に変わる
- *    （`executeSubTraining` は対象＝いまの形なら抽選に戻る）。
- * ⚠ 打席変更は失敗すると打席が変わらないので、次のクールでまた挑む（成功したら止まる）
- */
-export function campSubKey(rawKey, player, target) {
-  // ⚠ まとめた古い名前（守備補強 → サブポジ練習）は今の名前で回す。保存済みの計画に残っている
-  const key = canonicalSubMenu(rawKey);
-  // ⚠ フォーム改造は投手と野手で別物（投球フォーム / 打撃フォーム）
-  if (key === 'form_change' && player?.position !== 'pitcher')
-    return CAMP_STANCES.includes(target) && target !== battingStanceOf(player)
-      ? key
-      : 'physique';
-  if (key === 'form_change')
-    return CAMP_FORMS.includes(target) && target !== (player.pitching?.form || 'threeQuarter')
-      ? key
-      : 'physique';
-  if (key === 'switch_hit')
-    return CAMP_BATS.includes(target) && target !== currentBats(player) ? key : 'physique';
-  return key;
-}
+// 実際に回すサブ練習（フォーム改造・打席変更は、対象が無いか、もうその形なら基礎体力）。
+// ⚠ 一人用のキャンプ画面と同じ規則なので `campTraining.js` に置いた。検査が読むのでここからも出す
+export { campSubKey };
 
 /**
  * キャンプを**1クールだけ**走らせる。
