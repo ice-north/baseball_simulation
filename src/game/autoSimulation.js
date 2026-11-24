@@ -1,29 +1,18 @@
-import { tacticalChance, tacticalPitchLimit, tacticalDamageLimit, STRATEGY_MODS } from '../online/tactics.js';
+import { tacticalChance, tacticalPitchLimit, tacticalDamageLimit } from '../online/tactics.js';
 import { createDecisionLog, observeDecisionLog, decisionsFromResult, recordDecisions } from './pitcherDecisions.js';
 import { TEAMS_DATA, LEAGUE_SETTINGS, normalizeMaxExtraInnings } from '../teams-data.js';
-import { calculatePhysicsContact, calculateBattedBallPhysics, judgeFielderReach, getTunnelingEffect, getThrowErrorRate, spinAdjustedArsenal } from '../simulation-logic.js';
-import { PITCHING_FORM_EFFECTS, adjustGrowthModifier, applyFatigueGrowthPenalty, DP_BASE,
-  pitchVelocityDrop, isUnreadablePitch, isPitcherPlayer, addFatigue } from '../utils/constants.js';
-import { conditionBattingMod, CONDITION_PITCHING_MODIFIER, CONDITION_LEVELS, initializeCondition,
-  lineupConditionMod, batterFatiguePenalty } from './condition.js';
-import { getPositionFitness, getHandednessEffect } from '../utils/physics.js';
-import { contactFoulProbability, isDirectionalFoul } from './contactRules.js';
+import { getThrowErrorRate } from '../simulation-logic.js';
+import { adjustGrowthModifier, applyFatigueGrowthPenalty, isPitcherPlayer, addFatigue } from '../utils/constants.js';
+import { lineupConditionMod, batterFatiguePenalty } from './condition.js';
+import { getPositionFitness } from '../utils/physics.js';
 import { getTeamStaffBonus } from '../corporate/staffData.js';
-import { callPitchTarget, resolvePitchLocation, decideSwing, ballZoneContactChance, getPitchQualityEffect, getHeightPitchEffect, BALL_ZONE_PENALTY, selectPitchType, infieldDefenseOf, guessSuccessRate } from './pitchCalling.js';
-import { getZoneProfile, getZoneMatchupEffect, combineBatterEffects, zoneWeaknessAt } from './batterZone.js';
-import { decideSwingPower, getSwingPowerEffect } from './swingType.js';
-import { createSequence, pushCall, lastCall, sequenceShift, shiftMeetAdjust, locationReadChance,
-  pushSwingQuality, decayFooled, fooledLevel } from './pitchSequence.js';
-import { decidePitchObjective } from './pitchSituation.js';
-import { hitByPitchChance, hitByPitchFatigue } from './pitchZone.js';
-import { getBatterType, resolveAiBatterGuess } from './batterType.js';
-import { getDeception, deceptionAxis } from './deception.js';
+import { createSequence, lastCall } from './pitchSequence.js';
+import { hitByPitchFatigue } from './pitchZone.js';
 import { resolveGroundOutAdvance, tryExtraAdvance } from './baserunning.js';
 import { stealSuccessRate, stealAttemptRate } from './stealing.js';
-import { classifyBuntContact, rollBuntQuality, buntFieldDefense,
-         buntThrowOutChance, squeezeHomeThrowChance } from './bunting.js';
-import { effectiveArsenalSize, activeArsenal } from './arsenal.js';
+import { classifyBuntContact, rollBuntQuality, buntFieldDefense, buntThrowOutChance, squeezeHomeThrowChance } from './bunting.js';
 import { withSeededRandom } from './rng.js';
+import { simulatePitch, pitchArsenalOf, fieldDefenseOf } from './pitchEngine.js';
 import { forceAdvance } from './baseState.js';
 import { nextRotationStarterId, bestFieldAssignment, applyBattingOrderEntries } from './lineup.js';
 
@@ -399,6 +388,174 @@ export function accrueBatterExperience(playerData, gamePlayer, atBats) {
 /** 1試合に登板した投手の経験値（登板1 + 投球回）。自動試合と采配試合で共有する */
 export function accruePitcherExperience(playerData, outs) {
   playerData.experience = (playerData.experience || 0) + 1 + Math.floor((outs || 0) / 3);
+}
+
+/**
+ * 1試合の成績をシーズン成績（TEAMS_DATA の選手）へ書き戻す。自動の試合と采配の試合で共用する正本。
+ * ⚠ 以前は采配の試合（gameSetup.js）に写しがあり、疲労と成長の補正の順番や犠飛の扱いが
+ *    少しずつ違っていた（2026-11-24 に自動の側へそろえた）。
+ * 出場の印（_playedToday）・打撃・投手・守備の集計、疲労、成長の補正、経験値、QS まで行う。
+ * 勝敗・セーブ・ホールドは別（recordDecisions）。
+ *
+ * @param {object} playerData TEAMS_DATA の選手（書き込む先）
+ * @param {object} teamData TEAMS_DATA の球団（投手の役割を読む）
+ * @param {object} player 試合の中の選手（position・battingOrder・_isDH を読む）
+ * @param {object} game その試合の成績 { batting, pitching, fielding, wasStarter }
+ *   batting: atBats・hits・doubles…（自動の gameStats.batting の形）
+ *   pitching: outs・pitches・runsAllowed…（自動の gameStats.pitching の形）
+ *   fielding: chances（失策を含む）・errors・assists
+ *   wasStarter: この試合の先発だったか
+ */
+export function writeBackGameStats(playerData, teamData, player, { batting = {}, pitching = {}, fielding = null, wasStarter = false }) {
+  // seasonStats が未初期化の場合（新加入選手など）に安全に初期化
+  if (!playerData.seasonStats) playerData.seasonStats = { batting: {}, pitching: {} };
+  if (!playerData.seasonStats.batting) playerData.seasonStats.batting = {};
+  if (!playerData.seasonStats.pitching) playerData.seasonStats.pitching = {};
+
+  // 出場した選手はその日の疲労回復を行わない（recoverAllPitcherFatigueでスキップ）。
+  // 打席・登板が無くても、打順を持っていれば途中出場（代走・守備固め）とみなす。
+  {
+    const gb = batting;
+    const gp = pitching;
+    const appeared = (gb.atBats || 0) > 0 || (gb.walks || 0) > 0 || (gb.hitByPitch || 0) > 0
+      || (gb.sacrificeFlies || 0) > 0
+      || (gp.outs || 0) > 0 || (gp.pitches || 0) > 0
+      || (player.battingOrder || 0) > 0;
+    if (appeared) playerData._playedToday = true;
+  }
+
+  // 打撃成績の集計
+  // ⚠ 条件を atBats>0 だけにすると「0打数2四球」の試合の四球・死球が
+  //    シーズン成績から丸ごと落ちる（実測で死球が9%欠けていた）
+  if ((batting.atBats || 0) > 0
+      || (batting.walks || 0) > 0
+      || (batting.hitByPitch || 0) > 0
+      || (batting.sacrificeBunts || 0) > 0     // 犠打だけの試合も出場
+      || (batting.sacrificeFlies || 0) > 0) {  // 犠飛だけの試合も
+    const b = batting;
+    const season = playerData.seasonStats.batting;
+
+    season.games = (season.games || 0) + 1;
+    season.atBats = (season.atBats || 0) + (b.atBats || 0);
+    season.hits = (season.hits || 0) + (b.hits || 0);
+    season.doubles = (season.doubles || 0) + (b.doubles || 0);
+    season.triples = (season.triples || 0) + (b.triples || 0);
+    season.homeruns = (season.homeruns || 0) + (b.homeruns || 0);
+    season.rbis = (season.rbis || 0) + (b.rbis || 0);
+    season.walks = (season.walks || 0) + (b.walks || 0);
+    season.hitByPitch = (season.hitByPitch || 0) + (b.hitByPitch || 0);
+    season.strikeouts = (season.strikeouts || 0) + (b.strikeouts || 0);
+    season.stolenBases = (season.stolenBases || 0) + (b.stolenBases || 0);
+    season.caughtStealing = (season.caughtStealing || 0) + (b.caughtStealing || 0);
+    season.sacrificeBunts = (season.sacrificeBunts || 0) + (b.sacrificeBunts || 0);
+    // 犠飛は打った選手にだけ項目を足す（保存を膨らませない。読む側は無ければ 0）
+    if (b.sacrificeFlies) season.sacrificeFlies = (season.sacrificeFlies || 0) + b.sacrificeFlies;
+
+    // 経験値・ポジション別・打順別の経験（采配試合と共有）
+    accrueBatterExperience(playerData, player, b.atBats || 0);
+
+    // 野手疲労蓄積: スタメン出場(3打席以上)のみ疲労が溜まる
+    // 代打(1-2打席)や守備固めは疲労の蓄積なし（ただし回復もしない）
+    // 基礎疲労 7〜15（体力100→7, 体力1→15）。オンラインは別の式（`withFielderGameFatigue`）
+    const baseFatigue = fielderGameFatigue(playerData.physical?.bodyStamina || 50, b);
+    if (baseFatigue > 0) addFatigue(playerData, baseFatigue);
+    // 死球の疲労は打席数に関わらず乗る（代打の1打席で当たっても痛い）
+    if (b.hbpFatigue) addFatigue(playerData, b.hbpFatigue);
+
+    // 成長率変動: 10試合出場ごとに+0.01
+    // 摩耗ペナルティはスタメン出場(3打席以上)時のみ、疲労度に応じて段階的に適用
+    // （代打・代走・守備固めではペナルティ無し）
+    applyFatigueGrowthPenalty(playerData, (b.atBats || 0) >= 3);
+    if (season.games % 10 === 0) adjustGrowthModifier(playerData, 0.01);
+  }
+
+  // 投手成績の集計
+  // ⚠ **アウトを1つも取れなかった登板も数える**（采配試合の `gameSetup` と同じ条件）。
+  //    以前は `outs > 0` だけで、打者に投げて1死も取れずに降りた投手の
+  //    失点・被安打・四球・登板数・疲労がまるごと消えていた（防御率が良く見える）。
+  if ((pitching.outs || 0) > 0 || (pitching.pitches || 0) > 0) {
+    const p = pitching;
+    const season = playerData.seasonStats.pitching;
+
+    season.games = (season.games || 0) + 1;
+    season.inningsPitched = (season.inningsPitched || 0) + (p.outs || 0);
+    season.runsAllowed = (season.runsAllowed || 0) + (p.runsAllowed || 0);
+    // 自責点は試合中に失策を考慮して積算済み（p.earnedRuns）。
+    // 万一未設定なら失点で代替する（旧セーブ・想定外経路の保険）。
+    season.earnedRuns = (season.earnedRuns || 0) + (p.earnedRuns ?? p.runsAllowed ?? 0);
+    season.hits = (season.hits || 0) + (p.hits || 0);
+    season.homeruns = (season.homeruns || 0) + (p.homeruns || 0);
+    season.strikeouts = (season.strikeouts || 0) + (p.strikeouts || 0);
+    season.walks = (season.walks || 0) + (p.walks || 0);
+    season.hitBatters = (season.hitBatters || 0) + (p.hitBatters || 0);
+    season.pitches = (season.pitches || 0) + (p.pitches || 0);
+    season.wildPitches = (season.wildPitches || 0) + (p.wildPitches || 0);
+
+    // 成長率変動: 摩耗ペナルティは10球以上投げた登板のみ、疲労度に応じて段階的に適用
+    // （10球以下のワンポイント起用ではペナルティ無し）
+    applyFatigueGrowthPenalty(playerData, (p.pitches || 0) >= 10);
+
+    // 投手疲労蓄積: bodyStaminaが高いほど疲労が溜まりにくい
+    // 先発かどうかはリリーフリストに含まれないかで判定（投球回数ではなく登板種別）
+    // ショートスターターも先発登板扱いにしてリリーフより多く疲労が溜まる
+    const bodyStamina = playerData.physical?.bodyStamina || 50;
+    const staminaBonus = (bodyStamina / 100) * 1.5;
+    const baseDivisor = wasStarter ? 1.5 : 3;
+    const pitchFatigue = Math.floor((p.pitches || 0) / (baseDivisor + staminaBonus));
+    // startBonusは先発として1イニング以上投げた場合のみ付与（短命降板でもペナルティがつかないよう）
+    const startBonus = (wasStarter && (p.outs || 0) >= 3) ? 30 : 0;
+    const fatigueGain = wasStarter ? pitchFatigue + startBonus : Math.max(11, pitchFatigue);
+    addFatigue(playerData, fatigueGain);
+
+    // 成長率変動: 先発はイニング数ベース、リリーフは登板数ベース
+    if (wasStarter) {
+      // 先発: 15イニング(45アウト)ごとに+0.01
+      const prevTotalOuts = season.inningsPitched - (p.outs || 0);
+      if (Math.floor(season.inningsPitched / 45) > Math.floor(prevTotalOuts / 45)) {
+        adjustGrowthModifier(playerData, 0.01);
+      }
+    } else {
+      // リリーフ: 登板数ベース（守護神/セットアッパー/中継ぎエースは4登板、その他は5登板ごと）
+      const pitcherRoles = teamData.pitchingRotation?.pitcherRoles || {};
+      const role = pitcherRoles[player.id] || '';
+      const highPressureRoles = ['closer', 'setup', 'ace_relief'];
+      const threshold = highPressureRoles.includes(role) ? 4 : 5;
+      if (season.games % threshold === 0) {
+        adjustGrowthModifier(playerData, 0.01);
+      }
+    }
+
+    // 経験値蓄積（登板1 + 投球回数。采配試合と共有）
+    accruePitcherExperience(playerData, p.outs || 0);
+
+    // QS/HQS判定（先発投手のみ）
+    if (wasStarter) {
+      season.gamesStarted = (season.gamesStarted || 0) + 1;
+      const innings = p.outs || 0; // アウト数（18アウト = 6回）
+      const earnedRuns = p.earnedRuns ?? p.runsAllowed ?? 0; // QS/HQSは自責点で判定
+      // QS: 6回以上 && 自責点3以下
+      if (innings >= 18 && earnedRuns <= 3) {
+        season.qualityStarts = (season.qualityStarts || 0) + 1;
+      }
+      // HQS: 7回以上 && 自責点2以下
+      if (innings >= 21 && earnedRuns <= 2) {
+        season.highQualityStarts = (season.highQualityStarts || 0) + 1;
+      }
+    }
+
+    // 勝敗・セーブ・ホールドは試合の最後に `recordDecisions` がまとめて記録する
+  }
+
+  // 守備成績の集計
+  if (fielding) {
+    const f = fielding;
+    if ((f.chances || 0) > 0 || (f.errors || 0) > 0 || (f.assists || 0) > 0) {
+      const season = playerData.seasonStats.batting;
+      season.fieldingChances = (season.fieldingChances || 0) + (f.chances || 0);
+      season.errors = (season.errors || 0) + (f.errors || 0);
+      season.assists = (season.assists || 0) + (f.assists || 0); // 捕殺
+    }
+  }
 }
 
 // 野手が1試合（3打席以上）で溜める疲労。一人用は体力100→7・体力1→15。
@@ -782,387 +939,19 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false, observer = 
       || team.players.find(p => p.position === 'catcher') || team.players[0];
   };
 
-  // 守備データを構築（守備位置適正を反映: 適正100→100%、適正0→50%）
-  const buildDefense = (team) => {
-    const defense = {};
-    const defStrat = team.strategy?.defense || 'normal';
-    // 守備方針の得と損（数字は tactics.js の STRATEGY_MODS。画面の説明も同じ表から）
-    const defMod = STRATEGY_MODS.defense[defStrat] || {};
-    const infieldBonus = defMod.infield || 0;
-    const outfieldBonus = defMod.outfield || 0;
-    const infieldPositions = ['first', 'second', 'short', 'third', 'catcher', 'pitcher'];
-
-    // DH制: 投手はbattingOrder=0だが守備参加、DHはbattingOrder>0だが守備不参加
-    const currentPitcherForDef = getCurrentPitcher(team);
-    team.players.filter(p =>
-      (p.battingOrder > 0 && p.battingOrder <= 9 && !p._isDH) ||
-      (p.position === 'pitcher' && p.id === currentPitcherForDef?.id)
-    ).forEach(player => {
-      const fitness = getPositionFitness(player, player.position);
-      const fitnessMult = 0.5 + (fitness / 100) * 0.5;
-      const posBonus = infieldPositions.includes(player.position) ? infieldBonus : outfieldBonus;
-      defense[player.position] = {
-        defense: Math.round((player.fielding?.defense || 50) * fitnessMult) + posBonus,
-        speed: Math.round((player.physical?.speed || 50) * fitnessMult),
-        arm: Math.round((player.physical?.arm || 50) * fitnessMult),
-        throws: player.physical?.throws || 'right'
-      };
-    });
-    return defense;
-  };
-
-  // 投手の持ち球（打席の間は変わらないので、打席の頭で1回だけ作って `simulateOnePitch` に渡す）。
-  // 封印した球は投げない（arsenal.js）。練習・成長からは消さない。
-  // 回転数を変化量へ織り込む（回転の高い投手は変化球も少し曲がる）。
-  // ここで一度だけ掛けることで、球種選択・球速減・コース・スイング判断・
-  // 物理エンジンのすべてが同じ実効変化量で動く（simulation-logic.js）。
-  // `arsenalSize` は似た球を打ち消した実効的な持ち球数（狙い球の的中率に使う）。乱数は引かない
-  const pitchArsenalOf = (pitcherPlayer) => {
-    const arsenal = spinAdjustedArsenal(
-      activeArsenal(pitcherPlayer.pitching?.arsenal), pitcherPlayer.pitching?.spinRate ?? 50);
-    return { arsenal, arsenalSize: effectiveArsenalSize(arsenal) };
-  };
+  // 守備データを構築（中身は pitchEngine.js の fieldDefenseOf。采配の試合と共用）
+  const buildDefense = (team) => fieldDefenseOf(team, getCurrentPitcher(team));
 
   // 直前の1球で打者が狙い球を当てたか（対人の記録だけが読む。試合の判定には使わない）
   let lastGuessRight = false;
-  // 一球シミュレーション（自己完結型）
+  // 一球シミュレーション。中身は pitchEngine.js（采配の試合と共用の正本）
   const simulateOnePitch = (batterPlayer, pitcherPlayer, catcherPlayer, defense, count, pitcherStamina, bases, sequence, offenseStrategy, defenseStrategy, pitchArsenal) => {
-    lastGuessRight = false;
-    // 前球（打席内の配球メモリ。詳細は pitchSequence.js）
-    const lastPitch = lastCall(sequence);
-    // この場面で捕手が求める結果（併殺狙い / 三振狙い / 通常。pitchSituation.js）
-    const objective = decidePitchObjective(bases, gameState.outs);
-    const battingStrat = offenseStrategy?.batting || 'balanced';
-    const pitchingStrat = defenseStrategy?.pitching || 'balanced';
-
-    // 打撃方針の効果
-    const batMod = STRATEGY_MODS.batting[battingStrat] || {};
-    const stratMeetMod = batMod.meet || 0;
-    const stratPowerMod = batMod.power || 0;
-    const stratEyeMod = batMod.eye || 0;
-
-    // コンディション補正
-    const batterCondition = batterPlayer.condition ?? CONDITION_LEVELS.NORMAL;
-    const pitcherCondition = pitcherPlayer.condition ?? CONDITION_LEVELS.NORMAL;
-    const batterCondMod = conditionBattingMod(batterCondition);
-    const pitcherCondMod = CONDITION_PITCHING_MODIFIER[pitcherCondition] || 0;
-
-    // 疲労による能力低下（疲労0→0%, 疲労50→-5%, 疲労100→-15%）
-    const fatiguePenalty = batterFatiguePenalty(batterPlayer.fatigue);
-
-    // 精神力によるチャンス/ピンチ補正
-    const isClutch = bases[1] || bases[2]; // 得点圏にランナー
-    const batterMental = batterPlayer.personality?.mental ?? 50;
-    const pitcherMental = pitcherPlayer.personality?.mental ?? 50;
-    const batterClutchMod = isClutch ? Math.round((batterMental - 50) / 10) : 0;
-    const pitcherClutchMod = isClutch ? Math.round((pitcherMental - 50) / 10) : 0;
-
-    const batter = {
-      meet: (batterPlayer.batting?.meet || 50) + stratMeetMod + batterCondMod.meet - fatiguePenalty + batterClutchMod,
-      power: (batterPlayer.batting?.power || 50) + stratPowerMod + batterCondMod.power - fatiguePenalty + batterClutchMod,
-      eye: (batterPlayer.batting?.eye || 50) + stratEyeMod - Math.floor(fatiguePenalty * 0.5),
-      speed: (batterPlayer.physical?.speed || 50) - fatiguePenalty,
-      bats: batterPlayer.batting?.bats || 'right',
-      // コース適性（内外角・高低の得手不得手）。25セルは持たず2数値から導出する
-      zone: getZoneProfile(batterPlayer),
-    };
-
-    // 投手の疲労ペナルティ（打者と同じ二次曲線: 疲労0→0, 50→-4, 100→-15）
-    const pitcherFatigue = pitcherPlayer.fatigue || 0;
-    const pitcherFatiguePenalty = pitcherFatigue > 0 ? Math.round(pitcherFatigue * pitcherFatigue / 670) : 0;
-
-    const pitcherFormEffect = PITCHING_FORM_EFFECTS[pitcherPlayer.pitching?.form] || PITCHING_FORM_EFFECTS.threeQuarter;
-    const pitcher = {
-      velocity: Math.round((pitcherPlayer.pitching?.velocity || 140) * (pitcherFormEffect.velocityMult || 1.0)) - pitcherFatiguePenalty,
-      control: (pitcherPlayer.pitching?.control || 50) + pitcherCondMod - pitcherFatiguePenalty + pitcherClutchMod,
-      throws: pitcherPlayer.physical?.throws || 'right',
-      spinRate: pitcherPlayer.pitching?.spinRate ?? 50
-    };
-
-    // スタミナによる能力低下（2次曲線: スタミナ50%以下で急激に低下）
-    const pitcherMaxStamina = pitcherPlayer.pitching?.stamina || 100;
-    const staminaRatio = Math.max(0, Math.min(pitcherStamina / pitcherMaxStamina, 1));
-    const staminaCurve = staminaRatio * staminaRatio; // 0→0, 0.5→0.25, 0.7→0.49, 1.0→1.0
-    const effectiveControl = pitcher.control * (0.6 + 0.4 * staminaCurve);
-    const effectiveVelocity = pitcher.velocity * (0.88 + 0.12 * staminaCurve);
-
-    // 左右相性
-    const handEffect = getHandednessEffect(pitcher.throws, batter.bats);
-
-    // 投球する球種を選択（捕手のリードが効く。詳細は pitchCalling.js）。
-    // 従来はここで変化球を完全ランダムに選んでおり、采配モードだけが
-    // リードでスコア選択していた。リーグ成績を作るのは自動側なので、
-    // 捕手のリード能力が成績にまったく反映されていなかった。
-    // 持ち球（`arsenal`・`arsenalSize`）は打席の頭で1回だけ作る（`pitchArsenalOf`）
-    const { arsenal, arsenalSize } = pitchArsenal;
-    const selectedPitch = selectPitchType({
-      arsenal,
-      catcherLead: catcherPlayer?.catching?.lead ?? 50,
-      form: pitcherPlayer.pitching?.form || 'threeQuarter',
-      strategy: pitchingStrat,
-      strikes: count.strikes,
-      // 奥行き: 速球のあとは変化球、変化球のあとは速球（リードが高いほど意識する）
-      lastWasBreaking: lastPitch ? lastPitch.isBreaking : null,
-      // 場面: 走者一塁ならゴロ系、走者三塁なら空振り系の決め球を選ぶ
-      objective: objective.goal,
-      // 到達球速で曲がりの効き(breakEfficiency)が変わるので投手の速球を渡す
-      velocity: effectiveVelocity,
-      // 崩した直後は球速帯を替えずに畳み掛けてよい（pitchSequence.js）
-      fooled: fooledLevel(sequence),
-      // 守備の堅いチームではゴロ・凡打を狙う球の値打ちが上がる
-      infieldDefense: infieldDefenseOf(defense),
+    const { result, guessRight } = simulatePitch({
+      batterPlayer, pitcherPlayer, catcherPlayer, defense, count, pitcherStamina, bases,
+      outs: gameState.outs, sequence, offenseStrategy, defenseStrategy, pitchArsenal, observer,
     });
-
-
-    // 変化球の球速減速（緩急効果）
-    // 球種ごとの球速減。**采配モードと同じ式を使う**（constants.js）。
-    // 以前はここだけ `8 + level/100×15` で、Lv100なら全球種が一律 -23 だった
-    let pitchVelocityFinal = effectiveVelocity
-      - pitchVelocityDrop(selectedPitch.type, selectedPitch.level ?? 50);
-
-    // 緩急ペナルティ: **前球との**球速差で打者のタイミングが狂う（比率ベース）。
-    // 遅い投手ほど同じ球速差でも体感の緩急が大きくなる。
-    // 従来は前球ではなく「その投手のストレート」と比べていたうえ、そもそも
-    // lastPitch が常に null だったため一度も発火していなかった。
-    let speedDiffPenalty = 0;
-    if (lastPitch && lastPitch.velocity) {
-      const veloDiff = Math.abs(lastPitch.velocity - pitchVelocityFinal);
-      const speedDiffRatio = veloDiff / Math.max(lastPitch.velocity, pitchVelocityFinal);
-      speedDiffPenalty = speedDiffRatio * 22;
-    }
-
-    // ===== 配球 → 投球位置 → スイング判定 =====
-    // 制球は「ストライク率」ではなく「狙った所へ投げられる再現性」として効く。
-    // 詳細は pitchCalling.js 参照。采配モード(App.jsx)と同じモデルを共有している。
-    const isBreaking = selectedPitch.type !== 'straight';
-    // 変化球のばらつきは pitchShape.shapeSigma に一本化した
-    // （旧 breakingControlPenalty。自動と采配で係数が 0.20 / 0.30 と食い違っていた）
-    // 投球方針は配球だけを変える（contact=ゾーンで勝負しやすく / strikeout=誘い球を増やす。
-    // callPitchTarget・selectPitchType 側）。⚠ 以前は打たせて取るに制球+4が付いていた
-    // （選ぶだけで勝率 .524。いしだ 2026-11-13「型で強さを変えない」で外した）
-
-    const aim = callPitchTarget({
-      balls: count.balls, strikes: count.strikes, batterEye: batter.eye,
-      catcherLead: catcherPlayer?.catching?.lead ?? 50, strategy: pitchingStrat,
-      pitcherControl: effectiveControl, objective,
-    });
-    const loc = resolvePitchLocation({
-      aim,
-      control: effectiveControl,
-      catcherDefense: catcherPlayer?.fielding?.defense ?? 50,
-      // 捕手は打者の弱点コースを要求する（狙いの配分は変えない）
-      batterZone: batter.zone,
-      catcherLead: catcherPlayer?.catching?.lead ?? 50,
-      // 前球との関係（対角へ動かす／同じ引き出しを続けない）
-      sequence, velocity: pitchVelocityFinal, isBreaking,
-      // 場面: 併殺が欲しければ低め、三振が欲しければ高め
-      objective: objective.goal,
-      // 球種に合ったコース（速球=高め / スライダーは逃げる側）と、
-      // 変化球レベルによる決まりやすさ
-      pitchType: selectedPitch.type, pitchLevel: selectedPitch.level ?? 50,
-      pitcherThrows: pitcher.throws, batterBats: batter.bats,
-    });
-
-    // 揺さぶれた球は打ちにくく、同じ所へ続けた球は打たれやすい（リーグ平均で±0）
-    const shift = sequenceShift(lastPitch,
-      { col: loc.col, row: loc.row, velocity: pitchVelocityFinal });
-    const shiftMeet = shiftMeetAdjust(shift);
-    // 同じ引き出しが続くと打者に読まれる。的中の効果は球種の読みと同じ
-    // 打者の狙い球（コース）。捕手の要求の偏りと、同じ引き出しの繰り返しで読む
-    const locationRead = Math.random()
-      < locationReadChance(sequence, loc.col, loc.row, isBreaking, batter.eye, loc.readSignal);
-
-    // 打者の型（野村の4分類）ごとの狙い方。batterType.js
-    const aiGuess = resolveAiBatterGuess({
-      type: getBatterType(batterPlayer), player: batterPlayer,
-      balls: count.balls, strikes: count.strikes,
-      isBreaking, col: loc.col, sequence, batterEye: batter.eye,
-      // ナックルは読み合いが成立しない（誰にもどこへ来るか分からない）
-      // ⚠ 代入は記録（捕手の「狙い球を外した率」）のためだけ。乱数を引く順番は変えない
-      guessRight: (lastGuessRight = !isUnreadablePitch(selectedPitch.type) && Math.random() < guessSuccessRate({
-        catcherLead: catcherPlayer?.catching?.lead ?? 50,
-        // **何球種持っているかではなく、どれだけ幅があるか**（arsenal.js）。
-        // 似た球（スライダー＋カット等）は同じ引き出しとして数えない
-        arsenalSize, batterEye: batter.eye,
-        // 崩された直後は球種を読むどころではない
-        fooled: fooledLevel(sequence),
-        // 出どころが見えなければ球種も判断できない（deception.js）
-        deception: deceptionAxis(getDeception(pitcherPlayer)),
-      })),
-    });
-    const guessLevel = Math.max(-2, Math.min(2, aiGuess.level + (locationRead ? 1 : 0)));
-    pushCall(sequence, {
-      col: loc.col, row: loc.row, isBreaking,
-      velocity: pitchVelocityFinal, type: selectedPitch.type,
-    });
-
-    observer?.pitchDetail?.({ type: selectedPitch.type, velocity: pitchVelocityFinal, col: loc.col, row: loc.row });
-
-    // そのセルが打者にとってどれだけ苦手か。スイング判断・打撃補正・振り方で共有する
-    const weakness = zoneWeaknessAt(loc, batter.zone);
-    const swung = decideSwing({
-      inZone: loc.inZone, quality: loc.quality, strikes: count.strikes, batterEye: batter.eye,
-      pitcherControl: effectiveControl, isBreaking, breakingLevel: selectedPitch.level || 50,
-      // 打者は自分の得意コースをより振る
-      zoneWeakness: weakness,
-      // B型は張っていないコースを見送る
-      approachMult: aiGuess.swingMult ?? 1,
-      // 崩された打者はゾーンを広げる（pitchCalling.js）
-      fooled: fooledLevel(sequence),
-    });
-
-    // 打球の解決。投球位置の質（甘い球=meatball / 際どい球=edge / ボール球）で
-    // 打者の実効ミート・パワーを補正してから物理エンジンに渡す。
-    const resolveContact = (mod) => {
-      const effBatter = {
-        ...batter,
-        meet: Math.max(1, Math.min(100, batter.meet + (mod?.meet || 0))),
-        power: Math.max(1, Math.min(100, batter.power + (mod?.power || 0))),
-        // C型（方向決定型）が決めた打球方向
-        dirBias: aiGuess.dirBias,
-      };
-      const pitchData = {
-        type: selectedPitch.type,
-        velocity: pitchVelocityFinal,
-        level: selectedPitch.level || 50
-      };
-      const tunnelingEffect = lastPitch ? getTunnelingEffect(lastPitch, pitchData, catcherPlayer?.catching?.lead || 50) : 0;
-
-      // 物理コンタクト計算
-      const physicsResult = calculatePhysicsContact(
-        { velocity: effectiveVelocity, throws: pitcher.throws, form: pitcherPlayer.pitching?.form || 'threeQuarter', spinRate: pitcherPlayer.pitching?.spinRate ?? 50,
-          deception: deceptionAxis(getDeception(pitcherPlayer)) },
-        effBatter,
-        // 打者の狙い球。球種とコースを別々に張り、当たった数で効果が変わる
-        // （1つ=タイミング窓×1.30 / 両方=×1.50。simulation-logic.js）。
-        // 従来は球種だけで、しかも 0.3/0.2 の固定値だった。
-        guessLevel,
-        pitchData,
-        tunnelingEffect,
-        handEffect
-      );
-
-      // 崩されたか（芯品質）を打席の記憶に残す。次の球の振り方に効く
-      pushSwingQuality(sequence, physicsResult.isContact ? physicsResult.meetQuality : null);
-      if (!physicsResult.isContact) {
-       
-        return { type: 'swinging_strike' };
-      }
-
-      // ファウル: タイミングを外した打球は左右のファウルゾーンへ切れる。
-      // 実データでは全投球の約17%（＝コンタクトの4割弱）がファウルで、打席が長引く。
-      // これが無いとコンタクトが即座に打席を終わらせてしまい、四球が構造的に出ない。
-      const foulProb = contactFoulProbability(physicsResult.meetQuality, count.strikes);
-      if (Math.random() < foulProb) {
-        return { type: 'foul' };
-      }
-
-      // 打球物理パラメータ計算
-      // 緩急（前球との速度差）を打球方向に効かせるため lastPitch を渡す
-      const battedBall = calculateBattedBallPhysics(effBatter, pitcher, pitchData, physicsResult, loc, lastPitch);
-
-      if (isDirectionalFoul(battedBall.direction)) return { type: 'foul' };
-
-      // 守備判定
-      const fieldResult = judgeFielderReach(battedBall, defense, effBatter);
-      // 打球の向き・飛距離・角度と処理した野手（オンラインの打席速報が読む。表示専用で、判定には使わない）
-      const batted = {
-        direction: battedBall.direction, distance: battedBall.distance, launchAngle: battedBall.launchAngle,
-        fielder: fieldResult.fieldingPosition || null,
-      };
-
-      if (fieldResult.result === 'homerun') {
-        return { type: 'homerun', batted };
-      } else if (fieldResult.result === 'out') {
-        // 2アウトからは併殺が成立しない（打者アウトで3アウト目）。
-        // outs のチェックが無かったため、2アウトから「4アウト目」が記録され
-        // 投手の投球回がわずかに水増しされていた。
-        // 併殺。**内野ゴロのアウトなら距離は問わない**。
-        // 以前は `distance < 40` も条件にしていたが、この分岐に来た時点で
-        // 内野手が捕球している（外野へ抜けた打球は 'out' にならない）ので
-        // 二重の門番になっており、実NPBの1/4しか併殺が出ていなかった。
-        if (bases[0] && gameState.outs < 2 && battedBall.launchAngle < 10
-            && !fieldResult.isOutfieldFly) {
-          const ifDefense = ['second', 'short'].map(p => defense[p]?.defense || 50);
-          const ifAvg = ifDefense.reduce((a, b) => a + b, 0) / 2;
-          // 走者の足が速いと二塁が間に合わない／一塁がセーフになる
-          const runnerSpeed = bases[0]?.physical?.speed ?? 55;
-          const dpBase = DP_BASE + (ifAvg - 50) * 0.35 - (runnerSpeed - 55) * 0.30;
-          if (Math.random() * 100 < dpBase) {
-            return { type: 'double_play', batted };
-          }
-        }
-        return {
-          type: 'out',
-          isOutfieldFly: fieldResult.isOutfieldFly || false,
-          // 内野ゴロは走者を進める（ゴロGO・進塁打）。フライ・ライナーは進まない
-          isGroundOut: battedBall.launchAngle < 10 && !fieldResult.isOutfieldFly,
-          tagupThrowbackChance: fieldResult.tagupThrowbackChance || 0,
-          fieldingPosition: fieldResult.fieldingPosition,
-          batted,
-        };
-      } else if (fieldResult.result === 'triple') {
-        return { type: 'triple', fieldingPosition: fieldResult.fieldingPosition, batted };
-      } else if (fieldResult.result === 'double') {
-        return { type: 'double', fieldingPosition: fieldResult.fieldingPosition, batted };
-      } else {
-        return {
-          type: 'single',
-          isError: fieldResult.isError || false,
-          hitWithError: !!fieldResult.hitWithError,
-          errorPosition: fieldResult.errorPosition,
-          fieldingPosition: fieldResult.fieldingPosition,
-          // 悪送球・中継ミスは走者が余分に1つ進む
-          extraAdvance: !!fieldResult.extraAdvance || !!fieldResult.isThrowingError,
-          batted,
-        };
-      }
-    };
-
-    // コース適性: 苦手なコースに来るとミート・パワーが落ちる（得意なら上がる）。
-    // 母集団の平均は0なのでリーグ成績は動かず、打者ごとの差だけが出る。
-    // コース適性 + 前球からの揺さぶり（どちらもリーグ平均では±0）
-    // 振り方: 得意コース・打者有利カウントならフルスイング、
-    // 苦手コース・2ストライクなら当てにいく（swingType.js）
-    const swingPower = swung ? decideSwingPower({
-      weakness, balls: count.balls, strikes: count.strikes,
-      // 前の球で崩されていれば当てにいく（pitchSequence.js）
-      fooled: fooledLevel(sequence),
-      meet: batter.meet, power: batter.power, approach: battingStrat,
-    }) : 0;
-    const matchup = combineBatterEffects(
-      combineBatterEffects(
-        combineBatterEffects(getZoneMatchupEffect(loc, batter.zone),
-          // 高めの速球・低めの変化球は空振りを取れる（逆は打たれる）
-          getHeightPitchEffect(loc.row, isBreaking)),
-        getSwingPowerEffect(swingPower)),
-      { meet: shiftMeet, power: shiftMeet * 0.6 });
-
-    if (loc.inZone) {
-      if (!swung) { decayFooled(sequence); return { type: 'called_strike' }; }
-      const q = combineBatterEffects(getPitchQualityEffect(loc.quality), matchup);
-      const breakingPenalty = isBreaking ? (selectedPitch.level || 50) * 0.12 : 0;
-      const contactChance = 82 + (batter.meet + q.meet) * 0.45
-        + (handEffect.meetBonus || handEffect.meetPenalty || 0) - breakingPenalty - speedDiffPenalty;
-      if (Math.random() * 100 >= contactChance) { pushSwingQuality(sequence, null); return { type: 'swinging_strike' }; }
-      return resolveContact(q);
-    }
-
-    // ボールゾーン。振ってしまった場合は半分以上バットに当たり、凡打になる。
-    // 以前は「20%ファウル / 80%空振り」で打球が一切発生せず、chase率を上げると
-    // 三振だけが増えてしまう構造だった。
-    if (!swung) {
-      decayFooled(sequence);
-      // あまりにも内角へ外れた球は打者に当たる（pitchZone.js）。
-      // 振って当たればストライクなので、見送った球にだけ問う
-      if (Math.random() < hitByPitchChance(loc.col, loc.row)) {
-        return { type: 'hit_by_pitch', velocity: pitchVelocityFinal };
-      }
-      return { type: 'ball' };
-    }
-    if (Math.random() >= ballZoneContactChance(batter.eye)) { pushSwingQuality(sequence, null); return { type: 'swinging_strike' }; }
-    if (Math.random() < 0.56) return { type: 'foul' };
-    return resolveContact(combineBatterEffects(BALL_ZONE_PENALTY, matchup));
+    lastGuessRight = guessRight;
+    return result;
   };
 
   // 守備機会（刺殺・補殺）を1つ記録する。守備位置が取れないものは無視する
@@ -3073,156 +2862,14 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false, observer = 
       const playerData = teamData.players.find(p => p.id === player.id);
       if (!playerData) return;
 
-      // seasonStats が未初期化の場合（新加入選手など）に安全に初期化
-      if (!playerData.seasonStats) playerData.seasonStats = { batting: {}, pitching: {} };
-      if (!playerData.seasonStats.batting) playerData.seasonStats.batting = {};
-      if (!playerData.seasonStats.pitching) playerData.seasonStats.pitching = {};
-
-      // 出場した選手はその日の疲労回復を行わない（recoverAllPitcherFatigueでスキップ）。
-      // 打席・登板が無くても、打順を持っていれば途中出場（代走・守備固め）とみなす。
-      {
-        const gb = player.gameStats.batting || {};
-        const gp = player.gameStats.pitching || {};
-        const appeared = (gb.atBats || 0) > 0 || (gb.walks || 0) > 0 || (gb.hitByPitch || 0) > 0
-          || (gb.sacrificeFlies || 0) > 0
-          || (gp.outs || 0) > 0 || (gp.pitches || 0) > 0
-          || (player.battingOrder || 0) > 0;
-        if (appeared) playerData._playedToday = true;
-      }
-
-      // 打撃成績の集計
-      // ⚠ 条件を atBats>0 だけにすると「0打数2四球」の試合の四球・死球が
-      //    シーズン成績から丸ごと落ちる（実測で死球が9%欠けていた）
-      if (player.gameStats.batting.atBats > 0
-          || player.gameStats.batting.walks > 0
-          || player.gameStats.batting.hitByPitch > 0
-          || (player.gameStats.batting.sacrificeBunts || 0) > 0     // 犠打だけの試合も出場
-          || (player.gameStats.batting.sacrificeFlies || 0) > 0) {  // 犠飛だけの試合も
-        const b = player.gameStats.batting;
-        const season = playerData.seasonStats.batting;
-
-        season.games = (season.games || 0) + 1;
-        season.atBats = (season.atBats || 0) + b.atBats;
-        season.hits = (season.hits || 0) + b.hits;
-        season.doubles = (season.doubles || 0) + (b.doubles || 0);
-        season.triples = (season.triples || 0) + (b.triples || 0);
-        season.homeruns = (season.homeruns || 0) + b.homeruns;
-        season.rbis = (season.rbis || 0) + b.rbis;
-        season.walks = (season.walks || 0) + b.walks;
-        season.hitByPitch = (season.hitByPitch || 0) + (b.hitByPitch || 0);
-        season.strikeouts = (season.strikeouts || 0) + b.strikeouts;
-        season.stolenBases = (season.stolenBases || 0) + (b.stolenBases || 0);
-        season.caughtStealing = (season.caughtStealing || 0) + (b.caughtStealing || 0);
-        season.sacrificeBunts = (season.sacrificeBunts || 0) + (b.sacrificeBunts || 0);
-        // 犠飛は打った選手にだけ項目を足す（保存を膨らませない。読む側は無ければ 0）
-        if (b.sacrificeFlies) season.sacrificeFlies = (season.sacrificeFlies || 0) + b.sacrificeFlies;
-
-        // 経験値・ポジション別・打順別の経験（采配試合と共有）
-        accrueBatterExperience(playerData, player, b.atBats);
-
-        // 野手疲労蓄積: スタメン出場(3打席以上)のみ疲労が溜まる
-        // 代打(1-2打席)や守備固めは疲労の蓄積なし（ただし回復もしない）
-        // 基礎疲労 7〜15（体力100→7, 体力1→15）。オンラインは別の式（`withFielderGameFatigue`）
-        const baseFatigue = fielderGameFatigue(playerData.physical?.bodyStamina || 50, b);
-        if (baseFatigue > 0) addFatigue(playerData, baseFatigue);
-        // 死球の疲労は打席数に関わらず乗る（代打の1打席で当たっても痛い）
-        if (b.hbpFatigue) addFatigue(playerData, b.hbpFatigue);
-
-        // 成長率変動: 10試合出場ごとに+0.01
-        // 摩耗ペナルティはスタメン出場(3打席以上)時のみ、疲労度に応じて段階的に適用
-        // （代打・代走・守備固めではペナルティ無し）
-        applyFatigueGrowthPenalty(playerData, b.atBats >= 3);
-        if (season.games % 10 === 0) adjustGrowthModifier(playerData, 0.01);
-      }
-
-      // 投手成績の集計
-      // ⚠ **アウトを1つも取れなかった登板も数える**（采配試合の `gameSetup` と同じ条件）。
-      //    以前は `outs > 0` だけで、打者に投げて1死も取れずに降りた投手の
-      //    失点・被安打・四球・登板数・疲労がまるごと消えていた（防御率が良く見える）。
-      if (player.gameStats.pitching.outs > 0 || player.gameStats.pitching.pitches > 0) {
-        const p = player.gameStats.pitching;
-        const season = playerData.seasonStats.pitching;
-
-        season.games = (season.games || 0) + 1;
-        season.inningsPitched = (season.inningsPitched || 0) + p.outs;
-        season.runsAllowed = (season.runsAllowed || 0) + p.runsAllowed;
-        // 自責点は試合中に失策を考慮して積算済み（p.earnedRuns）。
-        // 万一未設定なら失点で代替する（旧セーブ・想定外経路の保険）。
-        season.earnedRuns = (season.earnedRuns || 0) + (p.earnedRuns ?? p.runsAllowed);
-        season.hits = (season.hits || 0) + (p.hits || 0);
-        season.homeruns = (season.homeruns || 0) + (p.homeruns || 0);
-        season.strikeouts = (season.strikeouts || 0) + p.strikeouts;
-        season.walks = (season.walks || 0) + p.walks;
-        season.hitBatters = (season.hitBatters || 0) + (p.hitBatters || 0);
-        season.pitches = (season.pitches || 0) + p.pitches;
-        season.wildPitches = (season.wildPitches || 0) + (p.wildPitches || 0);
-
-        // 成長率変動: 摩耗ペナルティは10球以上投げた登板のみ、疲労度に応じて段階的に適用
-        // （10球以下のワンポイント起用ではペナルティ無し）
-        applyFatigueGrowthPenalty(playerData, (p.pitches || 0) >= 10);
-
-        // 投手疲労蓄積: bodyStaminaが高いほど疲労が溜まりにくい
+      // 中身は writeBackGameStats（采配の試合と共用）
+      writeBackGameStats(playerData, teamData, player, {
+        batting: player.gameStats.batting || {},
+        pitching: player.gameStats.pitching || {},
+        fielding: player.gameStats.fielding || null,
         // 先発かどうかはリリーフリストに含まれないかで判定（投球回数ではなく登板種別）
-        // ショートスターターも先発登板扱いにしてリリーフより多く疲労が溜まる
-        const wasStarter = !reliefIds.has(player.id);
-        const bodyStamina = playerData.physical?.bodyStamina || 50;
-        const staminaBonus = (bodyStamina / 100) * 1.5;
-        const baseDivisor = wasStarter ? 1.5 : 3;
-        const pitchFatigue = Math.floor(p.pitches / (baseDivisor + staminaBonus));
-        // startBonusは先発として1イニング以上投げた場合のみ付与（短命降板でもペナルティがつかないよう）
-        const startBonus = (wasStarter && (p.outs || 0) >= 3) ? 30 : 0;
-        const fatigueGain = wasStarter ? pitchFatigue + startBonus : Math.max(11, pitchFatigue);
-        addFatigue(playerData, fatigueGain);
-
-        // 成長率変動: 先発はイニング数ベース、リリーフは登板数ベース
-        if (wasStarter) {
-          // 先発: 15イニング(45アウト)ごとに+0.01
-          const prevTotalOuts = season.inningsPitched - p.outs;
-          if (Math.floor(season.inningsPitched / 45) > Math.floor(prevTotalOuts / 45)) {
-            adjustGrowthModifier(playerData, 0.01);
-          }
-        } else {
-          // リリーフ: 登板数ベース（守護神/セットアッパー/中継ぎエースは4登板、その他は5登板ごと）
-          const pitcherRoles = teamData.pitchingRotation?.pitcherRoles || {};
-          const role = pitcherRoles[player.id] || '';
-          const highPressureRoles = ['closer', 'setup', 'ace_relief'];
-          const threshold = highPressureRoles.includes(role) ? 4 : 5;
-          if (season.games % threshold === 0) {
-            adjustGrowthModifier(playerData, 0.01);
-          }
-        }
-
-        // 経験値蓄積（登板1 + 投球回数。采配試合と共有）
-        accruePitcherExperience(playerData, p.outs);
-
-        // QS/HQS判定（先発投手のみ）
-        if (wasStarter) {
-          season.gamesStarted = (season.gamesStarted || 0) + 1;
-          const innings = p.outs; // アウト数（18アウト = 6回）
-          const earnedRuns = p.earnedRuns ?? p.runsAllowed; // QS/HQSは自責点で判定
-          // QS: 6回以上 && 自責点3以下
-          if (innings >= 18 && earnedRuns <= 3) {
-            season.qualityStarts = (season.qualityStarts || 0) + 1;
-          }
-          // HQS: 7回以上 && 自責点2以下
-          if (innings >= 21 && earnedRuns <= 2) {
-            season.highQualityStarts = (season.highQualityStarts || 0) + 1;
-          }
-        }
-
-        // 勝敗・セーブ・ホールドは試合の最後に `recordDecisions` がまとめて記録する
-      }
-
-      // 守備成績の集計
-      if (player.gameStats.fielding) {
-        const f = player.gameStats.fielding;
-        if (f.chances > 0 || f.errors > 0 || f.assists > 0) {
-          const season = playerData.seasonStats.batting;
-          season.fieldingChances = (season.fieldingChances || 0) + f.chances;
-          season.errors = (season.errors || 0) + f.errors;
-          season.assists = (season.assists || 0) + (f.assists || 0); // 捕殺
-        }
-      }
+        wasStarter: !reliefIds.has(player.id),
+      });
     });
   };
 
