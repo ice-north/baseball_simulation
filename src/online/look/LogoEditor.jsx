@@ -285,7 +285,7 @@ export function LogoEditor({ view, busy, run, command, close }) {
   const submit = () => {
     const logo = cleanLogo({ colors, layers, mini, rec });
     if (!logo) {
-      setError('部品が1枚もありません。おまかせから選び直してください');
+      setError(layers.length ? 'ロゴが大きすぎて保存できません。部品か字を減らしてください' : '部品が1枚もありません。おまかせから選び直してください');
       return;
     }
     save(logo);
@@ -495,7 +495,7 @@ export function LogoEditor({ view, busy, run, command, close }) {
                       setSel(-1);
                     } else if (what === 'dup') {
                       if (list.length >= LOGO_MAX_LAYERS) return;
-                      list.splice(sel + 1, 0, { ...current, x: current.x + 6, y: current.y + 6 });
+                      list.splice(sel + 1, 0, { ...current, x: inBox(current.x + 6), y: inBox(current.y + 6) });
                       setSel(sel + 1);
                     } else {
                       const to = sel + (what === 'up' ? 1 : -1);
