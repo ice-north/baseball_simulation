@@ -324,7 +324,7 @@ fun squadStrength(roster: List<Player>): Double {
  * 提案した側の伸びがCPUの伸びをこれより上回る交換は、値段が釣り合っても断る。
  * 画面はサーバーが渡す決まり（[CpuTradeRule.gapLimit]）を使う。
  */
-const val STRENGTH_GAP_LIMIT = 3.0
+const val STRENGTH_GAP_LIMIT = 8.0
 
 /**
  * 交換で開く戦力の差＝提案した側の [squadStrength] の伸び − 受ける側の伸び（Web 版 `tradeStrengthGap` と同じ）。
