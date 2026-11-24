@@ -26,6 +26,10 @@
   値と文字は `tools/expect-stats.mjs` が書き出す期待値（`stats-expected.json`）と `StatsWebTest` で答え合わせする。
 - キャンプの方針（`trainingPolicy.js`）とトライアウトの希望順（`tryoutPlan.js`）は Kotlin に写してあり、
   `tools/expect-logic.mjs` が書き出す期待値（`logic-expected.json`）と `LogicTest` で答え合わせする。
+- トレードの探し方と値段（`tradeSearch.js`。持ち場の力・余り・補強・まとめて抜けた穴・出番の上乗せ `givingTradeValues`・
+  CPUの見込み）は `TradeSearch.kt`、相手に与えるメリット（`tradeMerit.js`）は `TradeMerit.kt` に写してあり、
+  同じ `expect-logic.mjs` の期待値（`logic-expected.json` の `tradeMerit`・`giving`）と `LogicTest` で答え合わせする
+  （`TradeSearch.kt` のほかの関数は答え合わせが無い。直すときは Web 版と見比べる）。
 - 得点経過・最終ログイン・留守中のまとめの文（`social.js`・`awaySummary.js`）は `Social.kt`・`AwaySummary.kt` に写してあり、
   `tools/expect-social.mjs` が書き出す期待値（`social-expected.json`）と `SocialTest` で答え合わせする。
 - 新しい見た目（試作。`src/online/look/` と打席の色分け `gamePlays.js` の `playTone`）は `Look*.kt`・`TodayGame.kt` に写してあり、
@@ -48,8 +52,12 @@
 - アプリは `?action=login / refresh / view / defaults / team / player / games / game / transactions / command / presence` を使う。`presence` はアプリに戻るたび（10分に1回まで）送り、最終ログインとおるすばんの解除に使う。ビューの項目名を変えるとアプリが壊れる。
   - `presence` の返事は `{ ok: true }`。おるすばんを解いたときは `{ ok: true, returned: true }` で、アプリはそのときもう一度ビューを読む（一緒に走らせた読み直しが解ける前のビューを読んでいて、自分が「おるすばん」のまま見えるため）。`returned` が無ければ解いていない扱い（`shared/.../OnlineApi.kt` の `presence`）。
   - 版（`revision`）は、最終ログインを書いただけなら上がらない（ほかの人の画面を読み直させない）。おるすばんを解いたときは上がる。ただしビューの世代（`viewGeneration`）は、書き込みを保存するたび（`presence` が最終ログインを書いたときも）上がる（`server/storage/supabaseStore.mjs` の `online_publish`。公開は世代を必ず1つ上げる）。なので `since` を添えた次の `view` は中身をまるごと返す。
-- ⚠ 下の「名前を変えると黙って出なくなる」項目の正本は `tools/view-contract.mjs`（ビューの約束）。サーバーで項目を足す・変えるときはそこも直す。
-  本物のサーバーの答えにあるかを `online-view-contract-check`（`check`。開幕直後）と `--year`（`check:full`。1年通して）が確かめる。
+- ⚠ `tools/view-contract.mjs`（ビューの約束）は、下の「名前を変えると黙って出なくなる」項目のうち**主なもの**（約70項目。
+  画面の主な表・通知・ウィジェット・チーム分析・年代記・指導者の入口の項目）を載せた一覧で、下の文の項目を全部は載せていない
+  （例: `trades[]` の中の項目・`chronicle.face` の中身・`seasonReview`・`transactions` の `items[]` の中身）。
+  載っている項目は、本物のサーバーの答えにあるかを `online-view-contract-check`（`check`。開幕直後の `live`）と
+  `--year`（`check:full`。1年通して `when`）が確かめる（どちらも無い項目は検査が落とす）。サーバーで項目を足す・変えるときは、
+  載っていればそこも直し、載っていなければ下の文を正として読むところを確かめる。
 - 画面が読む項目のうち、名前を変えると黙って空になるもの（どれも無ければ出さないだけなので、画面の検査では気づきにくい）:
   - ビュー: `careerLeaders`（通算成績ランキング）、`chronicle.proDrafted`（プロ入りした選手。指名順位は `round`（数）と `ikusei`（育成指名なら true）で「4位」「育成2位」と出す）、`lastCamp`（キャンプの結果）、`stage.key`（`season` かどうかでキャンプ直後の案内を出す）、`trades[]` の `fromCpu`・`expires`（CPU球団からの提案とその期限）、`rosterLimit`・`rosterStandard`（選手枠。下の項目）、`yearSummary`（その年のまとめ。`year`・`league`・`rank`・`record`・`standings[]`（`rank`・`label`・`wins`・`losses`・`draws`・`mine`）・`joined[]`/`left[]`（`side`・`how`・`name`・`position`・`other`）・`topics[]`。`server/yearSummary.mjs`。年度更新から開幕した月の間だけ載る）、`roster[].naturalGrowth`（自球団の選手の自然成長。次の年度替わりに主な能力が1つあたり何点動くかの見込みで、選手情報の「自然成長」に `+1.20/年` の形で出す。`server/projection.mjs` の `playerViewWithGrowth`。他球団の名簿（`team`）には載らない）。
   - `team`: `formerCareers`（引退・退団した選手の通算）、`chronicle.moves`（入退団履歴）、`roster[].years`（他球団の選手の年ごとの推移）。
