@@ -275,8 +275,17 @@ const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
  *   - `marks` 大きな文字 `[{ t, text, tone, sub }]`（tone: out・hit・run・homer・walk・error）
  *   - `scoreTimes` 点が入る時、`main` 打球を捕る野手と時、`guessed` 走者の割り当てが合わず動かさずに置いたとき true
  */
+/** 打球の記録が無くても前へ転がった打席（バント。記録は四球・三振と同じく塁だけ） */
+const BUNT_CODES = new Set(['犠', '安', '凡', '失']);
+/** バントの打球を作る: 安打（セーフティ）は三塁線、ほかは投手の前へ */
+const buntBall = (code) => (code === '安' ? { pos: 5, dir: -28, dist: 14, la: -15 } : { pos: 1, dir: -8, dist: 10, la: -15 });
+
 export function motionOf(scene, before = 0) {
-  const { code, batted } = scene;
+  const { code } = scene;
+  // サーバーはバント（犠打・バント安打・バントの凡退）に打球を書かない。打球の無いまま描くと
+  // 四球の絵（捕手が捕って「四球」、打者が打席に残る）になるので、転がした打球を作って描く
+  const bunt = !scene.batted && BUNT_CODES.has(code);
+  const batted = bunt ? buntBall(code) : scene.batted;
   const rowOuts = Math.max(0, (scene.outs || 0) - (scene.outsBefore || 0));
   const hasBatter = code !== '走' && code !== '刺';
   const assigned = assignRunners({
@@ -377,7 +386,7 @@ export function motionOf(scene, before = 0) {
       tAfter = got;
     }
   } else if (!batted) {
-    // 打球の無い打席（三振・四球・死球）
+    // 打球の無い打席（三振・四球・死球。バントは上で打球を作るのでここに来ない）
     if (code === '死') {
       ball.push([CONTACT + 0.4, -0.5, 1.4, 0.05]);
       events.push({ t: CONTACT, kind: 'hbp', x: -0.95, y: 0.5 });
@@ -401,7 +410,7 @@ export function motionOf(scene, before = 0) {
     }
     tAfter = CONTACT + 0.7;
   } else {
-    swingAt = code === '犠' ? null : CONTACT - 0.07;
+    swingAt = code === '犠' || bunt ? null : CONTACT - 0.07;
     const fielder = mainPos;
     const homer = code === '本';
     const dir = clamp(batted.dir, -45, 45);
@@ -436,10 +445,10 @@ export function motionOf(scene, before = 0) {
             ? clamp(batted.dist * 0.3, 2.5, 7)
             : Math.max(along * 0.6, Math.min(along, batted.dist));
       fieldPoint = at(dir, d);
-      const roll = code === '犠' ? 11 : through ? 24 : 30;
+      const roll = code === '犠' || bunt ? 11 : through ? 24 : 30;
       const need = dist2(fHome, fieldPoint) / FIELD_SPRINT;
       const tRoll = Math.max(dist2(plate, fieldPoint) / roll, need);
-      ball.push(...hopTrack(plate, fieldPoint, CONTACT, tRoll, 0.8, code === '犠' ? 0.2 : 0.5));
+      ball.push(...hopTrack(plate, fieldPoint, CONTACT, tRoll, 0.8, code === '犠' || bunt ? 0.2 : 0.5));
       const hop = at(dir, d * 0.16);
       events.push({ t: CONTACT + tRoll * 0.16, kind: 'bounce', x: hop[0], y: hop[1] });
       fieldTime = CONTACT + tRoll + 0.05;
@@ -755,7 +764,7 @@ export function motionOf(scene, before = 0) {
     ball,
     fielders,
     runners,
-    batter: hasBatter ? { swingAt, bunt: code === '犠', walk: code === '四', hbp: code === '死' } : null,
+    batter: hasBatter ? { swingAt, bunt: code === '犠' || bunt, walk: code === '四', hbp: code === '死' } : null,
     acts,
     events,
     marks,
