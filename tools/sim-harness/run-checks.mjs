@@ -113,6 +113,8 @@ const CHECKS = [
   { name: 'online-team-face-check', group: 'check', online: true, slow: 5 },
   // 年代記（節目・引退・裏の大会・マジック・球団史）。1年を通して進める
   { name: 'online-chronicle-check', group: 'check', online: true, slow: 130 },
+  // 球団名を変えたあとに変える前の名前（と内部名）が保存・ビュー・Web の画面に残らない（1年を通して進める）
+  { name: 'online-rename-check', group: 'check', online: true, slow: 95 },
   { name: 'online-owner-draft-five-check', group: 'check', online: true, slow: 165 },
   { name: 'online-staff-moves-check', group: 'check', online: true, slow: 150 },
   // 指導者（監督・コーチ）。種・任せ方・人事・40年の入れ替わり・1年を通して翌年のキャンプまで

@@ -1,5 +1,6 @@
 import { BALL_EFFECTS, PITCHING_FORM_EFFECTS, normalizeAbility } from '../utils/constants.js';
 import { naturalGrowthText } from '../utils/naturalGrowth.js';
+import { teamLabel } from './gameText.js';
 import { getDeception } from '../game/deception.js';
 import { describeBatterShape } from '../game/batterZone.js';
 import { getBatterType, BATTER_TYPE_LABEL } from '../game/batterType.js';
@@ -181,7 +182,8 @@ export function abilityRows(player, group) {
       ],
       ['出身高校', player.origin?.highSchool || null],
       ['出身大学', player.origin?.university || null],
-      ['前所属', player.origin?.previousTeam || null],
+      // ⚠ 前所属は内部名。いまの球団名に引き直す（名前を変えた球団が前の名前で出ていた。2026-11-24 監査）
+      ['前所属', player.origin?.previousTeam ? teamLabel(player.origin.previousTeam) : null],
     ],
     arsenal: (p.arsenal || []).map((pitch) => [
       BALL_EFFECTS[pitch.type]?.name || pitch.type,

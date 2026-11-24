@@ -1,4 +1,4 @@
-import { TEAMS_DATA } from '../teams-data.js';
+import { TEAMS_DATA, releasedPlayersPool } from '../teams-data.js';
 import { addToReleasedPool } from '../state/pools.js';
 import { generateFullSeasonSchedule, fitGamesPerSeason } from './scheduleGenerator.js';
 import { generateExpansionRoster } from './tryoutSystem.js';
@@ -64,9 +64,13 @@ export function repairLeagueConfig(leagueConfig, settings, gameMode) {
 //    移り、新しい名前で24人の別の名簿が作られ、`Object.keys(TEAMS_DATA)[0]`（多くの画面が
 //    自チームとして読む）は2番目の球団に替わっていた。CPU の球団も同じだった。
 //    解散・新規参入は球団数の増減（行の増減。規定画面は後ろの行から足し引きする）だけで起こす。
-// ⚠ 記録（年度の成績・殿堂・大会の歴代・プールの選手の前所属）は、その年の名前のまま残す
+// ⚠ 年度の記録（年度の成績・順位・殿堂・大会の歴代）は、その年の名前のまま残す
 //    （当時はその名前だった）。いまの世界で名前を引く所（TEAMS_DATA のキー・球団の name と略称・
-//    leagueConfig・日程・順位表・チームランキング）だけを新しい名前にする
+//    leagueConfig・日程・順位表・チームランキング）は新しい名前にする。
+// ⚠ **選手に付いている所属（経歴 `careerHistory` の球団・プールの前所属 `previousTeam`）と
+//    OB名鑑の所属も新しい名前にする**（`relabelRenamedTeams`）。いしだ 2026-11-24「チーム名を
+//    変えた後も、旧チーム名が選手の経歴などに残ってしまう」。改名は球団そのものの名前の変更なので、
+//    今いる選手の経歴に変える前の名前が並ぶと、別の球団に居たように読めていた
 // ============================================================
 /**
  * 前年のリーグの球団（prevNames）と確定した球団（nextNames）を行ごとに比べる。
@@ -100,10 +104,40 @@ export function validateLeagueTeamNames(nextNames = [], currentTeams = []) {
   return errors;
 }
 
+/**
+ * 選手に付いている所属を改名後の名前にする（経歴 `careerHistory` の球団・前所属 `previousTeam`・
+ * OB名鑑の `teamName`）。`to` は 旧名 → 新名 の Map。行の入れ替え（#2 と #3）も1回で置き換える。
+ * ⚠ 高校の経歴は球団ではないので触らない（球団名と同じ高校名はまず無いが念のため）
+ * @returns 書き換えた件数
+ */
+export function relabelRenamedTeams(players, to) {
+  let changed = 0;
+  if (!to?.size) return changed;
+  for (const p of players || []) {
+    if (!p) continue;
+    for (const h of Array.isArray(p.careerHistory) ? p.careerHistory : []) {
+      if (h && h.type !== 'highschool' && to.has(h.label)) {
+        h.label = to.get(h.label);
+        changed++;
+      }
+    }
+    if (to.has(p.previousTeam)) {
+      p.previousTeam = to.get(p.previousTeam);
+      changed++;
+    }
+    if (to.has(p.teamName)) {
+      p.teamName = to.get(p.teamName);
+      changed++;
+    }
+  }
+  return changed;
+}
+
 // TEAMS_DATA のキーを付け替える。**並びはそのまま**（先頭は自チーム。監督移籍の並べ替えと同じ注意）
+// 返り値は 旧名 → 新名 の Map（OB名鑑など、ここから届かない記録を呼ぶ側が直すため）
 const renameTeams = (renames) => {
   const to = new Map(renames.filter(r => TEAMS_DATA[r.from]).map(r => [r.from, r.to]));
-  if (to.size === 0) return;
+  if (to.size === 0) return to;
   const entries = Object.entries(TEAMS_DATA);
   for (const [name] of entries) delete TEAMS_DATA[name];
   for (const [name, team] of entries) {
@@ -113,6 +147,10 @@ const renameTeams = (renames) => {
   }
   // チームランキング（年度更新で取った今の順位）も新しい名前で引けるようにする
   (WORLD_DATA._teamRanking || []).forEach(entry => { if (to.has(entry.name)) entry.name = to.get(entry.name); });
+  // 選手の経歴・前所属（どの世界の球団に居る選手も・トライアウトのプールも）
+  for (const team of Object.values(TEAMS_DATA)) relabelRenamedTeams(team?.players, to);
+  relabelRenamedTeams(releasedPlayersPool, to);
+  return to;
 };
 
 /**
@@ -123,6 +161,8 @@ const renameTeams = (renames) => {
 export function applyNextSeasonRegulations({
   confirmedSettings, seasonData, currentTeams, setSeasonData, setLeagueConfig, generatePitchingRotation,
   setManagementView, nextView, notify = (message) => globalThis.alert?.(message),
+  // 改名したとき（旧名 → 新名 の Map）。OB名鑑（App の state）を新しい名前にする
+  onRenamed = null,
 }) {
   const settings = confirmedSettings || seasonData.settings || {};
   const calendarYear = calendarYearOf(seasonData.year);
@@ -165,7 +205,8 @@ export function applyNextSeasonRegulations({
     delete TEAMS_DATA[teamName];
   });
 
-  renameTeams(plan.renames);
+  const renamed = renameTeams(plan.renames);
+  if (renamed.size > 0) onRenamed?.(renamed);
 
   // 略称は規定画面の欄のとおりにする（以前は新規参入の球団にしか入れず、続ける球団の略称の変更は捨てていた）
   const abbrs = settings.teamAbbreviations || [];

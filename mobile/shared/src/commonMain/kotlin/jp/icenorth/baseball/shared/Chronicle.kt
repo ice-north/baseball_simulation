@@ -290,8 +290,12 @@ fun raceText(r: Race, short: (String) -> String): ChronicleText? {
 /** 節目（「通算100安打に到達（このリーグで）」） */
 fun milestoneText(m: Milestone): String = if (m.kind == "career") "${m.label}に到達（このリーグで）" else "${m.label}に到達"
 
-/** 裏の大会（甲子園・独立リーグ日本一決定戦） */
-fun worldText(w: WorldNews, short: (String) -> String): ChronicleText? = when (w.kind) {
+/**
+ * 裏の大会（甲子園・独立リーグ日本一決定戦）。
+ * ⚠ 日本一決定戦の優勝・敗れた相手は、このリーグの球団なら内部名で入っている。[label] でいまの
+ *    球団名に引き直す（名前を変えた球団が変える前の名前で出ていた。2026-11-24 監査。Web 版 chronicleText.js と同じ）
+ */
+fun worldText(w: WorldNews, short: (String) -> String, label: (String) -> String = { it }): ChronicleText? = when (w.kind) {
     "koshien" -> {
         val star = w.star?.let { "大会の顔は${it.school}の${it.role}・${it.name}（${it.stageLabel}）。" }.orEmpty()
         ChronicleText(
@@ -300,9 +304,9 @@ fun worldText(w: WorldNews, short: (String) -> String): ChronicleText? = when (w
         )
     }
     "grand" -> {
-        val ours = w.ours?.let { "このリーグの代表${short(it)}は${w.oursResult ?: "出場"}${w.oursLostTo?.let { l -> "（${l}に敗れた）" }.orEmpty()}。" }.orEmpty()
+        val ours = w.ours?.let { "このリーグの代表${short(it)}は${w.oursResult ?: "出場"}${w.oursLostTo?.let { l -> "（${label(l)}に敗れた）" }.orEmpty()}。" }.orEmpty()
         ChronicleText(
-            "独立リーグ日本一は${w.champion}${w.championLeague?.let { "（$it）" }.orEmpty()}",
+            "独立リーグ日本一は${label(w.champion)}${w.championLeague?.let { "（$it）" }.orEmpty()}",
             "各地の独立リーグの王者${if (w.teams > 0) "${w.teams}球団" else ""}が争った決定戦。${w.finalScore?.let { "決勝は${it}。" }.orEmpty()}$ours",
         )
     }

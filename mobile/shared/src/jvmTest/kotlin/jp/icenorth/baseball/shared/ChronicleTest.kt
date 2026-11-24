@@ -105,5 +105,11 @@ class ChronicleTest {
         assertEquals("宮崎、1部1位が決定", raceText(Race(leagueName = "1部", kind = "first", team = "宮崎アトラス", clinched = true), short)!!.head)
         assertEquals("通算100安打に到達（このリーグで）", milestoneText(Milestone(kind = "career", label = "通算100安打")))
         assertNotNull(worldText(WorldNews(kind = "koshien", champion = "A高"), short))
+        // 日本一決定戦の優勝はこのリーグの球団なら内部名。いまの球団名に引き直す（2026-11-24 監査）
+        val label = { n: String -> if (n == "三河ハリケーンズ") "新名フェニックス" else n }
+        assertEquals(
+            "独立リーグ日本一は新名フェニックス（四国）",
+            worldText(WorldNews(kind = "grand", champion = "三河ハリケーンズ", championLeague = "四国", ours = "三河ハリケーンズ", oursResult = "優勝"), short, label)!!.head,
+        )
     }
 }

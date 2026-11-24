@@ -469,7 +469,7 @@ export function LeagueTopics({ view, full = false, bare = false }) {
     .slice(0, limit);
   // ⚠ 年をまたいでも残す（PCは「話題」の一覧なので、紙面のように日付で切らない）。年を見出しに添える
   const world = (view.chronicle?.world || [])
-    .map((w, i) => ({ text: worldText(w, teamShort), year: w?.year, i }))
+    .map((w, i) => ({ text: worldText(w, teamShort, teamLabel), year: w?.year, i }))
     .filter((x) => x.text)
     .slice(0, limit);
   const milestones = full ? [] : view.chronicle?.milestones || [];

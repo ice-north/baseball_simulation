@@ -1,6 +1,7 @@
 import React from 'react';
 import { POS } from './api.js';
 import { isYearSummaryTime } from './shared.js';
+import { teamLabel } from './gameText.js';
 
 // ============================================================
 // その年のまとめ（年度更新の直後に出す）。
@@ -26,9 +27,11 @@ function MoveRow({ row }) {
         {row.name}
         {row.position && <small>{POS[row.position] || row.position}</small>}
       </span>
+      {/* ⚠ 相手の球団は内部名で来る（`teamMoves`）。いまの球団名に引き直す（名前を変えた球団が
+          変える前の名前で出ていた。2026-11-24 監査。アプリの `yearSummaryMoveText` も同じ） */}
       {row.other && (
         <small className="online-muted">
-          {row.side === 'in' ? `← ${row.other}` : `→ ${row.other}`}
+          {row.side === 'in' ? `← ${teamLabel(row.other)}` : `→ ${teamLabel(row.other)}`}
         </small>
       )}
     </li>
