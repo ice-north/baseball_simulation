@@ -1333,13 +1333,16 @@ small.online-gain:not(:where(.online-sp *)) {
    入るよう上限を広く取り、足りない画面でだけ … で止めて全文は title で出す。
    表は余った幅を意欲の列に配っているので、ここを広げても横には溢れない
    （実測 1440px で 変化球110px・意欲148→143px・表1138px のまま） */
+/* ⚠ 2026-11-24: 1行（上限 200px）のままだと、4〜5球種の投手と「合わせる」「サブポジ練習＋おまかせ」が
+   同じ表に揃ったときに 1440px でも表が横に溢れた（選手は毎回くじで決まるので、検査がときどき落ちた）。
+   **2行に折り返して幅を 120px に留める**（3文字×3球種で1行。行の高さは選択欄の方が高いので伸びない） */
 .online-camp-pitches {
   font-size: 10px;
+  line-height: 1.25;
   color: #cbd5e1;
-  white-space: nowrap;
-  max-width: 200px;
+  white-space: normal;
+  max-width: 120px;
   overflow: hidden;
-  text-overflow: ellipsis;
 }
 .online-camp-bulk-all {
   font-size: 12px;
