@@ -11,6 +11,7 @@ import {
 } from '../../src/online/tryoutPlan.js';
 import { pitchingFromLineup, reliefGroups, moveRelief, reliefOrderOf } from '../../src/online/pitchingEdit.js';
 import { planRest } from '../../src/online/restPlan.js';
+import { tradeMerits, meritSummaryText } from '../../src/online/tradeMerit.js';
 
 const view = JSON.parse(fs.readFileSync(new URL('../shared/src/jvmTest/resources/view-running.json', import.meta.url)));
 const roster = view.roster;
@@ -108,5 +109,30 @@ const restPlansTwoWay = [];
 for (let i = 0; i < field.length; i += 1)
   for (let j = 0; j < field.length; j += 1)
     if (i !== j) restPlansTwoWay.push(restCase(field.map((_, k) => (k === j ? 100 : 0)), field[i].playerId));
-const text = JSON.stringify({ restPlans, restPlansTwoWay, camp, wish, recommended, relief, tryout: { ranked, picks, added, removed, shifted, moved, totals, shorts, blocking: summary.blocking, warnings: summary.warnings, warningCases: [fullStaff.warnings, fewPitchers.warnings] } });
+// 相手に与えるメリット（`tradeMerit.js`）。名簿を偶数番と奇数番の2球団に分け、偶数番を相手、奇数番を自球団とする。
+// 出す選手の組（野手1人・投手1人・野手2人・投手2人・捕手）と、相手が出す選手（無し・1人・2人）の組み合わせ
+const meritTheirs = roster.filter((_, i) => i % 2 === 0);
+const meritMine = roster.filter((_, i) => i % 2 === 1);
+const mineFielders = meritMine.filter((p) => p.position !== 'pitcher');
+const minePitchers = meritMine.filter((p) => p.position === 'pitcher');
+const meritGives = [
+  [], mineFielders.slice(0, 1), minePitchers.slice(0, 1), mineFielders.slice(1, 3), minePitchers.slice(1, 3),
+  meritMine.filter((p) => p.position === 'catcher'), meritMine.slice(-3),
+];
+const meritGets = [[], [meritTheirs[0].id], meritTheirs.slice(1, 3).map((p) => p.id)];
+const tradeMerit = [];
+for (const give of meritGives)
+  for (const get of meritGets)
+    for (const others of [{}, { mine: meritMine }]) {
+      const m = tradeMerits(meritTheirs, give, get, others);
+      tradeMerit.push({
+        give: give.map((p) => p.id),
+        get,
+        others: Object.keys(others).length > 0,
+        players: m.players.map((p) => ({ id: p.id, role: p.role.kind, slot: p.role.slot, tags: p.tags })),
+        tags: m.tags,
+        summary: meritSummaryText(m),
+      });
+    }
+const text = JSON.stringify({ restPlans, restPlansTwoWay, camp, wish, recommended, relief, tryout: { ranked, picks, added, removed, shifted, moved, totals, shorts, blocking: summary.blocking, warnings: summary.warnings, warningCases: [fullStaff.warnings, fewPitchers.warnings] }, tradeMerit });
 emitExpected(text, { script: 'expect-logic.mjs', file: 'logic-expected.json', also: 'アプリの共通部も揃えること' });

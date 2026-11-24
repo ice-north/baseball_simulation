@@ -209,4 +209,36 @@ class LogicTest {
             twoWay += case(field.indices.map { if (it == j) 100 else 0 }, field[i].at("playerId").long())
         compare("restPlansTwoWay", expected.at("restPlansTwoWay").list(), twoWay)
     }
+    /** 相手に与えるメリット（Web 版 `tradeMerit.js`）。組み合わせは expect-logic.mjs と同じ */
+    @Test
+    fun tradeMeritMatchesWeb() {
+        val players = roster.map { OnlineJson.decodeFromJsonElement(Player.serializer(), it) }
+        val theirs = players.filterIndexed { i, _ -> i % 2 == 0 }
+        val mine = players.filterIndexed { i, _ -> i % 2 == 1 }
+        val fielders = mine.filter { !it.isPitcher }
+        val pitchers = mine.filter { it.isPitcher }
+        val gives = listOf(
+            emptyList(), fielders.take(1), pitchers.take(1), fielders.drop(1).take(2), pitchers.drop(1).take(2),
+            mine.filter { it.position == "catcher" }, mine.takeLast(3),
+        )
+        val gets = listOf(emptySet(), setOf(theirs[0].id), theirs.drop(1).take(2).map { it.id }.toSet())
+        val cases = expected.at("tradeMerit").list()
+        var n = 0
+        fun tagsOf(list: List<MeritTag>) = list.map { it.tone + ":" + it.text }
+        fun wantTags(e: kotlinx.serialization.json.JsonElement?) = e.list().map { it.at("tone").str() + ":" + it.at("text").str() }
+        for (give in gives) for (get in gets) for (withOthers in listOf(false, true)) {
+            val want = cases[n++]
+            val m = tradeMerits(theirs, give, get, if (withOthers) mapOf("mine" to mine) else emptyMap())
+            val label = "give=${give.map { it.id }} get=$get others=$withOthers"
+            assertEquals(want.at("players").list().map { it.at("id").long() }, m.players.map { it.id }, label)
+            want.at("players").list().forEachIndexed { i, w ->
+                assertEquals(w.at("role").str(), m.players[i].role.kind.key, label)
+                assertEquals(w.at("slot").str(), m.players[i].role.slot, label)
+                assertEquals(wantTags(w.at("tags")), tagsOf(m.players[i].tags), label)
+            }
+            assertEquals(wantTags(want.at("tags")), tagsOf(m.tags), label)
+            assertEquals(want.at("summary").str(), meritSummaryText(m), label)
+        }
+        assertEquals(cases.size, n)
+    }
 }

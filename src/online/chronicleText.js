@@ -38,8 +38,14 @@ export function milestoneText(m) {
   return m.kind === 'career' ? `${m.label}に到達（このリーグで）` : `${m.label}に到達`;
 }
 
-/** 裏の大会（甲子園・独立リーグ日本一決定戦） */
-export function worldText(w, short = (n) => n) {
+/**
+ * 裏の大会（甲子園・独立リーグ日本一決定戦）。
+ * ⚠ 日本一決定戦の優勝・敗れた相手は、このリーグの球団なら**内部名**で入っている。
+ *    `label` でいまの球団名に引き直す（名前を変えた球団が日本一になると、変える前の名前で
+ *    「独立リーグ日本一は〇〇」と出ていた。2026-11-24 監査）。ほかのリーグの球団は名前のまま返る。
+ *    アプリの `Chronicle.kt` の `worldText` も同じ
+ */
+export function worldText(w, short = (n) => n, label = (n) => n) {
   if (w?.kind === 'koshien') {
     const star = w.star
       ? `大会の顔は${w.star.school}の${w.star.role}・${w.star.name}（${w.star.stageLabel}）。`
@@ -51,10 +57,10 @@ export function worldText(w, short = (n) => n) {
   }
   if (w?.kind === 'grand') {
     const ours = w.ours
-      ? `このリーグの代表${short(w.ours)}は${w.oursResult || '出場'}${w.oursLostTo ? `（${w.oursLostTo}に敗れた）` : ''}。`
+      ? `このリーグの代表${short(w.ours)}は${w.oursResult || '出場'}${w.oursLostTo ? `（${label(w.oursLostTo)}に敗れた）` : ''}。`
       : '';
     return {
-      head: `独立リーグ日本一は${w.champion}${w.championLeague ? `（${w.championLeague}）` : ''}`,
+      head: `独立リーグ日本一は${label(w.champion)}${w.championLeague ? `（${w.championLeague}）` : ''}`,
       body: `各地の独立リーグの王者${w.teams ? `${w.teams}球団` : ''}が争った決定戦。${w.finalScore ? `決勝は${w.finalScore}。` : ''}${ours}`,
     };
   }

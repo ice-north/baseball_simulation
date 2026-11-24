@@ -558,7 +558,18 @@ for (const [count, games] of [[4, 144], [4, 150], [6, 145], [5, 148], [7, 150]])
   const keysBefore = Object.keys(TEAMS_DATA);
   const { WORLD_DATA } = await import('../../src/corporate/worldData.js');
   WORLD_DATA._teamRanking = names.map((name, i) => ({ position: i + 1, name, rank: 'D', score: 900 }));
+  // ⚠ 選手に付いた所属（経歴・前所属）と OB名鑑の所属も新しい名前にする（いしだ 2026-11-24
+  //    「チーム名を変えた後も、旧チーム名が選手の経歴などに残ってしまう」）。
+  //    今いる選手・ほかの世界の球団へ移った選手・プールの選手・OB名鑑で確かめる。高校の経歴は触らない
+  const careerOf = (label, type = 'independent') => ({ type, year: 1, label });
+  userTeam.players[0].careerHistory = [careerOf(user, 'highschool'), careerOf(cpu), careerOf(user, 'trade')];
+  const outsideTeam = Object.values(TEAMS_DATA).find((t) => !names.includes(t.name) && t.players?.length);
+  assert.ok(outsideTeam, '前提: 並行世界の球団に選手がいる');
+  outsideTeam.players[0].careerHistory = [...(outsideTeam.players[0].careerHistory || []), careerOf(user)];
+  const pooled = { id: 'rename-pool', name: 'プールの人', previousTeam: cpu, careerHistory: [careerOf(cpu)] };
+  releasedPlayersPool.push(pooled);
   const poolBefore = releasedPlayersPool.length;
+  let renamedMap = null;
   const renamed = ['改名ズ', second, '新愛媛', fourth];
   let league = { format: 'single', teamsPerLeague: 4, leagues: [{ name: '四国', teams: [...names] }] };
   let next = { ...seasonData, year: 2 };
@@ -575,8 +586,33 @@ for (const [count, games] of [[4, 144], [4, 150], [6, 145], [5, 148], [7, 150]])
     setManagementView: (v) => { view = v; },
     nextView: 'camp',
     notify: (message) => notes.push(message),
+    onRenamed: (to) => { renamedMap = to; },
   }));
   apply(renamed, { teamAbbreviations: ['改名', '徳島', '新愛', '香川'] });
+  assert.deepEqual(userTeam.players[0].careerHistory.map((h) => h.label), [user, '新愛媛', '改名ズ'],
+    '自チームの選手の経歴に変える前の球団名が残る（高校の経歴は触らない）');
+  assert.equal(outsideTeam.players[0].careerHistory.at(-1).label, '改名ズ', 'ほかの世界へ移った選手の経歴に変える前の名前が残る');
+  assert.equal(pooled.previousTeam, '新愛媛', 'プールの選手の前所属が変える前の名前のまま');
+  assert.equal(pooled.careerHistory[0].label, '新愛媛');
+  assert.deepEqual([...(renamedMap || new Map())], [[user, '改名ズ'], [cpu, '新愛媛']], 'OB名鑑を直すための改名の知らせが来ない');
+  {
+    const { relabelRenamedTeams } = await import('../../src/season/nextSeasonRegulations.js');
+    const ob = [{ name: 'OB', teamName: user, careerHistory: [careerOf(user)] }];
+    assert.equal(relabelRenamedTeams(ob, renamedMap), 2);
+    assert.equal(ob[0].teamName, '改名ズ', 'OB名鑑の所属が変える前の名前のまま');
+    // 経歴の多くは「球団名＋入団/退団/ 〇〇就任」の文で、実績の行は球団を team に持つ
+    const words = [{ careerHistory: [
+      careerOf(`${user}入団`), careerOf(`${cpu}退団`, 'released'), careerOf(`${user} 監督就任`, 'staff'),
+      { type: 'achievement', year: 1, label: '首位打者', team: cpu }, careerOf(`${user}高校`, 'highschool'),
+      careerOf(`${user}ファン`),
+    ] }];
+    relabelRenamedTeams(words, renamedMap);
+    assert.deepEqual(words[0].careerHistory.map((h) => h.label),
+      ['改名ズ入団', '新愛媛退団', '改名ズ 監督就任', '首位打者', `${user}高校`, `${user}ファン`],
+      '経歴の文（入団・退団・就任）に変える前の名前が残る／関係ない文まで書き換えた');
+    assert.equal(words[0].careerHistory[3].team, '新愛媛', '実績の行の球団が変える前の名前のまま');
+  }
+  releasedPlayersPool.splice(releasedPlayersPool.indexOf(pooled), 1);
   assert.equal(view, 'camp');
   assert.equal(TEAMS_DATA['改名ズ'], userTeam, '自チームの名前を変えると、自チームが解散して別の名簿になる');
   assert.equal(TEAMS_DATA['新愛媛'], cpuTeam, 'CPU 球団の名前を変えると、解散して別の名簿になる');
@@ -591,7 +627,7 @@ for (const [count, games] of [[4, 144], [4, 150], [6, 145], [5, 148], [7, 150]])
     '改名で TEAMS_DATA の並びが変わった（先頭は自チーム）');
   assert.equal(Object.keys(TEAMS_DATA)[0], '改名ズ', '自チームが TEAMS_DATA の先頭でない');
   assert.deepEqual(league.leagues[0].teams, renamed, 'leagueConfig が新しい名前にならない（userTeamName は allTeams[0]）');
-  assert.equal(releasedPlayersPool.length, poolBefore, '改名で選手がプールへ移った');
+  assert.equal(releasedPlayersPool.length, poolBefore - 1, '改名で選手がプールへ移った');
   assert.ok(next.schedule.every(g => renamed.includes(g.home) && renamed.includes(g.away)), '日程に旧名が残る');
   assert.deepEqual(next.standings.map(s => s.team), renamed);
   assert.deepEqual(WORLD_DATA._teamRanking.map(e => e.name), renamed, 'チームランキングの名前が旧名のまま');

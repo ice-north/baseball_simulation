@@ -28,6 +28,7 @@ import {
 } from '../../server/leagueEngine.mjs';
 import { createTradeJudge } from '../../server/tradeJudge.mjs';
 import { teamThoughts, thoughtsText } from '../../src/online/tradeThoughts.js';
+import { tradeMerits, roleText } from '../../src/online/tradeMerit.js';
 import { tradeFactorFor, staffOf } from '../../server/coachEngine.mjs';
 import { TRADE_FACTOR_LIMIT } from '../../src/online/coaches.js';
 import { CPU_ACCEPT_MARGIN } from '../../src/online/trades.js';
@@ -211,15 +212,17 @@ try {
   // --- 相手の一覧にCPU球団も出す -----------------------------------------
   // ⚠ **1人で遊んでいる間もトレードが使えること**。以前は参加者の球団だけを
   //    相手にしていて、CPU11球団に対して何も出せなかった。
-  // ⚠ 人の球団を**先に**並べ、CPUにはそう書く（返事が返るまでの時間が違う）
+  // ⚠ 人の球団かCPUかを札と読み上げの名前で分ける（返事が返るまでの時間が違う）
+  // ⚠ 部（1部・2部）の見出しで分け、球団マーク＋球団名のカードの格子に並べる。
+  //    マークは新しい見た目が切（この検査の既定）でも出す（いしだ 2026-11-24）。自球団は押せないカード
   {
     const picker = p
       .locator('.online-trade-composer')
       .last()
       .getByRole('group', { name: '相手の球団' });
-    const names = (await picker.getByRole('button').allInnerTexts()).map((t) =>
-      t.trim(),
-    );
+    const names = await picker
+      .getByRole('button')
+      .evaluateAll((els) => els.map((e) => e.getAttribute('aria-label')));
     assert.equal(
       names.length,
       started.season.settings.teamNames.length - 1,
@@ -229,15 +232,36 @@ try {
       names.some((n) => n.includes('（CPU）')),
       `CPU球団が相手に出ていない: ${names.join('/')}`,
     );
-    assert.ok(
-      !names[0].includes('（CPU）'),
-      `人の球団が先に並んでいない: ${names.join('/')}`,
-    );
     assert.equal(
       names.filter((n) => !n.includes('（CPU）')).length,
       1,
       `人の球団の数がちがう: ${names.join('/')}`,
     );
+    assert.deepEqual(
+      await picker.locator('.online-trade-partner-league h3').allInnerTexts(),
+      ['1部', '2部'],
+      '相手の球団が部の見出しで分かれていない',
+    );
+    assert.equal(
+      await picker.locator('.online-trade-partner .online-team-mark').count(),
+      started.season.settings.teamNames.length,
+      '相手の球団のカードに球団マークが無い（切のときも出す）',
+    );
+    assert.equal(
+      await picker.locator(`.online-trade-partner.is-own[data-team="${teamA}"]`).count(),
+      1,
+      '自球団のカードが無い',
+    );
+    assert.match(
+      await picker.locator(`button.online-trade-partner[data-team="${teamB}"]`).innerText(),
+      /参加者|B/,
+      '人の球団に札が無い',
+    );
+    // 1部も2部も同じ幅のカード（段がそろう）
+    const widths = await picker
+      .locator('.online-trade-partner')
+      .evaluateAll((els) => [...new Set(els.map((e) => Math.round(e.getBoundingClientRect().width)))]);
+    assert.equal(widths.length, 1, `カードの幅がそろっていない: ${widths.join('/')}`);
   }
 
   // --- 新しい提案: 1枚の表で選ぶ → 交換案 → 提案 ------------------------
@@ -528,6 +552,20 @@ try {
       if (process.env.TRADE_SHOTS)
         await deal.screenshot({ path: `${process.env.TRADE_SHOTS}/pc-trade-odds.png` });
     }
+    // 相手に与えるメリット（いしだ 2026-11-24）: 出す選手の相手での役割を `tradeMerit.js` と同じ式で。
+    // CPU球団なら見込みの札も並ぶ
+    {
+      const merit = deal.getByRole('region', { name: '相手へのメリット' });
+      await merit.locator(`li[data-player="${best.id}"]`).waitFor();
+      const m = tradeMerits(rosterOf(l, cpuTeam), [best], [worst.id]);
+      const row = await merit.locator(`li[data-player="${best.id}"]`).innerText();
+      assert.ok(
+        row.includes(roleText(m.players[0].role, m.players[0].slot)),
+        `相手での役割が式と違う: ${row}`,
+      );
+      assert.match(await merit.innerText(), /相手の戦力[+-±]/, '交換全体の相手の戦力が出ていない');
+      assert.match(await merit.innerText(), /CPUの見込み: /, 'CPUの見込みの札が出ていない');
+    }
     await submit.click();
     await cpuConfirm.waitFor();
     assert.doesNotMatch(
@@ -788,7 +826,7 @@ try {
   }
   assert.deepEqual(errors, []);
   console.log(
-    'online-trade-ui-check PASS（届いた提案を同じ列で比べる・交換後の構成 / 相手にCPU球団も出る・人が先 / 1枚の表で選ぶ・交換案 / 成り立たない交換は提案できない / 提案と逆提案の向き / 送る前の確認（選手・取り消せない・片側が空の注意） / CPU球団の答えを文で出す（断った・受けた） / CPUの見込みメーター / 相手の考えていること（弱い持ち場・出しやすい・出し渋る） / 補強から探す・余りを出す / 選手の詳細からトレード / スマホWebのホームで返事が必要な提案を知らせる / スマホWebで受ける・断る（どちらも確認つき） / スマホWebで練習試合の申し込みに返事する）',
+    'online-trade-ui-check PASS（届いた提案を同じ列で比べる・交換後の構成 / 相手にCPU球団も出る・1部と2部に分けたマーク付きのカード / 相手へのメリット / 1枚の表で選ぶ・交換案 / 成り立たない交換は提案できない / 提案と逆提案の向き / 送る前の確認（選手・取り消せない・片側が空の注意） / CPU球団の答えを文で出す（断った・受けた） / CPUの見込みメーター / 相手の考えていること（弱い持ち場・出しやすい・出し渋る） / 補強から探す・余りを出す / 選手の詳細からトレード / スマホWebのホームで返事が必要な提案を知らせる / スマホWebで受ける・断る（どちらも確認つき） / スマホWebで練習試合の申し込みに返事する）',
   );
 } catch (error) {
   await failureShots(browser, 'online-trade-ui');

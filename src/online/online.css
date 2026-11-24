@@ -752,6 +752,176 @@
 .online-trade-impact-team li.is-down:not(:where(.online-sp *)) b {
   color: #fdba74;
 }
+/* 相手の球団を選ぶ（`PartnerPicker`）: 部ごとの見出しと、マーク＋球団名のそろったカードの格子。
+   ⚠ カードの幅をそろえる（以前は文字のボタンが折り返して不揃いだった。いしだ 2026-11-24） */
+.online-trade-partners {
+  display: block;
+  margin-bottom: 4px;
+}
+.online-trade-partner-league + .online-trade-partner-league {
+  margin-top: 10px;
+}
+.online-trade-partner-league h3:not(:where(.online-sp *)) {
+  margin: 6px 0 6px;
+  font-size: 13px;
+  color: #cbd5e1;
+}
+/* 1部・2部とも6球団なので、広い画面は6列（部ごとに1段）、狭い画面は3列（2段）で段をそろえる */
+.online-trade-partner-grid {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 8px;
+}
+@media (max-width: 1360px) {
+  .online-trade-partner-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+.online .online-trade-partner:not(:where(.online-sp *)) {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr);
+  align-items: center;
+  gap: 4px 8px;
+  min-height: 58px;
+  height: auto;
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid #ffffff1f;
+  background: #ffffff0a;
+  color: inherit;
+  text-align: left;
+  font-weight: 400;
+}
+.online button.online-trade-partner:not(:where(.online-sp *)):hover:not(:disabled) {
+  background: #ffffff16;
+}
+.online button.online-trade-partner[aria-pressed='true']:not(:where(.online-sp *)) {
+  border-color: #60a5fa;
+  background: #1d4ed833;
+  box-shadow: inset 0 0 0 1px #60a5fa;
+}
+.online .online-trade-partner.is-own:not(:where(.online-sp *)) {
+  opacity: 0.6;
+  border-style: dashed;
+}
+/* マークは入／切どちらも同じ場所・同じ大きさ（隣の字との間は格子で取る） */
+.online .online-trade-partner .online-trade-partner-mark {
+  margin: 0;
+}
+.online-trade-partner-text {
+  display: grid;
+  min-width: 0;
+}
+.online-trade-partner-text b {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+}
+.online-trade-partner-text small {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  color: #94a3b8;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.online-trade-partner-kind {
+  flex: none;
+  max-width: 7em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 0 6px;
+  border-radius: 999px;
+  font-size: 10px;
+  line-height: 16px;
+  font-weight: 600;
+}
+.online-trade-partner-kind.is-cpu {
+  background: #94a3b833;
+  color: #cbd5e1;
+}
+.online-trade-partner-kind.is-human {
+  background: #f59e0b33;
+  color: #fcd34d;
+}
+.online-trade-partner-kind.is-own {
+  background: #ffffff14;
+  color: #94a3b8;
+}
+/* 相手へのメリット（`MeritPanel`） */
+.online-trade-merit {
+  margin-top: 12px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: #22c55e12;
+  border: 1px solid #22c55e33;
+  font-size: 12px;
+}
+/* 届いた提案の中（横に広い）は、交換のあとの名簿の幅にそろえる */
+.online-desktop .online-trade-card .online-trade-merit {
+  max-width: 560px;
+}
+.online-trade-merit h4:not(:where(.online-sp *)) {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 8px;
+  margin: 0 0 6px;
+  font-size: 12px;
+  color: #86efac;
+}
+.online-trade-merit h4 small:not(:where(.online-sp *)) {
+  font-weight: 400;
+  color: #94a3b8;
+}
+.online-trade-merit ul:not(:where(.online-sp *)) {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.online-trade-merit li:not(:where(.online-sp *)) {
+  display: grid;
+  gap: 3px;
+  padding: 5px 0;
+  border-top: 1px solid #ffffff12;
+}
+.online-trade-merit-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.online-trade-merit-tag {
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-size: 11px;
+  line-height: 18px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.online-trade-merit-tag.is-good {
+  background: #22c55e2b;
+  color: #bbf7d0;
+}
+.online-trade-merit-tag.is-plain {
+  background: #94a3b82b;
+  color: #e2e8f0;
+}
+.online-trade-merit-tag.is-bad {
+  background: #f9731633;
+  color: #fed7aa;
+}
+.online-trade-merit-total {
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid #ffffff1f;
+}
+.online-trade-merit-total p:not(:where(.online-sp *)) {
+  margin: 4px 0 0;
+}
 .online-trade-problem:not(:where(.online-sp *)) {
   margin: 6px 0 0;
   color: #fca5a5;
@@ -1163,13 +1333,16 @@ small.online-gain:not(:where(.online-sp *)) {
    入るよう上限を広く取り、足りない画面でだけ … で止めて全文は title で出す。
    表は余った幅を意欲の列に配っているので、ここを広げても横には溢れない
    （実測 1440px で 変化球110px・意欲148→143px・表1138px のまま） */
+/* ⚠ 2026-11-24: 1行（上限 200px）のままだと、4〜5球種の投手と「合わせる」「サブポジ練習＋おまかせ」が
+   同じ表に揃ったときに 1440px でも表が横に溢れた（選手は毎回くじで決まるので、検査がときどき落ちた）。
+   **2行に折り返して幅を 120px に留める**（3文字×3球種で1行。行の高さは選択欄の方が高いので伸びない） */
 .online-camp-pitches {
   font-size: 10px;
+  line-height: 1.25;
   color: #cbd5e1;
-  white-space: nowrap;
-  max-width: 200px;
+  white-space: normal;
+  max-width: 120px;
   overflow: hidden;
-  text-overflow: ellipsis;
 }
 .online-camp-bulk-all {
   font-size: 12px;

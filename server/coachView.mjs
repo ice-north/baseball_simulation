@@ -302,7 +302,8 @@ export function coachCard(league, coach, labelOf, { full = true, roster = null }
     // ⚠ 「得意」は画面に出さない（いしだ指摘 2026-11-10: 最初の3人は席と同じものが得意に
     //    決め打ちなので、出しても意味が無い）。中では看板の決まりやすさと空席埋めに効く
     specialty: coach.specialty,
-    origin: originText(coach),
+    // ⚠ 出身の球団はいまの名前で（`originText` の注）
+    origin: originText(coach, labelOf),
     fromPlayer: coach.origin?.kind === 'player',
     legend: !!coach.origin?.legend,
     // 紙面の言葉（「機動力と継投の野球」）

@@ -298,7 +298,7 @@ export function buildFrontPage(view, raw, lastGame = null, { history = null, his
   // 独立リーグ日本一決定戦に自球団が出たとき
   {
     const w = recentWorld(view).find((x) => x.kind === 'grand' && x.ours === team);
-    const t = w ? worldText(w, view.teamShort) : null;
+    const t = w ? worldText(w, view.teamShort, view.teamLabel) : null;
     if (w && t) articles.push(article('日本一決定戦', w.champion === team ? `${me}、独立リーグ日本一` : `${me}は${w.oursResult ?? '出場'}`, t.body, LINK_GAMES));
   }
 

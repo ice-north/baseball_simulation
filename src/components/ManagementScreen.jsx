@@ -1,6 +1,6 @@
 import React from 'react';
 import { TEAMS_DATA, initializeAllPitchingRotations } from '../teams-data.js';
-import { applyNextSeasonRegulations } from '../season/nextSeasonRegulations.js';
+import { applyNextSeasonRegulations, relabelRenamedTeams } from '../season/nextSeasonRegulations.js';
 import { withDeparted, rosterIndex, departedSince } from '../season/departedStats.js';
 import { progressDate } from '../season/dateProgression.js';
 import { generateOptimalLineup, generatePitchingRotation, generateAllTeamsLineup } from '../game/lineupGenerator.js';
@@ -64,6 +64,12 @@ const ManagementScreen = ({
   setGameFlowState
 }) => {
   const draftedIds = seasonData?.draftedPlayerIds || [];
+  // 翌年の規定で球団を改名したら、OB名鑑の所属も新しい名前にする（`relabelRenamedTeams` の注）。
+  // ⚠ state は写してから書き換える（前の配列の中身を直に変えない）
+  const relabelHallOfFame = (to) => setHallOfFamePlayers?.(prev => {
+    const next = (prev || []).map(p => ({ ...p, careerHistory: Array.isArray(p?.careerHistory) ? p.careerHistory.map(h => ({ ...h })) : p?.careerHistory }));
+    return relabelRenamedTeams(next, to) > 0 ? next : prev;
+  });
   if (managementView === 'tryout') return <TryoutScreen
     seasonData={seasonData}
     setSeasonData={setSeasonData}
@@ -318,7 +324,7 @@ const ManagementScreen = ({
     onConfirm={(confirmedSettings) => {
       applyNextSeasonRegulations({
         confirmedSettings, seasonData, currentTeams: allTeams, setSeasonData, setLeagueConfig, generatePitchingRotation,
-        setManagementView, nextView: 'sandbox_setup',
+        setManagementView, nextView: 'sandbox_setup', onRenamed: relabelHallOfFame,
       });
     }}
   />;
@@ -343,7 +349,7 @@ const ManagementScreen = ({
     onConfirm={(confirmedSettings) => {
       applyNextSeasonRegulations({
         confirmedSettings, seasonData, currentTeams: allTeams, setSeasonData, setLeagueConfig, generatePitchingRotation,
-        setManagementView, nextView: 'camp',
+        setManagementView, nextView: 'camp', onRenamed: relabelHallOfFame,
       });
     }}
   />;

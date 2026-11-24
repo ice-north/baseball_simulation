@@ -2,12 +2,12 @@
 #   pip install fonttools brotli
 #   python3 tools/look-fonts.py <フォントのフォルダ>
 # フォルダには google/fonts の次の TTF を置く:
-#   DelaGothicOne-Regular.ttf（ofl/delagothicone）
+#   MPLUS1p-Black.ttf（ofl/mplus1p）
 #   ZenKakuGothicNew-Regular.ttf・ZenKakuGothicNew-Bold.ttf（ofl/zenkakugothicnew）
 #   BarlowSemiCondensed-Regular.ttf・BarlowSemiCondensed-SemiBold.ttf（ofl/barlowsemicondensed）
 #   Graduate-Regular.ttf（ofl/graduate）・AlfaSlabOne-Regular.ttf（ofl/alfaslabone）・Yellowtail-Regular.ttf（apache/yellowtail）
 #
-# - 日本語の2つ（見出し Dela Gothic One・本文 Zen Kaku Gothic New）はどちらも1つ約2.4MB あるので、
+# - 日本語の2つ（見出し M PLUS 1p Black・本文 Zen Kaku Gothic New）はどちらも1つ約2MB あるので、
 #   JIS 第1水準・かな・記号に、src/・server/・アプリの画面に出てくる字（人名・地名の第2水準など）を足して絞る。
 #   名前の表に字を足したら、これを回し直す（無い字は今までのフォントで出るだけで、壊れはしない）。
 # - ⚠ Graduate と Alfa Slab One は OFL の「予約名」つき（名前を変えずに手を入れた版を配れない）なので絞らない。
@@ -154,9 +154,10 @@ chars = used_chars()
 head_text = ['--text-file=' + write_text('head.txt', chars)]
 body_text = ['--text-file=' + write_text('body.txt', chars - ASCII)]
 
-# 見出し（Dela Gothic One）
-subset(src('DelaGothicOne-Regular.ttf'), os.path.join(WEB_FONTS, 'look-head.woff2'), *head_text)
-subset(src('DelaGothicOne-Regular.ttf'), os.path.join(APP_FONTS, 'look_head.ttf'), *head_text)
+# 見出し（M PLUS 1p Black）。⚠ 2026-11-24 先方要望で Dela Gothic One から替えた（太すぎて字の中が潰れ、小さい見出しが読みにくい）。
+#   同じく太い角ゴシックで、字の中の空きが広い M PLUS 1p の一番太い字にした
+subset(src('MPLUS1p-Black.ttf'), os.path.join(WEB_FONTS, 'look-head.woff2'), *head_text)
+subset(src('MPLUS1p-Black.ttf'), os.path.join(APP_FONTS, 'look_head.ttf'), *head_text)
 
 # 数字と英字（Barlow Semi Condensed）・本文の日本語（Zen Kaku Gothic New）
 for weight, barlow, zen in (('regular', 'Regular', 'Regular'), ('bold', 'SemiBold', 'Bold')):

@@ -367,7 +367,7 @@ fun buildFrontPage(
     }
     // 独立リーグ日本一決定戦に自球団が出たとき
     recentWorld(view).firstOrNull { it.kind == "grand" && it.ours == team }?.let { w ->
-        worldText(w, view::teamShort)?.let { t ->
+        worldText(w, view::teamShort, view::teamLabel)?.let { t ->
             articles += FrontPage.Article("日本一決定戦", if (w.champion == team) "${me}、独立リーグ日本一" else "${me}は${w.oursResult ?: "出場"}", t.body, LINK_GAMES)
         }
     }

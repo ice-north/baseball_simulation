@@ -90,6 +90,7 @@ import {
   applyBatteryMentalEffect,
   menuFitsPlayer,
   subMenuFitsPlayer,
+  canonicalSubMenu,
   SUB_TRAINING_MENUS,
   calcSecondAffinity,
 } from '../src/season/campTraining.js';
@@ -413,7 +414,9 @@ function campTargetOptions(key, value, player) {
  *    （`executeSubTraining` は対象＝いまの形なら抽選に戻る）。
  * ⚠ 打席変更は失敗すると打席が変わらないので、次のクールでまた挑む（成功したら止まる）
  */
-export function campSubKey(key, player, target) {
+export function campSubKey(rawKey, player, target) {
+  // ⚠ まとめた古い名前（守備補強 → サブポジ練習）は今の名前で回す。保存済みの計画に残っている
+  const key = canonicalSubMenu(rawKey);
   // ⚠ フォーム改造は投手と野手で別物（投球フォーム / 打撃フォーム）
   if (key === 'form_change' && player?.position !== 'pitcher')
     return CAMP_STANCES.includes(target) && target !== battingStanceOf(player)
@@ -512,11 +515,16 @@ export function runCampRound(
     //    `validatePhasePlan`）。ここで倒すと、どちらの入口が漏れても気づけない
     const own =
       policies.get(player.id) || playerPolicy(player, policy, overrides);
+    const chosen = sub?.[player.id];
     const key = campSubKey(
-      sub?.[player.id] || resolveTraining(player, own.direction, own.phase).sub,
+      chosen || resolveTraining(player, own.direction, own.phase).sub,
       player,
       subTarget?.[player.id],
     );
+    // ⚠ 方針の「短所を埋める×技術」は、もと守備補強（本職だけを上げ、守備位置は動かさない）。
+    //    サブポジ練習にまとめた（2026-11-24）ので、ほかの位置の適性も上がり、後の
+    //    `syncPositionToFitness` でCPU球団の遊撃手が二塁へ黙って移ることがある。前と同じく動かさない
+    const keepPosition = humanTeam || (!chosen && own.phase === 'skill' && key === 'subposition');
     // ⚠ **選んだ対象を渡すこと**（覚えたい球種・磨きたい球種・守備位置）。
     //    渡さないと中で抽選され、画面で選んだのに違うものを覚える
     if (SUB_TRAINING_MENUS[key]) {
@@ -534,7 +542,7 @@ export function runCampRound(
       //    後の適性への合わせ（`syncPositionToFitness`）で黙って元に戻さない
       //    （一塁手を捕手に変えても1クールで一塁に戻り、捕手が0人になることもあった）。
       //    CPU球団は一人用と同じく適性に合わせる
-      if (humanTeam) player.position = position;
+      if (keepPosition) player.position = position;
     }
   }
   if (staff) {
@@ -1397,10 +1405,12 @@ export function validateCampRound(league, teamName, payload) {
   //    倒すが、画面には「選んだのに違う練習をした」と映る。入口で断る。
   const pick = (source, allowed, fits, message) => {
     const out = {};
-    for (const [id, key] of Object.entries(source || {})) {
+    for (const [id, rawKey] of Object.entries(source || {})) {
       const playerId = Number(id);
       const player = byId.get(playerId);
       if (!player) continue;
+      // ⚠ サブ練習のまとめた古い名前（守備補強）は今の名前で受ける（古いアプリ・下書きから届く）
+      const key = allowed === CAMP_SUB_MENUS ? canonicalSubMenu(rawKey) : rawKey;
       requireOnline(allowed.includes(key) && fits(key, player), message);
       out[playerId] = key;
     }
@@ -1604,10 +1614,12 @@ function validatePhasePlan(league, teamName, plan) {
       // ⚠ **サブ練習も守備位置を見る**（`campRound` の入口と同じ規則）。
       //    変化球練習を野手に当てても何も起きず、そのクールが丸ごと無駄になる
       const subAssignments = {};
-      for (const [id, key] of Object.entries(plan.subAssignments || {})) {
+      for (const [id, rawKey] of Object.entries(plan.subAssignments || {})) {
         const playerId = Number(id);
         const player = team.players.find((p) => p.id === playerId);
         if (!player) continue;
+        // ⚠ まとめた古い名前（守備補強 → サブポジ練習）は今の名前で残す
+        const key = canonicalSubMenu(rawKey);
         requireOnline(
           CAMP_SUB_MENUS.includes(key) && subMenuFitsPlayer(key, player),
           'サブ練習が不正です',

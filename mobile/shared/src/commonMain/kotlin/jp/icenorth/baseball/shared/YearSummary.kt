@@ -69,11 +69,15 @@ fun yearSummaryRankText(s: YearSummary): String? {
     return "${s.league?.let { "$it " } ?: ""}${rank}位$rec"
 }
 
-/** 入退団の1行（「入団 山田（投手）← 三陸」） */
-fun yearSummaryMoveText(m: YearSummaryMove): String =
+/**
+ * 入退団の1行（「入団 山田（投手）← 三陸」）。
+ * ⚠ 相手の球団は内部名で来るので [label] でいまの球団名に引き直す（名前を変えた球団が変える前の
+ *    名前で出ていた。2026-11-24 監査。Web 版 `YearSummary.jsx` と同じ）
+ */
+fun yearSummaryMoveText(m: YearSummaryMove, label: (String) -> String = { it }): String =
     "${m.how} ${m.name}" +
         (m.position?.let { "（${positionLabel(it)}）" } ?: "") +
-        (m.other?.let { if (m.side == "in") " ← $it" else " → $it" } ?: "")
+        (m.other?.let { val o = label(it); if (m.side == "in") " ← $o" else " → $o" } ?: "")
 
 /** その年のNPBドラフトで指名された選手（Web 版 `ProDraftResult.jsx` と同じく、その年の行だけ） */
 fun proDraftOfYear(chronicle: ChronicleView?, year: Int?): List<ProDrafted> =

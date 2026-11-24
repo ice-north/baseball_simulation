@@ -116,7 +116,7 @@ private val LookBody = FontFamily(
     Font(R.font.look_body_bold, FontWeight.Bold),
 )
 
-/** 見出し（Dela Gothic One。JIS 第1水準＋画面に出る字に絞ったもの。`tools/look-fonts.py`） */
+/** 見出し（M PLUS 1p Black。JIS 第1水準＋画面に出る字に絞ったもの。`tools/look-fonts.py`） */
 private val LookHead = FontFamily(Font(R.font.look_head))
 
 /**
@@ -276,14 +276,20 @@ private fun DrawScope.drawPlainItem(s: LookItem, path: Path?, measurer: TextMeas
     }
 }
 
-/** 球団マーク。切のとき・リーグの球団でないときは描かない */
+/**
+ * 球団マーク。切のとき・リーグの球団でないときは描かない。
+ * [always] なら切のときも描く（トレードの相手選び。いしだ 2026-11-24「球団フォントとチーム名を配置し」。Web の `always` と同じ）
+ */
 @Composable
-fun TeamMark(team: String?, size: Dp = 18.dp, modifier: Modifier = Modifier) {
+fun TeamMark(team: String?, size: Dp = 18.dp, modifier: Modifier = Modifier, always: Boolean = false) {
     val look = LocalLook.current
-    if (!look.on) return
+    if (!look.on && !always) return
     val t = look.teamLook(team) ?: return
-    // 球団ロゴ（ビューに載っていれば）。小さく出すときは小さい版の重ね
-    val layers = remember(t.logo, size) { t.logo?.let { logoLayersFor(it, size.value.toDouble()) }.orEmpty() }
+    // 球団ロゴ（ビューに載っていれば）。小さく出すときは小さい版の重ね。
+    // ⚠ ロゴは入のときだけ描く。切（always で出すとき）は今までの帽子のマークで、ロゴの絵の形も読まない（Web と同じ）
+    val layers = remember(t.logo, size, look.on) {
+        if (look.on) t.logo?.let { logoLayersFor(it, size.value.toDouble()) }.orEmpty() else emptyList()
+    }
     val needsIcons = remember(layers) { logoNeedsIcons(layers) }
     val icons = if (needsIcons) rememberLogoIcons() else null
     val art = remember(t, layers, icons) {
