@@ -1,4 +1,4 @@
-// アプリの共通部（Kotlin の Look.kt・LookArt.kt・LookScene.kt・LookPlay.kt・TodayGame.kt・LookStory.kt）に写した「新しい見た目（試作）」の表と描く手順が
+// アプリの共通部（Kotlin の Look.kt・LookArt.kt・LookScene.kt・LookPlay.kt・TodayGame.kt・LookStory.kt・LookGrade.kt）に写した「新しい見た目（試作）」の表と描く手順が
 // Web 版（src/online/look/）と同じ答えを出すかの検査用に、期待値を書き出す。
 //   node mobile/tools/expect-look.mjs > mobile/shared/src/jvmTest/resources/look-expected.json
 // CI は `--check`（Web 版だけ直したときに気づく）。答え合わせは `LookTest`。
@@ -329,7 +329,7 @@ if (process.argv.includes('--check')) {
   const file = new URL('../shared/src/jvmTest/resources/look-expected.json', import.meta.url);
   if (fs.readFileSync(file, 'utf8').trim() !== text) {
     console.error(
-      'look-expected.json が古い。node mobile/tools/expect-look.mjs > mobile/shared/src/jvmTest/resources/look-expected.json で書き出し直し、アプリの Look.kt・LookArt.kt・LookScene.kt・LookPlay.kt・TodayGame.kt・LookStory.kt も揃えること',
+      'look-expected.json が古い。node mobile/tools/expect-look.mjs > mobile/shared/src/jvmTest/resources/look-expected.json で書き出し直し、アプリの Look.kt・LookArt.kt・LookScene.kt・LookPlay.kt・TodayGame.kt・LookStory.kt・LookGrade.kt も揃えること',
     );
     process.exit(1);
   }
