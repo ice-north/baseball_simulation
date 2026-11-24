@@ -10,7 +10,7 @@
 // ============================================================
 import { buildTeamLooks, nameSource } from './teamLook.js';
 import { autoLogo, logoTeam } from './logoBuild.js';
-import { cleanLogoColors } from './logoData.js';
+import { cleanLogo, cleanLogoColors } from './logoData.js';
 
 /**
  * ロゴを作る材料（`logoBuild.js` の「球団」）を、ビューの名前ひとそろいと見た目から作る。
@@ -34,9 +34,11 @@ export function attachTeamLogos(teamLabels, savedOf) {
     const look = looks[name];
     const saved = savedOf(name);
     const colors = cleanLogoColors(saved?.colors) || [look.c1, look.c2, look.c3];
+    // ⚠ 自動のロゴも保存するものと同じ形（既定の値は書かない・数は小数2桁）に整えて送る。
+    //    描く側（Web とアプリ）が受け取る形を1つにするため。約4分の1軽くもなる
     labels.logo = saved?.layers?.length
       ? { ...saved, colors }
-      : { ...autoLogo(logoTeamOf(name, labels, look, colors)), colors, auto: 1 };
+      : { ...cleanLogo(autoLogo(logoTeamOf(name, labels, look, colors))), colors, auto: 1 };
   }
   return teamLabels;
 }

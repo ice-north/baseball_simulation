@@ -301,6 +301,9 @@ assert.ok(biggest <= LOGO_MAX_CHARS * 0.6, `型どおりのロゴが保存の上
   for (const name of names) {
     const logo = view0.teamLabels[name].logo;
     assert.ok(logo?.layers?.length && logo.auto === 1 && cleanLogoColors(logo.colors), `${name} のロゴがビューに無い`);
+    // 自動のロゴも、保存するものと同じ形（既定の値は書かない・数は小数2桁）で載る。アプリはこの形を読む
+    const { layers, mini } = cleanLogo(logo);
+    assert.deepEqual({ layers: logo.layers, mini: logo.mini }, { layers, mini }, `${name} の自動のロゴが整えた形でない`);
   }
   const bytes = JSON.stringify(names.map((n) => view0.teamLabels[n].logo)).length;
   assert.ok(bytes < 9000, `ビューのロゴが大きい（12球団で ${bytes} 字）`);
