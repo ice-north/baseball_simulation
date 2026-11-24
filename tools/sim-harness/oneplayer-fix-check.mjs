@@ -600,6 +600,17 @@ for (const [count, games] of [[4, 144], [4, 150], [6, 145], [5, 148], [7, 150]])
     const ob = [{ name: 'OB', teamName: user, careerHistory: [careerOf(user)] }];
     assert.equal(relabelRenamedTeams(ob, renamedMap), 2);
     assert.equal(ob[0].teamName, '改名ズ', 'OB名鑑の所属が変える前の名前のまま');
+    // 経歴の多くは「球団名＋入団/退団/ 〇〇就任」の文で、実績の行は球団を team に持つ
+    const words = [{ careerHistory: [
+      careerOf(`${user}入団`), careerOf(`${cpu}退団`, 'released'), careerOf(`${user} 監督就任`, 'staff'),
+      { type: 'achievement', year: 1, label: '首位打者', team: cpu }, careerOf(`${user}高校`, 'highschool'),
+      careerOf(`${user}ファン`),
+    ] }];
+    relabelRenamedTeams(words, renamedMap);
+    assert.deepEqual(words[0].careerHistory.map((h) => h.label),
+      ['改名ズ入団', '新愛媛退団', '改名ズ 監督就任', '首位打者', `${user}高校`, `${user}ファン`],
+      '経歴の文（入団・退団・就任）に変える前の名前が残る／関係ない文まで書き換えた');
+    assert.equal(words[0].careerHistory[3].team, '新愛媛', '実績の行の球団が変える前の名前のまま');
   }
   releasedPlayersPool.splice(releasedPlayersPool.indexOf(pooled), 1);
   assert.equal(view, 'camp');

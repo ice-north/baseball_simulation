@@ -54,7 +54,8 @@ function roleIn(roster, p) {
     if (r >= 0) return { slot: 'sp', kind: 'rotation', order: r + 1 };
     const b = pen.findIndex((q) => q.id === p.id);
     if (b === 0) return { slot: 'cl', kind: 'closer', order: 1 };
-    if (b > 0 && b <= BULLPEN_SIZE) return { slot: 'rp', kind: 'relief', order: b };
+    // ⚠ `squadStrength` が数える救援は pen の先頭から BULLPEN_SIZE 人（抑え込み）。それに合わせる
+    if (b > 0 && b < BULLPEN_SIZE) return { slot: 'rp', kind: 'relief', order: b };
     return { slot: null, kind: 'bench', order: 0 };
   }
   const assigned = fielderAssignment(roster);
@@ -155,8 +156,9 @@ export function meritTags({ role, slot, over, open, weak, gain }) {
   if (open) tags.push({ text: `空いていた${slot.label}を埋める`, tone: 'good' });
   else if (over != null)
     tags.push({
-      text: over > 0 ? `今の一番手より${signedPoints(over)}` : '今の一番手と並ぶ',
-      tone: 'good',
+      // ⚠ 新しい選手が入ると前の一番手が別の持ち場へ回ることがあり、差は負にもなる（そのときは得とは書かない）
+      text: Math.round(over * 10) === 0 ? '今の一番手と並ぶ' : `今の一番手より${signedPoints(over)}`,
+      tone: Math.round(over * 10) >= 0 ? 'good' : 'plain',
     });
   if (weak) tags.push({ text: `弱い${slot.label}（${weak.rank}位/${weak.teams}）を補う`, tone: 'good' });
   tags.push({

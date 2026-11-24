@@ -63,7 +63,8 @@ private fun roleIn(roster: List<Player>, p: Player): MeritRoleAt {
         if (r >= 0) return MeritRoleAt("sp", MeritRole.Rotation, r + 1)
         val b = pen.indexOfFirst { it.id == p.id }
         if (b == 0) return MeritRoleAt("cl", MeritRole.Closer, 1)
-        if (b in 1..BULLPEN_SIZE) return MeritRoleAt("rp", MeritRole.Relief, b)
+        // squadStrength が数える救援は pen の先頭から BULLPEN_SIZE 人（抑え込み）。Web と同じ
+        if (b in 1 until BULLPEN_SIZE) return MeritRoleAt("rp", MeritRole.Relief, b)
         return MeritRoleAt(null, MeritRole.Bench, 0)
     }
     val assigned = fielderAssignment(roster)
@@ -127,7 +128,11 @@ fun roleText(role: MeritRoleAt, slot: TradeSlot?): String = when (role.kind) {
 fun meritTags(m: PlayerMerit): List<MeritTag> {
     val tags = mutableListOf(MeritTag(roleText(m.role, m.slot), if (m.role.kind == MeritRole.Bench) "plain" else "good"))
     if (m.open) tags += MeritTag("空いていた${m.slot?.label}を埋める", "good")
-    else if (m.over != null) tags += MeritTag(if (m.over > 0) "今の一番手より${signedPoints(m.over)}" else "今の一番手と並ぶ", "good")
+    else if (m.over != null) {
+        // 新しい選手が入ると前の一番手が別の持ち場へ回ることがあり、差は負にもなる（Web と同じ）
+        val r = tenths(m.over)
+        tags += MeritTag(if (r == 0) "今の一番手と並ぶ" else "今の一番手より${signedPoints(m.over)}", if (r >= 0) "good" else "plain")
+    }
     m.weak?.let { tags += MeritTag("弱い${m.slot?.label}（${it.rank}位/${it.teams}）を補う", "good") }
     tags += MeritTag("戦力${signedPoints(m.gain)}", if (tenths(m.gain) > 0) "good" else "plain")
     return tags

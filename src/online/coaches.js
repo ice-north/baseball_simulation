@@ -880,8 +880,17 @@ export function originText(coach, labelOf = null) {
   const o = coach?.origin || {};
   const pos = POSITION_WORDS[o.position] || '選手';
   if (o.kind === 'player' && o.team)
-    return `元${pos}（${(labelOf ? labelOf(o.team) : o.teamLabel) || o.team}${o.seasons ? `で${o.seasons}年` : ''}）`;
+    return `元${pos}（${teamNameOf(o, labelOf)}${o.seasons ? `で${o.seasons}年` : ''}）`;
   return `元${pos}`;
+}
+/**
+ * 出身の球団の名前。いまの名前が引けるならそれ、引けない（リーグを抜けた・入れ替わった球団で
+ * `labelOf` が内部名をそのまま返す）なら保存した当時の名前
+ */
+function teamNameOf(o, labelOf) {
+  const now = labelOf ? labelOf(o.team) : null;
+  if (now && now !== o.team) return now;
+  return o.teamLabel || now || o.team;
 }
 const POSITION_WORDS = {
   pitcher: '投手',

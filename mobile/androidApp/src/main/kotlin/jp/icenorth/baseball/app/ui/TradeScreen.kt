@@ -376,7 +376,7 @@ private fun TradeCard(model: AppViewModel, view: LeagueView, raw: JsonObject, tr
         theirError?.let { LoadFailed(it, retryTheirs, title = "相手の名簿を読めませんでした") }
         if (theirs != null) AfterCounts(view, partner, myRoster, theirs, give, get, rosterLimitOf(raw))
         // 相手に与えるメリット（届いた提案なら、提案してきた球団が得るもの）
-        if (theirs != null && give.isNotEmpty()) {
+        if (theirs != null && (give.isNotEmpty() || get.isNotEmpty())) {
             val merits = remember(theirs, give, get, view.roster) { tradeMerits(theirs.toPlayers(), view.roster.filter { it.id in give }, get) }
             Caption("${view.teamShort(partner)}へのメリット")
             MeritBody(merits)
@@ -743,7 +743,7 @@ private fun PlayersStep(
                 PickedLine("出す", namesOf(draft.give, myRoster))
                 PickedLine("もらう", namesOf(draft.get, theirs))
                 // 相手に与えるメリット（短く: 出す選手の相手での役割と、相手の戦力の増減。くわしくは確認の段）
-                if (theirs != null && draft.give.isNotEmpty()) {
+                if (theirs != null && (draft.give.isNotEmpty() || draft.get.isNotEmpty())) {
                     val merits = remember(theirPlayers, myPlayers, draft.give, draft.get) {
                         tradeMerits(theirPlayers, myPlayers.filter { it.id in draft.give }, draft.get)
                     }

@@ -514,11 +514,16 @@ export function runCampRound(
     //    `validatePhasePlan`）。ここで倒すと、どちらの入口が漏れても気づけない
     const own =
       policies.get(player.id) || playerPolicy(player, policy, overrides);
+    const chosen = sub?.[player.id];
     const key = campSubKey(
-      sub?.[player.id] || resolveTraining(player, own.direction, own.phase).sub,
+      chosen || resolveTraining(player, own.direction, own.phase).sub,
       player,
       subTarget?.[player.id],
     );
+    // ⚠ 方針の「短所を埋める×技術」は、もと守備補強（本職だけを上げ、守備位置は動かさない）。
+    //    サブポジ練習にまとめた（2026-11-24）ので、ほかの位置の適性も上がり、後の
+    //    `syncPositionToFitness` でCPU球団の遊撃手が二塁へ黙って移ることがある。前と同じく動かさない
+    const keepPosition = humanTeam || (!chosen && own.phase === 'skill' && key === 'subposition');
     // ⚠ **選んだ対象を渡すこと**（覚えたい球種・磨きたい球種・守備位置）。
     //    渡さないと中で抽選され、画面で選んだのに違うものを覚える
     if (SUB_TRAINING_MENUS[key]) {
@@ -536,7 +541,7 @@ export function runCampRound(
       //    後の適性への合わせ（`syncPositionToFitness`）で黙って元に戻さない
       //    （一塁手を捕手に変えても1クールで一塁に戻り、捕手が0人になることもあった）。
       //    CPU球団は一人用と同じく適性に合わせる
-      if (humanTeam) player.position = position;
+      if (keepPosition) player.position = position;
     }
   }
   if (staff) {

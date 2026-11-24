@@ -818,7 +818,11 @@ function leagueGroups(view) {
   const standing = new Map((view.standings || []).map((s) => [s.team, s]));
   const rows = names.map((team) => standing.get(team) || { team, wins: 0, losses: 0, draws: 0 });
   if (!view.teamLeagues)
-    return [{ id: 'all', name: '球団', rows: rows.map((r, i) => ({ ...r, place: standing.has(r.team) ? i + 1 : null })) }];
+    return [{
+      id: 'all',
+      name: '球団',
+      rows: [...rows].sort(compareLeagueStanding).map((r, i) => ({ ...r, place: standing.has(r.team) ? i + 1 : null })),
+    }];
   return PYRAMID_LEAGUES.map((league) => ({
     id: league.id,
     name: league.name,
@@ -1057,6 +1061,9 @@ function TradeComposer({
       ),
     [league?.teams, partner],
   );
+  // ⚠ 弱い持ち場の順位は**全球団が読めてから**出す。読めた球団だけで比べると、開いた直後に
+  //    「弱い遊撃（3位/3）」が出て、読み終わると消える
+  const othersReady = Object.keys(others).length >= Math.max(0, (league?.total ?? 0) - 1);
   const rule = cpu ? cpuTradeRule(theirs.info) : null;
   const outlook = cpu
     ? cpuOutlook({
@@ -1148,7 +1155,7 @@ function TradeComposer({
             theirRoster={theirRoster}
             give={givePlayers}
             getIds={getIds}
-            others={others}
+            others={othersReady ? others : NO_OTHERS}
             outlook={outlook}
           />
           <Impact

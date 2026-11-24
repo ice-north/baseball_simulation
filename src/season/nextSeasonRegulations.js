@@ -113,11 +113,20 @@ export function validateLeagueTeamNames(nextNames = [], currentTeams = []) {
 export function relabelRenamedTeams(players, to) {
   let changed = 0;
   if (!to?.size) return changed;
+  // 長い名前から当てる（「三河」と「三河ベイ」のように頭が重なる名前があっても長い方を取る）
+  const froms = [...to.keys()].sort((a, b) => b.length - a.length);
   for (const p of players || []) {
     if (!p) continue;
     for (const h of Array.isArray(p.careerHistory) ? p.careerHistory : []) {
-      if (h && h.type !== 'highschool' && to.has(h.label)) {
-        h.label = to.get(h.label);
+      if (!h || h.type === 'highschool') continue;
+      const label = relabelText(h.label, to, froms);
+      if (label !== h.label) {
+        h.label = label;
+        changed++;
+      }
+      // 実績・第二の人生の行は球団を `team` に持つ
+      if (to.has(h.team)) {
+        h.team = to.get(h.team);
         changed++;
       }
     }
@@ -131,6 +140,24 @@ export function relabelRenamedTeams(players, to) {
     }
   }
   return changed;
+}
+
+// 経歴の文に入った球団名の後ろに付く語（`${球団}入団`・`${球団}退団`・`${球団} 監督就任` など）
+const LABEL_SUFFIX = /^(入団|退団|\s)/;
+
+/**
+ * 経歴の1行の文の球団名を新しい名前にする。名前そのもの、または名前＋決まった語で始まる文だけ
+ * （「三河入団」は書き換え、「三河高校」のような別物は書き換えない）
+ */
+function relabelText(label, to, froms) {
+  if (typeof label !== 'string') return label;
+  if (to.has(label)) return to.get(label);
+  for (const from of froms) {
+    if (label.startsWith(from) && LABEL_SUFFIX.test(label.slice(from.length))) {
+      return to.get(from) + label.slice(from.length);
+    }
+  }
+  return label;
 }
 
 // TEAMS_DATA のキーを付け替える。**並びはそのまま**（先頭は自チーム。監督移籍の並べ替えと同じ注意）
