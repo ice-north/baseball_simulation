@@ -113,6 +113,10 @@ jobs:
       - name: Single-player year-end UI
         run: npm run check:ui:yearend
 
+      # 采配の試合を画面で2試合通す（約2分。dist は check:ui:yearend が作ったもの）
+      - name: Single-player managed game UI
+        run: node tools/sim-harness/managed-game-ui-check.mjs
+
       - name: Upload UI evidence
         if: always()
         uses: actions/upload-artifact@v4
@@ -121,6 +125,7 @@ jobs:
           path: |
             /tmp/baseball-single-yearend-*.png
             /tmp/baseball-single-yearend-*-failure.zip
+            /tmp/baseball-managed-*.png
           if-no-files-found: ignore
 
   # 画面検査（オンラインの PC・スマホと、一人用の通し）

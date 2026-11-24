@@ -43,7 +43,7 @@ import { executeResetGame, executeStartSimMode } from './game/gameControls.js';
 import { executeSetupManagedGame, executeHandleManagedGameEnd } from './game/gameSetup.js';
 
 // AI Manager imports
-import { executeAutoSubstitutePitcher, executeAutoSubstitutePinchHitter, executeAutoDefensiveSubstitution, executeAutoStealingDecision, executeAutoOptimizePitcherUsage } from './game/aiManager.js';
+import { createManagedTacticsMemory, runManagedTactics, noteAtBatEnd, noteHalfInningEnd, staminaOf, setStamina } from './game/managedTactics.js';
 
 // Season progress imports
 
@@ -903,19 +903,34 @@ import { useEscapeToClose } from './components/useEscapeToClose.js';
         return team.players.find(p => p.isStarter && p.position === 'catcher' && !p._isDH) || team.players[7];
       };
 
-      // 監督AI関数（→ aiManager.js に抽出済み、ラッパーのみ）
-      const aiManagerCtx = () => ({
-        autoManagerMode, gameStarted, isSubstituting,
-        getDefenseTeam, getOffenseTeam, getCurrentPitcher, getCurrentBatter,
-        isTopInning, setHomeTeam, setAwayTeam,
-        homeTeam, awayTeam, currentStamina, score, bases, inning,
-        setCurrentStamina, setGameLog
-      });
-      const autoSubstitutePitcher = () => executeAutoSubstitutePitcher(aiManagerCtx());
-      const autoSubstitutePinchHitter = () => executeAutoSubstitutePinchHitter(aiManagerCtx());
-      const autoDefensiveSubstitution = () => executeAutoDefensiveSubstitution(aiManagerCtx());
-      const autoStealingDecision = (runner, situation) => executeAutoStealingDecision(aiManagerCtx(), runner, situation);
-      const autoOptimizePitcherUsage = () => executeAutoOptimizePitcherUsage(aiManagerCtx());
+      // CPU の采配（代打・守備固め・継投）は自動の試合と同じ決まり（cpuTactics.js）。
+      // 帳簿（救援の記録・先発のダメージ・投手ごとのスタミナ）は1試合のあいだこの ref に持つ。
+      // ⚠ 以前は aiManager.js の別の決まりで、「おまかせ」を切ると CPU の球団まで
+      //    一度も投手を代えなかった。いまは CPU の球団はいつも、自分の球団は「おまかせ」のときだけ
+      const tacticsMemoryRef = useRef(createManagedTacticsMemory());
+      // 投げる前に CPU の采配を走らせる。交代があれば true（その球は投げずに交代だけを反映する）
+      const applyCpuTactics = () => {
+        const { changed, updates, messages } = runManagedTactics({
+          memory: tacticsMemoryRef.current, homeTeam, awayTeam, inning, isTopInning, outs, score, bases,
+          controls: {
+            home: homeTeam.name !== userTeamName || autoManagerMode,
+            away: awayTeam.name !== userTeamName || autoManagerMode,
+          },
+        });
+        const patch = (map) => (prev) => (map.size === 0 ? prev : {
+          ...prev,
+          players: prev.players.map(p => (map.has(p.id) ? { ...p, ...map.get(p.id) } : p)),
+        });
+        if (updates.home.size) setHomeTeam(patch(updates.home));
+        if (updates.away.size) setAwayTeam(patch(updates.away));
+        if (messages.length) {
+          setGameLog(prev => {
+            const updated = [...prev, ...messages.map(description => ({ description, isSpecial: true }))];
+            return updated.length > 50 ? updated.slice(-50) : updated;
+          });
+        }
+        return changed;
+      };
 
       // 次の打者に進む（攻撃チームの打順を進める）
       const advanceBatter = () => {
@@ -999,13 +1014,17 @@ import { useEscapeToClose } from './components/useEscapeToClose.js';
         const { result: r, info } = simulateEnginePitch({
           batterPlayer: currentBatter, pitcherPlayer: currentPitcher, catcherPlayer: currentCatcher,
           defense: fieldDefenseOf(defenseTeam, currentPitcher),
-          count: count || { balls: 0, strikes: 0 }, pitcherStamina: currentStamina,
+          count: count || { balls: 0, strikes: 0 }, pitcherStamina: staminaOf(tacticsMemoryRef.current, currentPitcher),
           bases: pitchBases, outs, sequence: pitchSeqRef.current.seq,
           offenseStrategy: offenseTeam.strategy, defenseStrategy: defenseTeam.strategy,
           pitchArsenal, control,
         });
-        // スタミナを1減らす（自動の試合と同じく、投げた後に減る）
-        setCurrentStamina(Math.max(0, currentStamina - 1));
+        // スタミナを1減らす（自動の試合と同じく、投げた後に減る。投手ごとに持つ）
+        {
+          const left = Math.max(0, staminaOf(tacticsMemoryRef.current, currentPitcher) - 1);
+          setStamina(tacticsMemoryRef.current, currentPitcher, left);
+          setCurrentStamina(left);
+        }
 
         const pitchType = info.pitch?.type || 'straight';
         const velocity = Math.round(info.velocity || 0);
@@ -1161,10 +1180,9 @@ import { useEscapeToClose } from './components/useEscapeToClose.js';
         const doForceSteal = strat.forceSteal;
         const doIntentionalWalk = strat.intentionalWalk;
 
-        // 打席の最初（カウント0-0）で代打チェック
-        if (count.balls === 0 && count.strikes === 0) {
-          autoSubstitutePinchHitter();
-        }
+        // CPU の采配（打席の頭の代打・継投、半イニングの後の継投・守備固め）。
+        // 交代したらこの球は投げない（次の球は交代した後の選手で投げる）
+        if (count.balls === 0 && count.strikes === 0 && applyCpuTactics()) return;
 
         // 現在の選手データを取得（チーム対応）
         const currentBatter = getCurrentBatter();
@@ -1637,33 +1655,13 @@ import { useEscapeToClose } from './components/useEscapeToClose.js';
               catcherArm: defense.catcher?.arm ?? 50, pitcherControl: pitcher.control,
               pitcherThrows: pitcher.throws, toBase: 2,
             });
+            // 走るかどうかは自動の試合と同じ決まり（stealing.js。球団の走塁の方針も見る）。
+            // ⚠ 以前は「おまかせ」のときだけ別の倍率（aiManager.js）を掛けていた
             let stealAttempt = stealAttemptRate({
               successRate: stealRate2, runnerSteal: r1Steal, outs: newOuts, toBase: 2,
+              strategy: (isTopInning ? awayTeam : homeTeam).strategy?.baseRunning || 'normal',
             });
 
-            // 監督AI：盗塁判断（Phase 3）
-            if (autoManagerMode) {
-              const batterAvg = batter.stats?.batting?.atBats > 0
-                ? batter.stats.batting.hits / batter.stats.batting.atBats
-                : (batter.batting?.contact || 50) / 200; // 成績がない場合は能力値から推定
-              const isPitcher = batter.position === 'pitcher';
-              const isWeakBatter = batterAvg < 0.200 || isPitcher;
-              const isStrongBatter = batterAvg > 0.300 && batter.batting?.power > 50;
-
-              const batterType = isPitcher ? 'pitcher' : isWeakBatter ? 'weak' : isStrongBatter ? 'strong' : 'normal';
-              const scoreDiff = Math.abs(score.home - score.away);
-              const isCloseGame = scoreDiff <= 3;
-
-              const stealMultiplier = autoStealingDecision(runner1, {
-                scoreDiff,
-                isCloseGame,
-                outs: newOuts,
-                batterType,
-                runnerSteal: r1Steal
-              });
-
-              stealAttempt *= stealMultiplier;
-            }
 
             // 采配: 盗塁指示/エンドランがあれば強制的に試行（成否は走力・肩で決まる）
             if (doForceSteal) { stealAttempt = 1; }
@@ -1706,31 +1704,9 @@ import { useEscapeToClose } from './components/useEscapeToClose.js';
     });
     let stealThirdAttempt = stealAttemptRate({
       successRate: stealRate3, runnerSteal: r2Steal, outs: newOuts, toBase: 3,
+      strategy: (isTopInning ? awayTeam : homeTeam).strategy?.baseRunning || 'normal',
     });
 
-    // 監督AI：盗塁判断（Phase 3）
-    if (autoManagerMode) {
-      const batterAvg = batter.stats?.batting?.atBats > 0
-        ? batter.stats.batting.hits / batter.stats.batting.atBats
-        : (batter.batting?.contact || 50) / 200;
-      const isPitcher = batter.position === 'pitcher';
-      const isWeakBatter = batterAvg < 0.200 || isPitcher;
-      const isStrongBatter = batterAvg > 0.300 && batter.batting?.power > 50;
-
-      const batterType = isPitcher ? 'pitcher' : isWeakBatter ? 'weak' : isStrongBatter ? 'strong' : 'normal';
-      const scoreDiff = Math.abs(score.home - score.away);
-      const isCloseGame = scoreDiff <= 3;
-
-      const stealMultiplier = autoStealingDecision(runner2, {
-        scoreDiff,
-        isCloseGame,
-        outs: newOuts,
-        batterType,
-        runnerSteal: r2Steal
-      });
-
-      stealThirdAttempt *= stealMultiplier; // 三塁盗塁
-    }
 
     if (Math.random() < stealThirdAttempt) {
               if (Math.random() < stealRate3) {
@@ -1761,8 +1737,8 @@ if (newOuts === 3) {
   newOuts = 0;
   newBases = [false, false, false];
   
-  // イニング終了時にスタミナ+3回復
-  setCurrentStamina(prev => Math.min(pitcher.stamina, prev + 3));
+  // 半イニングの後のスタミナ回復（+3）・継投・守備固めは次の球の前に CPU の采配で行う
+  noteHalfInningEnd(tacticsMemoryRef.current);
   
   // イニングの得点を記録
   const currentInn = inning - 1; // 0-indexed
@@ -1826,26 +1802,10 @@ if (newOuts === 3) {
             if (isTopInning) {
               setIsTopInning(false);
               resetEarnedRunTracking(); // 自責点判定はイニング単位
-              // イニング切り替え後に守備固めと投手起用最適化をチェック（順次実行）
-              setTimeout(() => {
-                autoDefensiveSubstitution();
-                // 守備固めの後、投手起用最適化を実行
-                setTimeout(() => {
-                  autoOptimizePitcherUsage();
-                }, 200);
-              }, 100);
             } else {
               setIsTopInning(true);
               resetEarnedRunTracking(); // 自責点判定はイニング単位
               setInning(inning + 1);
-              // イニング切り替え後に守備固めと投手起用最適化をチェック（順次実行）
-              setTimeout(() => {
-                autoDefensiveSubstitution();
-                // 守備固めの後、投手起用最適化を実行
-                setTimeout(() => {
-                  autoOptimizePitcherUsage();
-                }, 200);
-              }, 100);
             }
           }
         }
@@ -1881,6 +1841,12 @@ if (newOuts === 3) {
           newCount = { balls: 0, strikes: 0 };
           // 次の打者に進む
           advanceBatter();
+          // 先発のダメージ・救援の対戦打者数（CPU の継投の判断に使う。自動の試合と同じ帳簿）
+          noteAtBatEnd(tacticsMemoryRef.current, {
+            defenseSide: isTopInning ? 'home' : 'away', pitcherId: getCurrentPitcher()?.id,
+            kind: result.type === 'ball' || result.type === 'hit_by_pitch' ? 'walk' : result.type,
+            runs: isTopInning ? newScore.away - score.away : newScore.home - score.home,
+          });
         }
         
         // アウトが増えた場合フラグを立てる（1アウトモード用）
@@ -1892,11 +1858,6 @@ if (newOuts === 3) {
         setOuts(newOuts);
         setBases(newBases);
         setScore(newScore);
-
-        // 投球後に監督AIによる自動交代をチェック
-        setTimeout(() => {
-          autoSubstitutePitcher();
-        }, 100);
       };
 
       // バント実行ハンドラー（手動操作モード用）
@@ -1922,8 +1883,12 @@ if (newOuts === 3) {
           buntType = 'sacrifice';
         }
 
-        // スタミナ消費（1球分）
-        setCurrentStamina(prev => Math.max(0, prev - 1));
+        // スタミナ消費（1球分。投手ごとに持つ）
+        {
+          const left = Math.max(0, staminaOf(tacticsMemoryRef.current, currentPitcher) - 1);
+          setStamina(tacticsMemoryRef.current, currentPitcher, left);
+          setCurrentStamina(left);
+        }
         {
           const defenseTeamType = isTopInning ? 'home' : 'away';
           updatePitcherStats(currentPitcher.id, defenseTeamType, {
@@ -2152,7 +2117,12 @@ if (newOuts === 3) {
         if (atBatOver) {
           newCount = { balls: 0, strikes: 0 };
           advanceBatter();
+          noteAtBatEnd(tacticsMemoryRef.current, {
+            defenseSide: isTopInning ? 'home' : 'away', pitcherId: currentPitcher?.id,
+            kind: 'out', runs: isTopInning ? newScore.away - score.away : newScore.home - score.home,
+          });
         }
+        if (halfInningEnded) noteHalfInningEnd(tacticsMemoryRef.current);
 
         setCount(newCount);
         setOuts(newOuts);
@@ -2171,7 +2141,10 @@ if (newOuts === 3) {
         setIsAutoSimulating
       };
       // [SECTION: GAME_CONTROLS] → gameControls.js に抽出済み（ラッパーのみ）
-      const resetGame = () => executeResetGame(gameControlsCtx);
+      const resetGame = () => {
+        tacticsMemoryRef.current = createManagedTacticsMemory();
+        executeResetGame(gameControlsCtx);
+      };
       const startSimMode = (mode) => executeStartSimMode(gameControlsCtx, mode);
 
       // 残り投球数がある場合は自動的に投球を続ける
@@ -2224,7 +2197,11 @@ if (newOuts === 3) {
         setManagedGameInfo, managedGameInfoRef, setScreenMode
       };
       // [SECTION: GAME_SETUP] → gameSetup.js に抽出済み（ラッパーのみ）
-      const setupManagedGame = (gameInfo) => executeSetupManagedGame(gameSetupCtx, gameInfo);
+      const setupManagedGame = (gameInfo) => {
+        // CPU の采配の帳簿は1試合ごとに作り直す
+        tacticsMemoryRef.current = createManagedTacticsMemory();
+        executeSetupManagedGame(gameSetupCtx, gameInfo);
+      };
 
       // 試合中の両チームの投手とリードを記録する（試合開始で帳簿を作り直す）。
       // ⚠ 以前の采配モードは「先発が5回以上なら先発の勝ち」「最少アウトの投手＝最後の投手」
@@ -2234,6 +2211,12 @@ if (newOuts === 3) {
       useEffect(() => {
         if (gameStarted) decisionLogRef.current = createDecisionLog();
       }, [gameStarted]);
+      // 画面のスタミナの棒は、いま守っている投手のもの（スタミナは投手ごとに帳簿に持つ）
+      useEffect(() => {
+        if (!gameStarted) return;
+        const p = getCurrentPitcher();
+        if (p?.pitching) setCurrentStamina(staminaOf(tacticsMemoryRef.current, p));
+      }, [gameStarted, isTopInning, homeTeam, awayTeam]);
       useEffect(() => {
         if (!gameStarted) return;
         observeDecisionLog(decisionLogRef.current, {
@@ -2416,8 +2399,8 @@ if (newOuts === 3) {
                     </div>
                     <p className="text-xs text-gray-400 mt-2 text-center">
                       {autoManagerMode
-                        ? '投手のスタミナが20%以下になると自動的に交代します'
-                        : '選手交代は手動で行います'}
+                        ? '代打・継投・守備固めを、相手の球団と同じ決まりでベンチが決めます'
+                        : '自分の球団の選手交代は手動で行います（相手の球団はベンチが決めます）'}
                     </p>
                   </div>
 
@@ -3027,7 +3010,7 @@ if (newOuts === 3) {
                   </button>
                   <span className="w-px h-7 bg-gray-700 mx-1" />
                   <button onClick={() => setAutoManagerMode(!autoManagerMode)}
-                    title="采配をベンチに任せる（代打・継投・作戦を自動で決める）"
+                    title="采配をベンチに任せる（代打・継投・守備固めを相手の球団と同じ決まりで決める）"
                     className={`px-3 py-1.5 rounded text-sm font-semibold transition ${
                       autoManagerMode ? 'seg-on' : 'seg'
                     }`}>

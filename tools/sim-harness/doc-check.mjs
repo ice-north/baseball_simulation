@@ -86,6 +86,7 @@ const REMOVED_ON_PURPOSE = {
   formatRange:     'scouting.js の使い手のないレンジ表示。監査13で除去（歴史の記録）',
   MAX_SCOUT_LEVEL: '同上',
   simulateGamesOnDate: '`seasonProgress.js` にあった1日分の試合の消化。いまの本体は daySimulation.js の simulateScheduledGamesOnDate（歴史の記録）',
+  resultMap:       '采配の試合の1球の結果の表（App.jsx）。2026-11-24 に1球の計算を pitchEngine.js へ1本化して除去（歴史の記録）',
   CAMP_PRESETS:    'キャンプの旧プリセット5種。方向性×フェーズの2軸の方針に集約したあとも画面から呼ばれずに残っていたので 2026-11-23 に除去（歴史の記録）',
 };
 

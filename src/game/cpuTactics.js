@@ -725,7 +725,8 @@ export const createCpuTactics = ({ gameState, homeTeamName, awayTeamName, useDH,
 
   // 半イニングの後の投手のスタミナ回復・継投・守備固め（両球団それぞれに呼ぶ）。
   // ⚠ isTopInning・inning は次の半イニングへ進めてから呼ぶこと
-  const afterHalfInning = (team) => {
+  // `allowChanges: false` はスタミナの回復と救援の記録だけ（人が采配する球団。采配の試合で使う）
+  const afterHalfInning = (team, { allowChanges = true } = {}) => {
     const pitcher = getCurrentPitcher(team);
     const teamName = team === gameState.homeTeam ? homeTeamName : awayTeamName;
     const teamKey = team === gameState.homeTeam ? 'home' : 'away';
@@ -758,6 +759,7 @@ export const createCpuTactics = ({ gameState, homeTeamName, awayTeamName, useDH,
         if (reliefTrack.currentRelieverId === pitcher.id && defendedThisInning) {
           reliefTrack.relieverOutsPitched = pitcherData.gameStats?.pitching?.outs || 0;
         }
+        if (!allowChanges) return;
         // AI監督: ロール別の投手交代判定（pitcherRoles対応）
         const staminaRate = pitcherData.currentStamina / pitcher.pitching.stamina;
         const rotation = TEAMS_DATA[teamName]?.pitchingRotation;

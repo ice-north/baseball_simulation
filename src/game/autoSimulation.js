@@ -1738,7 +1738,7 @@ const simulateGame = (homeTeamName, awayTeamName, isCupGame = false, observer = 
     if (isGameOver()) return;
 
     // 投手スタミナ回復 & AI監督機能（役割ベースの投手交代・登板制限）
-    [gameState.homeTeam, gameState.awayTeam].forEach(afterHalfInning);
+    [gameState.homeTeam, gameState.awayTeam].forEach(team => afterHalfInning(team));
   };
 
   // 半イニングを終えた時点で試合が終わったか（`isTopInning` は反転済み）。
