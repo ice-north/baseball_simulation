@@ -668,6 +668,8 @@ export class LeagueService {
             region: command.payload?.region,
             playerName: command.payload?.playerName,
             comment: command.payload?.comment,
+            // 球団ロゴ（null は自動に戻す。送ってこなければ触らない）
+            logo: command.payload?.logo,
             now,
           });
         } else if (command.type === 'staffModes') {

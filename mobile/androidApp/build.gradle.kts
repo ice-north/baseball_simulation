@@ -60,6 +60,12 @@ android {
         buildConfig = true
     }
 
+    // 球団ロゴの絵の形（`logo-icons.json`。約280KB）は Web 版と同じファイルを入れる（写しを持たない）。
+    // 絵を足したら（`tools/logo-icons.mjs`）アプリも作り直す。⚠ 同じ場所の作者の表示（CC BY 3.0）も一緒に入る
+    sourceSets {
+        getByName("main") { assets.srcDir("../../public/look") }
+    }
+
     testOptions.unitTests.isIncludeAndroidResources = true
 
     compileOptions {

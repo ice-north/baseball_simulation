@@ -39,6 +39,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import jp.icenorth.baseball.app.ShareImage
 import kotlinx.coroutines.launch
 import androidx.compose.runtime.rememberCoroutineScope
@@ -525,6 +526,15 @@ private fun HomeMenu(model: AppViewModel, style: HomeStyle, onRename: () -> Unit
                 text = { Text((if (model.lookOn) "● " else "○ ") + "新しい見た目（試作）") },
                 onClick = { open = false; model.changeLookOn(!model.lookOn) },
             )
+            // ⚠ 球団ロゴの絵の作者の表示（絵の素材の利用条件）。ロゴが見える「入」の間は出しておく。消さない
+            if (model.lookOn) {
+                Text(
+                    LOGO_ICONS_CREDIT,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(horizontal = 12.dp).padding(bottom = 6.dp).testTag("logo-credit"),
+                )
+            }
             HorizontalDivider()
             // 試合結果の通知（裏でおよそ15分ごとに確かめる。ResultNotifier）。端末が許していなければ「○」
             DropdownMenuItem(

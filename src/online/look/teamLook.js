@@ -163,7 +163,7 @@ function monoCandidates(source) {
 }
 
 /**
- * ビューの `teamLabels`（`{ [内部名]: { label, short, city, nickname } }`）から、全球団の見た目を決める。
+ * ビューの `teamLabels`（`{ [内部名]: { label, short, city, nickname, logo } }`）から、全球団の見た目を決める。
  * ⚠ 色は12球団で重ならないよう、内部名の値で決めた順に配る（同じ顔ぶれならいつも同じ結果）。
  */
 export function buildTeamLooks(teamLabels = {}) {
@@ -203,6 +203,14 @@ export function buildTeamLooks(teamLabels = {}) {
     t.font = fontOf(t.style, t.latin);
     delete t.candidates;
     delete t.level;
+    // 球団ロゴ（ビューに載っていれば）。色を選んだ球団は、帽子・ユニフォームもその色にする
+    // ⚠ ロゴの載っていない名前の表（アプリとの答え合わせ・古いビュー）では、今までと同じ結果のまま
+    const logo = teamLabels[t.name]?.logo;
+    if (logo?.layers?.length) {
+      t.logo = logo;
+      if (Array.isArray(logo.colors) && logo.colors.length === 3 && logo.colors.every((c) => /^#[0-9a-f]{6}$/.test(c)))
+        [t.c1, t.c2, t.c3] = logo.colors;
+    }
   }
   return out;
 }

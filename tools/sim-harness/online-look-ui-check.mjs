@@ -17,17 +17,14 @@
 //     （リーグ平均比）・並べ替えた列の棒・列のまとまり。切のときは何も足さない
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
-import { chromium } from 'playwright';
 import { withDeadline } from './lib/deadline.mjs';
+import { launchBrowser, distHtml } from './lib/browser.mjs';
 import { seasonService, routeToService } from './lib/serviceRoute.mjs';
 
-const html = await readFile(new URL('../../dist/index.html', import.meta.url), 'utf8');
+const html = await distHtml();
 const base = 'http://localhost:3000';
 const LOOK_KEY = 'baseball-online-look-v1';
-const browser = await chromium.launch({
-  ...(process.env.PLAYWRIGHT_CHROME_CHANNEL ? { channel: process.env.PLAYWRIGHT_CHROME_CHANNEL } : {}),
-  headless: true,
-});
+const browser = await launchBrowser();
 const errors = [];
 // 新しい見た目の字（public/fonts/）。読んだ回数を名前ごとに数える
 const fontLoads = {};
@@ -69,6 +66,13 @@ async function open(contextOptions, { look = false, patchView = null } = {}) {
     const body = await readFile(new URL(`../../public/fonts/${name}`, import.meta.url));
     return route.fulfill({ contentType: 'font/woff2', body });
   });
+  // 球団ロゴの絵の形（public/look/。大きい球団マークを描くときに読む。`online-logo-ui-check` が詳しく見る）
+  await context.route(`${base}/look/logo-icons.json`, async (route) =>
+    route.fulfill({
+      contentType: 'application/json',
+      body: await readFile(new URL('../../public/look/logo-icons.json', import.meta.url)),
+    }),
+  );
   const p = await context.newPage();
   p.on('pageerror', (e) => errors.push(e.message));
   await p.goto(`${base}/online`);
