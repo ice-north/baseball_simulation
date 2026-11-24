@@ -139,7 +139,8 @@ const broadFor = (stat, isPitcher) =>
   !isPitcher && stat === 'bodyStamina' ? 'baserunning' : BROAD_BY_STAT[stat] || 'batting';
 const SUB_BY_PHASE = {
   physique: { sharpen: 'weight', balanced: 'physique', patch: 'physique' },
-  skill:    { sharpen: 'eye',    balanced: 'stretch',  patch: 'defense_sub' },
+  // ⚠ 短所を埋める×技術は「守備補強」だったが、サブポジ練習にまとめた（2026-11-24。`SUB_MENU_ALIASES`）
+  skill:    { sharpen: 'eye',    balanced: 'stretch',  patch: 'subposition' },
   range:    { sharpen: 'breaking', balanced: 'breaking', patch: 'subposition' },
 };
 

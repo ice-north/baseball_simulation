@@ -90,6 +90,7 @@ import {
   applyBatteryMentalEffect,
   menuFitsPlayer,
   subMenuFitsPlayer,
+  canonicalSubMenu,
   SUB_TRAINING_MENUS,
   calcSecondAffinity,
 } from '../src/season/campTraining.js';
@@ -411,7 +412,9 @@ function campTargetOptions(key, value, player) {
  *    （`executeSubTraining` は対象＝いまの形なら抽選に戻る）。
  * ⚠ 打席変更は失敗すると打席が変わらないので、次のクールでまた挑む（成功したら止まる）
  */
-export function campSubKey(key, player, target) {
+export function campSubKey(rawKey, player, target) {
+  // ⚠ まとめた古い名前（守備補強 → サブポジ練習）は今の名前で回す。保存済みの計画に残っている
+  const key = canonicalSubMenu(rawKey);
   // ⚠ フォーム改造は投手と野手で別物（投球フォーム / 打撃フォーム）
   if (key === 'form_change' && player?.position !== 'pitcher')
     return CAMP_STANCES.includes(target) && target !== battingStanceOf(player)
@@ -1383,10 +1386,12 @@ export function validateCampRound(league, teamName, payload) {
   //    倒すが、画面には「選んだのに違う練習をした」と映る。入口で断る。
   const pick = (source, allowed, fits, message) => {
     const out = {};
-    for (const [id, key] of Object.entries(source || {})) {
+    for (const [id, rawKey] of Object.entries(source || {})) {
       const playerId = Number(id);
       const player = byId.get(playerId);
       if (!player) continue;
+      // ⚠ サブ練習のまとめた古い名前（守備補強）は今の名前で受ける（古いアプリ・下書きから届く）
+      const key = allowed === CAMP_SUB_MENUS ? canonicalSubMenu(rawKey) : rawKey;
       requireOnline(allowed.includes(key) && fits(key, player), message);
       out[playerId] = key;
     }
@@ -1590,10 +1595,12 @@ function validatePhasePlan(league, teamName, plan) {
       // ⚠ **サブ練習も守備位置を見る**（`campRound` の入口と同じ規則）。
       //    変化球練習を野手に当てても何も起きず、そのクールが丸ごと無駄になる
       const subAssignments = {};
-      for (const [id, key] of Object.entries(plan.subAssignments || {})) {
+      for (const [id, rawKey] of Object.entries(plan.subAssignments || {})) {
         const playerId = Number(id);
         const player = team.players.find((p) => p.id === playerId);
         if (!player) continue;
+        // ⚠ まとめた古い名前（守備補強 → サブポジ練習）は今の名前で残す
+        const key = canonicalSubMenu(rawKey);
         requireOnline(
           CAMP_SUB_MENUS.includes(key) && subMenuFitsPlayer(key, player),
           'サブ練習が不正です',

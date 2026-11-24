@@ -3,6 +3,7 @@ import {
   SUB_TRAINING_MENUS,
   menuFitsPlayer,
   subMenuFitsPlayer,
+  canonicalSubMenu,
 } from '../season/campTraining.js';
 import { CAMP_MENUS, CAMP_SUB_MENUS } from './shared.js';
 
@@ -49,8 +50,13 @@ export const clampMenu = (key, player) =>
       ? 'control'
       : 'batting';
 
-/** サブ練習も同じく、出せない・合わないものに落ちたら基礎体力へ */
-export const clampSub = (key, player) =>
-  CAMP_SUB_MENUS.includes(key) && subMenuFitsPlayer(key, player)
+/**
+ * サブ練習も同じく、出せない・合わないものに落ちたら基礎体力へ。
+ * ⚠ まとめた古い名前（守備補強 → サブポジ練習）は先に今の名前へ読み替える（`canonicalSubMenu`）
+ */
+export const clampSub = (rawKey, player) => {
+  const key = canonicalSubMenu(rawKey);
+  return CAMP_SUB_MENUS.includes(key) && subMenuFitsPlayer(key, player)
     ? key
     : 'physique';
+};
