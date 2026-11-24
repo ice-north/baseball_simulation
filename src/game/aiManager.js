@@ -311,9 +311,16 @@ export function executeAutoSubstitutePinchHitter(ctx) {
 
   if (currentBatter.position === 'pitcher') return;
 
-  const availablePinchHitters = offenseTeam.players.filter(p =>
+  const bench = offenseTeam.players.filter(p =>
     !p.isStarter && p.position !== 'pitcher' && !p.hasSubbedOut
   );
+  // ⚠ 捕手の決まり（自動試合の `keepCatcher`・`restoreRealCatcher` と同じ狙い。2026-11-24 監査）:
+  //    代打はそのまま守備に就くので、捕手への代打は控えの捕手だけ（野手が最後までマスクをかぶらない）。
+  //    捕手以外への代打に、最後の控えの捕手は使わない
+  const benchCatchers = bench.filter(p => p.position === 'catcher');
+  const availablePinchHitters = currentBatter.position === 'catcher'
+    ? benchCatchers
+    : bench.filter(p => !(benchCatchers.length === 1 && p.id === benchCatchers[0].id));
   if (availablePinchHitters.length === 0) return;
 
   const batterTotal = (currentBatter.batting?.meet || 0) + (currentBatter.batting?.power || 0);
