@@ -31,10 +31,11 @@
   font-weight: 600 900;
   font-display: swap;
 }
-/* 見出し（Dela Gothic One）と本文の日本語（Zen Kaku Gothic New）。JIS 第1水準＋ソースに出てくる字に絞ったもの */
+/* 見出し（M PLUS 1p Black）と本文の日本語（Zen Kaku Gothic New）。JIS 第1水準＋ソースに出てくる字に絞ったもの */
 @font-face {
   font-family: LookHead;
   src: url('/fonts/look-head.woff2') format('woff2');
+  font-weight: 100 900;
   font-display: swap;
 }
 @font-face {

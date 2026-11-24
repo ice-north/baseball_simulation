@@ -703,8 +703,10 @@ export const displayActivity = (player) =>
 //    前（独立リーグの式）は21歳以下の野手で 制球・肩力・守備+0.8 ミート+0.6 と技術もフィジカルも同じくらいだった
 export const NATURAL_GROWTH_KIND = {
   speed: 2.2, arm: 2.2, armP: 1.8, velocity: 1.8, stamina: 1.6, bodyStamina: 1.8,
-  power: 0.8,
-  meet: 0.35, eye: 0.35, control: 0.35, defense: 0.35, breaking: 0.5, lead: 0.6,
+  // ⚠ パワー 0.8→0.6・ミート 0.35→0.3（要望 2026-11-24「ミートとパワーの成長量をやや下げます」。
+  //    キャンプの側は `campTraining.js` の `CAMP_BAT_GROWTH_MULT`）
+  power: 0.6,
+  meet: 0.3, eye: 0.35, control: 0.35, defense: 0.35, breaking: 0.5, lead: 0.6,
   steal: 0.35, bunt: 0.35,
 };
 // 若いほど伸びる（伸びる側だけ）。⚠ `applyAgeCurveChanges` が見る能力（回復力・体力・

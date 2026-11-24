@@ -346,7 +346,7 @@ function PlayerRow({
       </td>
       {/* ⚠ 持ち球は**練習を選ぶ2列のすぐ左**。メイン・サブは右に留める（下の
           `CampTableScroll`）ので、その右に列を足すと留めた列の下に隠れる。
-          長いので溢れたぶんは … にして、全文は title で出す。
+          長いので2行に折り返して幅を抑え、全文は title で出す。
           ⚠ 投手の行だけ（野手の表に空の列を作らない） */}
       {isPitcher && (
         <td className="online-camp-pitches" title={pitchTypesFull(player)}>

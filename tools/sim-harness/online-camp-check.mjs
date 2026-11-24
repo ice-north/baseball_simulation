@@ -39,7 +39,7 @@ import {
   executeCampTraining,
   TALENT_STAT_MULTIPLIERS,
 } from '../../src/season/campTraining.js';
-import { menusFor, subMenusFor } from '../../src/online/campMenus.js';
+import { menusFor, subMenusFor, clampSub } from '../../src/online/campMenus.js';
 import { createSeededRandom } from '../../src/game/rng.js';
 import { growthStopAge, postStopTrainEffect, executeCampTraining as runCampMenu, executeSubTraining as runSubMenu } from '../../src/season/campTraining.js';
 import { ABILITY_CAP } from '../../src/utils/constants.js';
@@ -78,7 +78,7 @@ import {
   assert.deepEqual(top.map((r) => r.player.id), [1], `伸びの大きかった選手に伸びていない選手が入る: ${top.map((r) => `${r.player.id}:${r.sum}`)}`);
 }
 
-// ノック・守備補強とスタッフ指導で伸びる能力も、成果から落とさない。
+// ノック・サブポジ練習とスタッフ指導で伸びる能力も、成果から落とさない。
 {
   const before = abilitySnapshot({ positionFitness: { short: 70 }, personality: { mental: 40 } });
   const after = abilitySnapshot({ positionFitness: { short: 78 }, personality: { mental: 41 } });
@@ -212,9 +212,15 @@ function campWith(build, seed = undefined) {
   assert.ok(offered(catcher).includes('clead_study'), '捕手にCリード学習が出ていない');
   assert.ok(!offered(fielder).includes('clead_study'), '野手にCリード学習が出ている');
   // 誰でもできるもの
-  for (const key of ['physique', 'weight', 'stretch', 'defense_sub', 'long_throw', 'eye'])
+  for (const key of ['physique', 'weight', 'stretch', 'subposition', 'long_throw', 'eye'])
     for (const player of [pitcher, catcher, fielder])
       assert.ok(offered(player).includes(key), `${player.position} に ${key} が出ていない`);
+  // ⚠ 守備補強（defense_sub）はサブポジ練習にまとめた。選択肢には出さず、保存済みの計画に
+  //    残っていても今の名前（サブポジ練習）で読む
+  for (const player of [pitcher, catcher, fielder]) {
+    assert.ok(!offered(player).includes('defense_sub'), `${player.position} に守備補強が残っている`);
+    assert.equal(clampSub('defense_sub', player), 'subposition', '守備補強がサブポジ練習に読み替わらない');
+  }
 }
 
 // --- 1クールの伸びの大きさ ---------------------------------------------
@@ -504,6 +510,19 @@ function campWith(build, seed = undefined) {
     assert.equal(fielder.positionFitness[pos], 30, `指定していない守備位置が伸びた: ${pos}`);
 }
 
+// --- サブポジ練習は今の守備位置（本職）も伸ばす（守備補強をまとめた。2026-11-24） ---
+{
+  for (const key of ['subposition', 'defense_sub']) {
+    const fielder = {
+      id: 4, name: '検査野手', position: 'left', physical: { dexterity: 50 }, fielding: { defense: 50 },
+      positionFitness: { catcher: 30, first: 30, second: 30, third: 30, short: 30, left: 60, center: 30, right: 30 },
+    };
+    executeSubTraining(fielder, key, { targetPosition: 'second' }, null);
+    assert.ok(fielder.positionFitness.left >= 64 && fielder.positionFitness.left <= 68, `${key}: 本職（左翼）の適性が+4〜8になっていない: ${fielder.positionFitness.left}`);
+    assert.ok(fielder.positionFitness.second > 30, `${key}: 指定した守備位置が伸びていない`);
+  }
+}
+
 // --- 対象がサーバーを通って練習まで届くか -------------------------------
 {
   const league = leagueAtCamp();
@@ -541,6 +560,10 @@ function campWith(build, seed = undefined) {
   // ⚠ **おまかせの引き先が伸びていないこと**。渡っていなければ中で抽選されるので、
   //    「どれかが伸びた」だけでは対象が効いている証明にならない
   assert.equal(after[decoy], before[decoy], 'おまかせの引き先（遊撃）が伸びた');
+
+  // ⚠ 古い名前（守備補強）の指示も受け、サブポジ練習として扱う（古いアプリ・保存済みの下書き）
+  const legacy = validateCampRound(league, teamName, { sub: { [fielder.id]: 'defense_sub' } });
+  assert.equal(legacy.sub[fielder.id], 'subposition', '守備補強の指示がサブポジ練習に読み替わらない');
 
   // ⚠ **食い違う対象は断る**。黙って捨てると、画面で選んだのに効かない
   const reject = (payload, re, message) =>

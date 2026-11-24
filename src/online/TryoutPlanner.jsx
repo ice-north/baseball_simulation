@@ -2,7 +2,7 @@ import React, { useMemo, useRef, useState } from 'react';
 import { POS, posTone, posInk } from './api.js';
 import { AbilityGrade, PlayerStatsButton } from './PlayerPerformance.jsx';
 import { PageNav } from './PageNav.jsx';
-import { teamShort } from './gameText.js';
+import { teamLabel, teamShort } from './gameText.js';
 import { rosterCounts } from '../utils/constants.js';
 import { AbilityValue } from '../components/AbilityValue.jsx';
 import { formatStat } from './statsView.js';
@@ -101,7 +101,9 @@ function storeWeights(weights) {
  */
 export function originOf(player) {
   const origin = player?.origin || {};
-  if (origin.previousTeam) return `元${origin.previousTeam}`;
+  // ⚠ 前の球団は内部名で入っている。いまの名前に引き直す（名前を変えた球団の選手が
+  //    「元〇〇（変える前の名前）」と出ていた。2026-11-24 監査。アプリの `TryoutPanel.kt` も同じ）
+  if (origin.previousTeam) return `元${teamLabel(origin.previousTeam)}`;
   return origin.university || origin.highSchool || '';
 }
 

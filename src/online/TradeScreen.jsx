@@ -14,6 +14,8 @@ import { TRADE_NOTE_MAX } from './social.js';
 import { TransactionsPage } from './SocialPages.jsx';
 import { Page } from './Page.jsx';
 import { Choice } from './Choice.jsx';
+import { PYRAMID_LEAGUES, compareLeagueStanding } from './pyramidLeague.js';
+import { tradeMerits, meritSummaryText } from './tradeMerit.js';
 import {
   ConditionMark,
   PlayerStatsButton,
@@ -306,17 +308,12 @@ function ThoughtsPanel({ partner, theirRoster, league }) {
  * CPU球団が受けそうかの目安（3段のメーター）。⚠ 参加者の球団には出さない（人が決める）。
  * メーターの横軸は「出す値段 ÷ もらう値段」。境目はサーバーの決まり（`team.trade`）から引く。
  */
-function OddsMeter({ rule, give, get, valueOf, roster, myRoster }) {
-  if (!rule) return null;
-  if (!get.length || !give.length) {
-    return (
-      <div className="online-trade-odds" aria-label="CPUの見込み">
-        <p className="online-muted">
-          出す選手ともらう選手を選ぶと、CPU球団が受けそうかの目安が出ます。
-        </p>
-      </div>
-    );
-  }
+/**
+ * CPUの見込みの中身（メーターと「相手へのメリット」の札で同じものを使う）。
+ * `null` … 片側が空（目安を出さない）／ `{ pending: true }` … 値段を読んでいる
+ */
+function cpuOutlook({ rule, give, get, valueOf, roster, myRoster }) {
+  if (!rule || !get.length || !give.length) return null;
   // ⚠ 出す選手は**その球団で出番があるかを乗せた値段**で見る（サーバーの `cpuDecisionFor` と
   //    同じ。いしだ 2026-11-24「もっとも得点が高いのは、余剰戦力が相手チームでレギュラーに
   //    なれる場合です」）。掛けないと、メーターが「足りない」と出したのに受けられる
@@ -336,13 +333,8 @@ function OddsMeter({ rule, give, get, valueOf, roster, myRoster }) {
       ? setTradeValues(roster, get, (p) => p.tradeBase)
       : get.map(valueOf)
   ).filter(Number.isFinite);
-  if (giveValues.length < give.length || getValues.length < get.length) {
-    return (
-      <div className="online-trade-odds" aria-label="CPUの見込み">
-        <p className="online-muted">値段を読んでいます…</p>
-      </div>
-    );
-  }
+  if (giveValues.length < give.length || getValues.length < get.length)
+    return { pending: true };
   // ⚠ 戦力の開きはサーバーと同じ式（`tradeStrengthGap`）。値段より先に見る（釣り合っても断るため）
   const gap =
     rule.gapLimit != null && roster && myRoster
@@ -357,6 +349,29 @@ function OddsMeter({ rule, give, get, valueOf, roster, myRoster }) {
   const odds = lopsided ? 'lopsided' : tradeOdds(giveValues, getValues, rule);
   const ratio = tradeRatio(giveValues, getValues);
   const [low, high] = tradeOddsBounds(rule);
+  return { odds, ratio, gap, lopsided, low, high };
+}
+
+function OddsMeter({ rule, give, get, valueOf, roster, myRoster }) {
+  if (!rule) return null;
+  const outlook = cpuOutlook({ rule, give, get, valueOf, roster, myRoster });
+  if (!outlook) {
+    return (
+      <div className="online-trade-odds" aria-label="CPUの見込み">
+        <p className="online-muted">
+          出す選手ともらう選手を選ぶと、CPU球団が受けそうかの目安が出ます。
+        </p>
+      </div>
+    );
+  }
+  if (outlook.pending) {
+    return (
+      <div className="online-trade-odds" aria-label="CPUの見込み">
+        <p className="online-muted">値段を読んでいます…</p>
+      </div>
+    );
+  }
+  const { odds, ratio, gap, lopsided, low, high } = outlook;
   // 横軸は 0 〜 境目の上の1.5倍。はみ出したら端に止める
   const max = high * 1.5;
   const at = (v) => `${Math.min(100, Math.max(0, (v / max) * 100))}%`;
@@ -733,6 +748,158 @@ function Impact({ view, partner, theirRoster, giveIds, getIds }) {
   );
 }
 
+/** 届いた提案の「相手へのメリット」は他球団の名簿を読まない（弱い持ち場の順位を出さない） */
+const NO_OTHERS = {};
+const ODDS_TONE = { likely: 'good', depends: 'plain', short: 'bad', lopsided: 'bad' };
+
+/**
+ * 相手に与えるメリット（いしだ 2026-11-24「選手を配置したときに相手に与えるメリットを表示してください」）。
+ * 出す選手ごとに、相手での役割（一番手・ローテ・抑え・控え）と、今の一番手との差・弱い持ち場を補うか・
+ * 戦力の上がりを札で出し、交換全体の相手の戦力の増減を添える。式は `tradeMerit.js`（アプリと同じ）。
+ * ⚠ 相手の名簿が読めるまでは出さない。`others` は相手以外の球団の名簿（弱い持ち場の順位。無ければ順位を出さない）。
+ * ⚠ CPU球団なら、CPUの見込み（`cpuOutlook`。メーターと同じ）も札にして並べる
+ */
+function MeritPanel({ theirRoster, give, getIds, others, outlook = null, partner }) {
+  // ⚠ 選手の並びは描くたびに作り直されるので、id の並びで覚える
+  const giveKey = give.map((p) => p.id).join(',');
+  const getKey = getIds.join(',');
+  const merits = useMemo(
+    () => (theirRoster ? tradeMerits(theirRoster, give, getIds, others) : null),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [theirRoster, giveKey, getKey, others],
+  );
+  if (!merits) return null;
+  const tags = [...merits.tags];
+  if (outlook && !outlook.pending)
+    tags.push({ text: `CPUの見込み: ${TRADE_ODDS[outlook.odds]}`, tone: ODDS_TONE[outlook.odds] });
+  return (
+    <section className="online-trade-merit" aria-label="相手へのメリット">
+      <h4>
+        {teamShort(partner)}へのメリット
+        <small>出す選手が相手でどう使われるか</small>
+      </h4>
+      {merits.players.length ? (
+        <ul>
+          {merits.players.map((m) => (
+            <li key={m.id} data-player={m.id}>
+              <b>{m.name}</b>
+              <span className="online-trade-merit-tags">
+                {m.tags.map((t) => (
+                  <span key={t.text} className={`online-trade-merit-tag is-${t.tone}`}>
+                    {t.text}
+                  </span>
+                ))}
+              </span>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="online-muted">出す選手を選ぶと、相手での役割と得が出ます。</p>
+      )}
+      {tags.length > 0 && (
+        <div className="online-trade-merit-total">
+          <span className="online-trade-merit-tags">
+            {tags.map((t) => (
+              <span key={t.text} className={`online-trade-merit-tag is-${t.tone}`}>
+                {t.text}
+              </span>
+            ))}
+          </span>
+          <p className="online-muted">{meritSummaryText(merits)}</p>
+        </div>
+      )}
+    </section>
+  );
+}
+
+/** 部ごとの球団の並び（順位の順）。`teamLeagues` が無い古いビューは1つにまとめる */
+function leagueGroups(view) {
+  const names = view.teamNames || [];
+  const standing = new Map((view.standings || []).map((s) => [s.team, s]));
+  const rows = names.map((team) => standing.get(team) || { team, wins: 0, losses: 0, draws: 0 });
+  if (!view.teamLeagues)
+    return [{
+      id: 'all',
+      name: '球団',
+      rows: [...rows].sort(compareLeagueStanding).map((r, i) => ({ ...r, place: standing.has(r.team) ? i + 1 : null })),
+    }];
+  return PYRAMID_LEAGUES.map((league) => ({
+    id: league.id,
+    name: league.name,
+    rows: rows
+      .filter((r) => view.teamLeagues[r.team] === league.id)
+      .sort(compareLeagueStanding)
+      .map((r, i) => ({ ...r, place: standing.has(r.team) ? i + 1 : null })),
+  })).filter((g) => g.rows.length);
+}
+
+/**
+ * 相手の球団を選ぶ（PC）。部（1部・2部）の見出しで分け、球団マークと球団名のそろったカードの格子に並べる
+ * （いしだ 2026-11-24「相手球団の並びが文字だけ且つ並びも整列していないため、見えにくい」）。
+ * ⚠ マークは**新しい見た目が切でも出す**（`TeamMark` の `always`。切のときは新しい字を読まない）。
+ * ⚠ **どちらが人でどちらがCPUか分かるようにする**（札。返事が返るまでの時間が全く違う）。
+ *    読み上げの名前は「球団名（CPU）」のまま（検査もこれで探す）。
+ * ⚠ 自球団も同じ格子に置く（押せない）。6球団ずつの段がそろい、自分がどの部か分かる
+ * ⚠ ボタン列には `role="group"` と「相手の球団」の名前を付ける（`Choice` と同じ決まり）
+ */
+function PartnerPicker({ view, partners, humans, value, disabled, onChange }) {
+  const groups = leagueGroups(view);
+  const owners = view.teamOwners || {};
+  return (
+    <div className="online-trade-partners" role="group" aria-label="相手の球団">
+      <span className="online-choice-label">相手の球団</span>
+      {groups.map((g) => (
+        <div key={g.id} className="online-trade-partner-league">
+          <h3>{g.name}</h3>
+          <div className="online-trade-partner-grid">
+            {g.rows.map((r) => {
+              const own = r.team === view.teamName;
+              const human = own || humans?.has(r.team);
+              const record = `${r.wins}勝${r.losses}敗${r.draws ? `${r.draws}分` : ''}`;
+              const body = (
+                <>
+                  <TeamMark team={r.team} size={34} always className="online-trade-partner-mark" />
+                  <span className="online-trade-partner-text">
+                    <b>{teamLabel(r.team)}</b>
+                    <small>
+                      <span className={`online-trade-partner-kind is-${own ? 'own' : human ? 'human' : 'cpu'}`}>
+                        {own ? '自球団' : human ? owners[r.team] || '参加者' : 'CPU'}
+                      </span>
+                      {r.place ? `${r.place}位 · ` : ''}
+                      {record}
+                    </small>
+                  </span>
+                </>
+              );
+              if (own || !partners.includes(r.team))
+                return (
+                  <div key={r.team} className="online-trade-partner is-own" data-team={r.team} title={teamLabel(r.team)}>
+                    {body}
+                  </div>
+                );
+              return (
+                <button
+                  key={r.team}
+                  type="button"
+                  className={`online-trade-partner ${human ? 'is-human' : 'is-cpu'}`}
+                  data-team={r.team}
+                  aria-label={`${teamLabel(r.team)}${human ? '' : '（CPU）'}`}
+                  aria-pressed={value === r.team}
+                  title={teamLabel(r.team)}
+                  disabled={disabled}
+                  onClick={() => onChange(r.team)}
+                >
+                  {body}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 /** 交換で名簿が成り立たなくなるか（どちらかの球団）。⚠ サーバーと同じ判定 */
 function dealProblems(myRoster, theirRoster, giveIds, getIds) {
   if (!theirRoster) return [];
@@ -884,6 +1051,30 @@ function TradeComposer({
   };
   const problems = dealProblems(myRoster, theirRoster, giveIds, getIds);
   const empty = giveIds.length + getIds.length === 0;
+  // 相手以外の球団の名簿（弱い持ち場の順位。自球団も入れる。`ThoughtsPanel` と同じ）
+  const others = useMemo(
+    () =>
+      Object.fromEntries(
+        Object.entries(league?.teams || {})
+          .filter(([name]) => name !== partner)
+          .map(([name, data]) => [name, data.roster || []]),
+      ),
+    [league?.teams, partner],
+  );
+  // ⚠ 弱い持ち場の順位は**全球団が読めてから**出す。読めた球団だけで比べると、開いた直後に
+  //    「弱い遊撃（3位/3）」が出て、読み終わると消える
+  const othersReady = Object.keys(others).length >= Math.max(0, (league?.total ?? 0) - 1);
+  const rule = cpu ? cpuTradeRule(theirs.info) : null;
+  const outlook = cpu
+    ? cpuOutlook({
+        rule,
+        give: givePlayers,
+        get: getPlayers,
+        valueOf: tierOf.valueOf || (() => undefined),
+        roster: theirRoster,
+        myRoster: view.roster,
+      })
+    : null;
   const inGroup = (players) =>
     players.filter((p) => rosterGroup(p.position) === group).sort(byOverall);
   const kind = group === 'pitcher' ? 'pitcher' : 'fielder';
@@ -893,16 +1084,10 @@ function TradeComposer({
   return (
     <div className="online-trade-composer">
       {!lockedPartner && (
-        <Choice
-          label="相手の球団"
-          /* ⚠ **どちらが人でどちらがCPUか分かるようにする**。返事が返るまでの
-             時間が全く違う（CPUはその場、人は相手が開くまで） */
-          options={Object.fromEntries(
-            partners.map((name) => [
-              name,
-              `${teamLabel(name)}${humans?.has(name) ? '' : '（CPU）'}`,
-            ]),
-          )}
+        <PartnerPicker
+          view={view}
+          partners={partners}
+          humans={humans}
           value={partner}
           disabled={busy}
           onChange={(name) => {
@@ -965,6 +1150,14 @@ function TradeComposer({
           <h3>交換案</h3>
           <DealList side="give" players={givePlayers} onRemove={toggle} busy={busy} />
           <DealList side="get" players={getPlayers} onRemove={toggle} busy={busy} />
+          <MeritPanel
+            partner={partner}
+            theirRoster={theirRoster}
+            give={givePlayers}
+            getIds={getIds}
+            others={othersReady ? others : NO_OTHERS}
+            outlook={outlook}
+          />
           <Impact
             view={view}
             partner={partner}
@@ -978,7 +1171,7 @@ function TradeComposer({
           )}
           {cpu && (
             <OddsMeter
-              rule={cpuTradeRule(theirs.info)}
+              rule={rule}
               give={givePlayers}
               get={getPlayers}
               valueOf={tierOf.valueOf || (() => undefined)}
@@ -1091,6 +1284,13 @@ function MobileDeal({ view, partner, theirRoster, theirError, giveEntries, getEn
         )}
       </div>
       <GoneNote gone={gone} />
+      <MeritPanel
+        partner={partner}
+        theirRoster={theirRoster}
+        give={give}
+        getIds={get.map((p) => p.id)}
+        others={NO_OTHERS}
+      />
       <Impact
         view={view}
         partner={partner}
@@ -1146,6 +1346,13 @@ function TradeCompare({ view, partner, theirRoster, theirError, giveEntries, get
         </div>
       )}
       <GoneNote gone={gone} />
+      <MeritPanel
+        partner={partner}
+        theirRoster={theirRoster}
+        give={give}
+        getIds={get.map((p) => p.id)}
+        others={NO_OTHERS}
+      />
       <Impact
         view={view}
         partner={partner}
