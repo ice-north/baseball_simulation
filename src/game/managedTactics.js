@@ -131,6 +131,15 @@ export const runManagedTactics = ({ memory, homeTeam, awayTeam, inning, isTopInn
       track.relieverOutsPitched = 0;
       track.relieverBattersFaced = 0;
       memory.removedIds.add(prev);
+      // この回の失点の基準を救援自身の失点に置き直す（cpuTactics の bringInReliever と同じ）
+      const entering = teams[side].players.find(p => p.id === id);
+      memory.inningStartRuns[side] = entering?.stats?.pitching?.runsAllowed || 0;
+      // 登板疲労（+50・上限150。CPU の継投の bringInReliever と同じ決まり）。
+      // ⚠ 以前は人の継投だけ足しておらず、人が使った救援は翌日も疲れていない扱いだった
+      const rotation = TEAMS_DATA[teams[side].name]?.pitchingRotation;
+      if (rotation?.reliefFatigue) {
+        rotation.reliefFatigue[id] = Math.min(150, (rotation.reliefFatigue[id] || 0) + 50);
+      }
     }
     memory.pitcherIds[side] = id;
     for (const p of teams[side].players) if (p.hasSubbedOut) memory.removedIds.add(p.id);
@@ -216,6 +225,8 @@ export const runManagedTactics = ({ memory, homeTeam, awayTeam, inning, isTopInn
       if (s.battingOrder !== wasOrder) upd.battingOrder = s.battingOrder;
       if (s.position !== p.position) upd.position = s.position;
       if (!!s._isDH !== !!p._isDH) upd._isDH = !!s._isDH;
+      // 守る前に退いた捕手の代打（restoreRealCatcher の印）。戻さないと捕手の守備経験に数えてしまう
+      if (s._neverFielded && !p._neverFielded) upd._neverFielded = true;
       if (hasSubbedOut !== !!p.hasSubbedOut) upd.hasSubbedOut = hasSubbedOut;
       if (Object.keys(upd).length) updates[side].set(s.id, upd);
       if (isStarter && !p.isStarter) entered.push(s);

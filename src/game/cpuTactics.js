@@ -413,6 +413,11 @@ export const createCpuTactics = ({ gameState, homeTeamName, awayTeamName, useDH,
     reliefTrack.currentRelieverId = reliever.id;
     reliefTrack.relieverOutsPitched = 0;
     reliefTrack.relieverBattersFaced = 0;
+    // この回の失点の基準を救援自身の失点に置き直す（「この回に失点したら交代」を救援の失点で見る）。
+    // ⚠ 前の投手の回の頭の失点のままだと、回の途中に入った救援は失点しても差が0以下で、交代しなかった
+    if (gameState.inningStartRuns) {
+      gameState.inningStartRuns[teamKey] = relieverData.gameStats?.pitching?.runsAllowed || 0;
+    }
 
     // currentPitcherId を更新
     gameState.currentPitcherId[teamKey] = reliever.id;
