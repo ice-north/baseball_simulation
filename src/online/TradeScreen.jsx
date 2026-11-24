@@ -45,6 +45,7 @@ import {
   tradeStrengthGap,
   tradeRatio,
   setTradeValues,
+  playingTimeFactor,
   tradeSlot,
   valueTiers,
 } from './tradeSearch.js';
@@ -221,6 +222,8 @@ const ODDS_HELP =
   'CPU球団は「受け取る選手の値段の合計が、出す選手の値段の合計の上乗せ分以上」なら受けます。' +
   '値段は素質（ドラフトと同じ見立て。若いほど高い）といまの持ち場での力を半々で見て、今季の成績で上下します。' +
   '相手が出す選手は、抜けると穴が空く主力ほど高くなります（控えが厚い持ち場なら上乗せはありません。何人かまとめてもらうと、まとめて空く穴で見ます）。' +
+  'さらに、その選手が相手の球団で**持ち場の一番になれる**なら値段が上がります（控え止まりなら上がりません）。' +
+  'トレードは活躍の場を与える場でもあるので、余っている選手が相手でレギュラーになれる形がいちばん通りやすくなります。' +
   'そこに監督の見る目（若手を高く見る・主力を高く見る など）が1人ずつかかるので、' +
   '境目の近くは「相手の監督しだい」です。足りないときは、同じ持ち場（投手・捕手・内野・外野）の安い選手に替えた逆提案が来るか、断られます。' +
   'また、値段が釣り合っていても、交換のあとのスタメン・ローテ・中継ぎの力がそちらばかり上がる交換は断ります（弱い2人で強い1人を取る形など）。';
@@ -314,7 +317,18 @@ function OddsMeter({ rule, give, get, valueOf, roster, myRoster }) {
       </div>
     );
   }
-  const giveValues = give.map(valueOf).filter(Number.isFinite);
+  // ⚠ 出す選手は**その球団で出番があるかを乗せた値段**で見る（サーバーの `cpuDecisionFor` と
+  //    同じ。いしだ 2026-11-24「もっとも得点が高いのは、余剰戦力が相手チームでレギュラーに
+  //    なれる場合です」）。掛けないと、メーターが「足りない」と出したのに受けられる
+  const gotIds = new Set(get.map((p) => p.id));
+  const rosterAfter = (roster || []).filter((p) => !gotIds.has(p.id));
+  const giveValues = give
+    .map((p) => {
+      const v = valueOf(p);
+      // ⚠ **もらう選手を抜いた名簿で測る**（サーバーと同じ）
+      return Number.isFinite(v) && roster ? v * playingTimeFactor(rosterAfter, p) : v;
+    })
+    .filter(Number.isFinite);
   // ⚠ 何人かまとめてもらうときは、まとめて抜けた穴の上乗せで引く（サーバーの
   //    `setValuesOf` と同じ式）。事情を抜いた値段（`tradeBase`）が無ければ1人ずつの値段
   const getValues = (
