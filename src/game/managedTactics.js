@@ -8,9 +8,9 @@
 //
 // 自動の試合は試合の中で持ち続ける帳簿（救援の記録・先発のダメージ・登板順など）を
 // gameState に持つ。采配の試合では同じものを `createManagedTacticsMemory()` の箱に持ち、
-// App.jsx が ref で1試合のあいだ持ち続ける。
+// useManagedGame.jsx が ref で1試合のあいだ持ち続ける。
 //
-// 呼ぶ所（App.jsx の throwPitch）:
+// 呼ぶ所（useManagedGame.jsx の throwPitch・handleBunt）:
 //   - 1球ごと: staminaOf で投げる前のスタミナを読み、投げたら setStamina
 //   - 打席が終わったら noteAtBatEnd、半イニングが終わったら noteHalfInningEnd
 //   - 投げる前に runManagedTactics。交代があればその球は投げずに交代だけを反映する

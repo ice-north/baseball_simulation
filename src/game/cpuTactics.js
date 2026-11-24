@@ -45,8 +45,8 @@ const INNING_DAMAGE_THRESHOLDS = [45, 40, 36, 32, 28, 25, 22, 19, 16];
 //    旧実装はイニングだけで決まり、先発の降板理由の約半分がダメージだった
 //    （スタミナ120以上でも平均4.9回・78球で降りていた）。これだと投球回が
 //    **打たれ方だけで決まってスタミナに依存しない**。（×0.7〜1.7）余力のある投手は多少打たれても
-//    続投し、疲れてきた投手は少しの綻びで代える——采配モードの `aiManager` が
-//    スタミナで判断しているのと同じ考え方に揃える。
+//    続投し、疲れてきた投手は少しの綻びで代える（スタミナで判断する考え方。
+//    以前の采配モードの別の決まり aiManager.js もそうしていた。いまは消して、ここに1本化）。
 const damageThreshold = (inning, staminaRate) =>
   Math.round((INNING_DAMAGE_THRESHOLDS[Math.min(inning - 1, 8)] || 5) * (0.7 + Math.max(0, Math.min(1, staminaRate))));
 
@@ -430,7 +430,7 @@ export const createCpuTactics = ({ gameState, homeTeamName, awayTeamName, useDH,
       // 流れて（22%→55%）かえって偏りが悪化する。
       // 上限を設ける。相対ゲートを入れたことで疲労が溜まり続けても登板できるため、
       // 無制限だと 4210 のような値になり、他の箇所の絶対値判定（左ワンポイント投入の
-      // `< 50` など）が永久に無効化されてしまう。3登板ぶんで頭打ちにする（aiManager も同じ +50・上限150）。
+      // `< 50` など）が永久に無効化されてしまう。3登板ぶんで頭打ちにする（采配の試合で人が継投したときも同じ +50・上限150。managedTactics.js）。
       TEAMS_DATA[teamName].pitchingRotation.reliefFatigue[reliever.id] = Math.min(150,
         (TEAMS_DATA[teamName].pitchingRotation.reliefFatigue[reliever.id] || 0) + 50);
     }
