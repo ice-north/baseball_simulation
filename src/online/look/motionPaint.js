@@ -580,6 +580,19 @@ function paintRadar(ctx, stage, actors, t) {
   ctx.restore();
 }
 
+// 四隅を暗くする輪（毎コマ作らず、絵ごとに1つ）
+const vignettes = new WeakMap();
+function vignetteOf(ctx) {
+  let vg = vignettes.get(ctx);
+  if (!vg) {
+    vg = ctx.createRadialGradient(VIEW_W / 2, VIEW_H * 0.52, VIEW_H * 0.42, VIEW_W / 2, VIEW_H * 0.52, VIEW_W * 0.68);
+    vg.addColorStop(0, 'rgba(3,7,20,0)');
+    vg.addColorStop(1, 'rgba(3,7,20,0.5)');
+    vignettes.set(ctx, vg);
+  }
+  return vg;
+}
+
 /**
  * 時間 t の絵を描く。
  * @param ctx 画面の canvas（幅 `width` 画素。縦は 9/16）
@@ -634,10 +647,7 @@ export function paintFrame(ctx, stage, stadium, t, width) {
 
   // ---- 画面に貼る物 ----
   ctx.setTransform(S, 0, 0, S, 0, 0);
-  const vg = ctx.createRadialGradient(VIEW_W / 2, VIEW_H * 0.52, VIEW_H * 0.42, VIEW_W / 2, VIEW_H * 0.52, VIEW_W * 0.68);
-  vg.addColorStop(0, 'rgba(3,7,20,0)');
-  vg.addColorStop(1, 'rgba(3,7,20,0.5)');
-  ctx.fillStyle = vg;
+  ctx.fillStyle = vignetteOf(ctx);
   ctx.fillRect(0, 0, VIEW_W, VIEW_H);
   // 本塁打が入った瞬間の光
   const homer = motion.events.find((e) => e.kind === 'homer');

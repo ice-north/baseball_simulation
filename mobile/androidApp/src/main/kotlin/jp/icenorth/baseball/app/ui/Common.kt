@@ -398,8 +398,11 @@ fun StatTable(
     androidx.compose.runtime.LaunchedEffect(enter) {
         if (look.on) enter.animateTo(1f, androidx.compose.animation.core.tween(420))
     }
-    /** i 行目の浮かび方（0〜1）。上の行から少しずつ遅れて */
-    fun rise(i: Int): Float = if (!look.on) 1f else ((enter.value * 1.6f) - i * 0.04f).coerceIn(0f, 1f)
+    /**
+     * i 行目の浮かび方（0〜1）。上の行から少しずつ遅れて。
+     * ⚠ 遅れは12行目で頭打ちにする（以前は17行目より下が最後まで薄いまま、41行目より下は見えなかった）
+     */
+    fun rise(i: Int): Float = if (!look.on) 1f else ((enter.value * 1.6f) - minOf(i, 12) * 0.04f).coerceIn(0f, 1f)
     fun Modifier.lookRow(i: Int, highlighted: Boolean): Modifier =
         if (!look.on) this
         else this

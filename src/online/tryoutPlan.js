@@ -332,16 +332,12 @@ export function weightedRanked(candidates, weights, roster = [], limit = TRYOUT_
 }
 
 /**
- * 候補の絞り込みと並べ替え。
- * ⚠ **並びを決定的にすること**。同点で順番が揺れると、押した行と動く行がずれる。
- */
-/**
  * 能力で絞り込む条件に使える能力（先方要望 2026-11-23「投手の野手能力や、野手の投手能力を検索するのが
  * 面倒なので、全選手から希望の能力値を絞って検索できるように」）。
  * ⚠ 値は**画面に出している数そのまま**（球速は km/h、スタミナは 0〜200）。評価値の 0〜100 に揃えた値
  *    （`abilityValue`）で絞ると、入れた数と表の数が食い違う
  * `side`: その能力をふだん見る側（'fielder' 野手 / 'pitcher' 投手）。反対の側の表では列を足して見せる
- * ⚠ アプリは Tryout.kt の `ABILITY_FILTERS`（同じ能力・同じ値）
+ * ⚠ アプリの `ABILITY_FILTERS` は gen-tables.mjs がここから Tables.kt に書き出す（値の引き方は expect-stats.mjs で答え合わせ）
  */
 export const ABILITY_FILTERS = [
   { key: 'meet', label: 'ミート', side: 'fielder', get: (p) => p.batting?.meet },
@@ -383,6 +379,10 @@ export const activeAbilityFilters = (filters = []) =>
     (f) => ABILITY_FILTERS.some((d) => d.key === f.key) && f.min !== '' && f.min != null && Number.isFinite(Number(f.min)),
   );
 
+/**
+ * 候補の絞り込みと並べ替え。
+ * ⚠ **並びを決定的にすること**。同点で順番が揺れると、押した行と動く行がずれる。
+ */
 export function filterCandidates(
   candidates,
   { group = 'all', query = '', sortKey = 'overall', desc = true, scoreOf = null, abilities = [] } = {},

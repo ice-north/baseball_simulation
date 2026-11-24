@@ -117,6 +117,8 @@ export class MemoryStore {
       if (whole) memory.set(this.path, JSON.stringify(value));
       else if (loaded.world) {
         // 本番の `writeSnapshot` と同じ: 分け直し、終わった年の試合は前の部分をそのまま使う
+        if (prepared.keepPastGames && !stored.parts.pastGames)
+          throw new Error('終わった年の試合の部分が見つからないまま、使い回して保存しようとしました');
         const next = splitBundle(prepared.bundle, { keepPastGames: Boolean(prepared.keepPastGames) });
         const parts = Object.fromEntries(
           Object.entries(next.parts).map(([name, data]) => [name, JSON.stringify(data)]),

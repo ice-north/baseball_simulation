@@ -15,7 +15,7 @@ import {
   refillOwnRotations,
 } from '../../server/leagueEngine.mjs';
 import { autoSimulateGame } from '../../src/game/autoSimulation.js';
-import { TEAMS_DATA } from '../../src/teams-data.js';
+import { TEAMS_DATA, releasedPlayersPool } from '../../src/teams-data.js';
 import { cleanupPlayerReferences } from '../../src/season/yearProgressionSystem.js';
 
 const NOW = '2026-10-26T15:00:00.000Z';
@@ -74,6 +74,18 @@ const names = league.season.settings.teamNames;
   assert.ok((league.transactions || []).some((t) => t.kind === 'signing' && t.teams.includes(name)), '入団の履歴に無い');
   // 捕手の居る球団には足さない
   assert.equal(fillMissingCatchers(league, NOW).length, 0);
+  // 放出された捕手が居ないとき: 外の球団の3人目より後ろから。在学中の大学生・正捕手は取らない
+  //（以前は大学の在学生や、外の球団の1・2番目の捕手を入れることがあった。2026-11-24 監査）
+  for (const p of team.players.filter((x) => x.position === 'catcher')) cleanupPlayerReferences(team, p.id);
+  team.players = team.players.filter((x) => x.position !== 'catcher');
+  releasedPlayersPool.splice(0, releasedPlayersPool.length);
+  const counts = Object.fromEntries(Object.entries(TEAMS_DATA).map(([n, t]) => [n, (t.players || []).filter((x) => x.position === 'catcher').length]));
+  const outside = fillMissingCatchers(league, NOW);
+  assert.equal(outside.length, 1, '外の球団から捕手を補っていない');
+  const from = Object.entries(TEAMS_DATA).find(([n, t]) => n !== name && (t.players || []).filter((x) => x.position === 'catcher').length === counts[n] - 1)?.[0];
+  assert.ok(from, '捕手を出した球団が見つからない');
+  assert.ok(!TEAMS_DATA[from].universityData && !TEAMS_DATA[from].universityTeamId, `大学（${from}）から捕手を取った`);
+  assert.ok(counts[from] >= 3, `捕手 ${counts[from]} 人の球団（${from}）から取った`);
 }
 
 // 3. 自分で組んだローテの空き枠を埋める（キャンプの終わりに呼ぶ）

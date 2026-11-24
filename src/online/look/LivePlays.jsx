@@ -99,7 +99,14 @@ export default function LivePlays({ game, motion = false }) {
         <div className="online-motion">
           <PlayMotion game={game} scene={scene} before={before} speed={speed} replayKey={replay} onDone={() => setFinished(now)} />
           <div className="online-motion-tools">
-            <button type="button" onClick={() => setReplay((n) => n + 1)}>
+            <button
+              type="button"
+              onClick={() => {
+                // もう一度: 結果を隠し直し、動きが終わるまで自動で次へ行かない
+                setFinished(-1);
+                setReplay((n) => n + 1);
+              }}
+            >
               ↻ もう一度
             </button>
             <button type="button" aria-pressed={speed === 2} onClick={() => setSpeed(speed === 2 ? 1 : 2)}>

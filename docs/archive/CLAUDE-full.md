@@ -1370,9 +1370,9 @@ CLAUDE.md の各所で潰してきたのと同じ型の誤り:
   正しいのは「実装に合わせて直す」か「もう無いと明記する」のどちらか
 
 ## 主要ファイル
-- `src/App.jsx` (~4240行) - メインアプリ、試合シミュレーション、画面遷移（下記セクション参照）
-- `src/game/autoSimulation.js` (~3000行) - 自動シミュレーション・buildDefense
-- `src/game/aiManager.js` (~650行) - 監督AI（自動投手交代・代打・守備固め・盗塁判定）
+- `src/App.jsx` (~520行) - メインアプリ、画面遷移。采配の試合は 2026-11-24 に `src/game/useManagedGame.jsx`（state と処理）と `src/components/ManagedGameScreen.jsx`（画面）へ移した（下記セクション参照）
+- `src/game/autoSimulation.js` (~1850行) - 自動シミュレーション・buildDefense
+- aiManager.js（2026-11-24 に削除）- 采配の試合の監督AI（自動投手交代・代打・守備固め・盗塁判定）。いまは自動の試合と同じ `src/game/cpuTactics.js` を `src/game/managedTactics.js` から呼ぶ
 - `src/game/lineupGenerator.js` (~690行) - AIオーダー編成・投手ローテーション生成・`ensureAllTeamsReady`
 - `src/game/gameControls.js` (~105行) - resetGame・multiPitch・simMode
 - `src/game/gameSetup.js` (~680行) - setupManagedGame・handleManagedGameEnd
@@ -1381,7 +1381,7 @@ CLAUDE.md の各所で潰してきたのと同じ型の誤り:
 - `src/game/bunting.js` (~69行) - バントの解決モデル（両エンジン共有。フェア率・質・送球アウト・スクイズ）
 - `src/game/saveSystem.js` (~800行) - セーブ/ロード/ファイル書き出し・読み込み
 - `src/simulation-logic.js` (~1090行) - 物理演算（打球・投球）
-- `src/components/LineupSettingScreen.jsx` (~2980行) - スタメン/投手起用/守備分析の3タブ（元に戻す/やり直す付き）
+- `src/components/LineupSettingScreen.jsx` (~1460行) - スタメン/投手起用/守備分析の3タブ（元に戻す/やり直す付き）
 - `src/components/DateProgressScreen.jsx` (~3760行) - 日程進行画面
   （`dateProgress/` に切り出し済み: `Newspaper.jsx` 440行 / `PreGameModal.jsx` 530行 /
    `Modals.jsx` 125行 / `bracketRenderer.jsx` 190行）
@@ -1395,7 +1395,8 @@ CLAUDE.md の各所で潰してきたのと同じ型の誤り:
 - `src/season/universityPool.js` (~1770行) - 大学プール（高卒世代生成・進路振分・ランク別成長・4年間成長・卒業）
 - `src/season/yearProgressionSystem.js` (~1630行) - 年間進行・キャンプ・オフシーズン処理
 - `src/corporate/corporateInit.js` (~1830行) - 社会人/独立リーグ初期化・チームランク変動
-- `src/corporate/scoutingSystem.js` (~2040行) - 社会人モード入退団（退団処理・スカウト候補生成・AI自動処理）
+- `src/corporate/scoutingSystem.js` (~1290行) - 社会人モード入団（スカウト候補生成・AI自動処理）。2026-11-24 に退団は `src/corporate/corporateDepartures.js`、大学のスカウトは `src/university/universityScout.js`、両方が使う見積もりは `src/game/scoutReport.js` に分けた
+- `src/season/playerFactory.js` (~860行) - 選手1人を作る部品（能力・球種・守れる位置・特性）。2026-11-24 に tryoutSystem.js から分けた。大学・高校のプールの入れ物は `src/state/schoolPools.js`
 - `src/university/universityTeamsData.js` (~510行) - 大学チームデータ（27リーグ234校（2部制12リーグ×12校＋1部制15リーグ×6校）、ランク別成長倍率定義）
 - `src/university/universityLeagueManager.js` (~450行) - 大学リーグ戦シミュレーション（27リーグ春季・秋季、スケジュール生成・試合シミュレーション・順位表管理）
 - `src/data/playerNames.js` (345KB) - 姓5000件+名4000件の重み付き名前DB
@@ -1425,13 +1426,13 @@ App.jsxは大きいファイルなので、作業に関連するセクション�
 | RENDER | メインreturn（試合画面UI・管理シェル） |
 
 ### 編集作業ガイド
-- **試合ロジック修正**: `src/App.jsx` THROW_PITCH (L611-2030) + `src/game/aiManager.js`
+- **試合ロジック修正**: `src/App.jsx` THROW_PITCH (L611-2030) + aiManager.js（2026-11-24 に削除 → `src/game/cpuTactics.js`）
 - **画面遷移修正**: `ManagementScreen.jsx` + `GameFlowScreens.jsx`
 - **UI修正**: `src/App.jsx` RENDER (L2131-END) + `GameUIComponents.jsx`
 - **日程進行修正**: `src/components/DateProgressScreen.jsx`（`handleProgressDate`）+ `src/season/dateProgression.js`
 - **選手交代修正**: `src/App.jsx` GAME_HANDLERS (L341-595)
 - **試合セットアップ**: `src/game/gameSetup.js`
-- **監督AI修正**: `src/game/aiManager.js`
+- **監督AI修正**: aiManager.js（2026-11-24 に削除 → `src/game/cpuTactics.js`・`src/game/managedTactics.js`）
 
 ## ゲームフロー
 ```
@@ -2943,7 +2944,7 @@ C も 61% が1年目に B へ。**クラブ208チームを含む母集団なの�
   - セーブロード後の再生成時は、現在月が大会終了月を過ぎている場合に自動キャッチアップ完了
 - **将来のゲームモード**: `gameMode = 'university'` として社会人モードと並行実装可能
 
-## 社会人モード入退団 (`src/corporate/scoutingSystem.js`)
+## 社会人モード入退団 (入団 `src/corporate/scoutingSystem.js`・退団 `src/corporate/corporateDepartures.js`)
 - **退団（11/9）**: 自動引退判定 + ユーザー/AI戦力外通告。戦力外選手(35歳未満)はリリースプールへ
 - **入団（11/10）**: スカウトシステム。`scoutingEye` でスカウト精度が変化（能力値のぼかし表示）
   - `reputation` で候補者の基礎能力にボーナス、候補数はスカウト能力で6〜12人
@@ -2959,7 +2960,7 @@ C も 61% が1年目に B へ。**クラブ208チームを含む母集団なの�
 - **チーム運営画面**: サイドバー「チーム運営」（社会人モード限定）でスタッフ・スカウト状況・パイプ・財務を確認
 - **画面遷移**: `corporate_departure` → `corporate_scout` → `dateprogress`（独立リーグの `contract` → `tryout` に対応）
 
-## 大学モード スポーツ推薦スカウト (`src/corporate/scoutingSystem.js`)
+## 大学モード スポーツ推薦スカウト (`src/university/universityScout.js`)
 - **概要**: 4月の高校生プール生成と同時にスカウト候補を初期化し、シーズン通年でスカウト活動
 - **推薦枠数**: ランク別 S=8, A=7, B=5, C=4, D=3
 - **候補生成**: `initUniversityScoutList(teamData, rank)` — 4月に高校生プールから候補を選出。reputation依存で8〜20名

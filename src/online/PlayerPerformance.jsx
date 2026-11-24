@@ -518,6 +518,7 @@ function Detail({ player, close, lookTeam }) {
         player={player}
         shown={shown}
         periodLabel={period?.label || '今季'}
+        lookTeam={lookTeam}
       />
       {/* ⚠ 場面別だけは**任意で開く**。打者×投手の組み合わせで行数が多く、
           1画面には入らない。上の3つ（札と経歴・成績・能力）は常に見える */}

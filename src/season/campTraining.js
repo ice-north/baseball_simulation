@@ -577,7 +577,10 @@ export function executeSubTraining(player, subType, options = {}, staffBonus = n
           const armVal = player.physical?.arm || 50;
           gain = old < getVelocityCap(armVal) ? 1 : 0;
         } else {
-          gain = picked.isTech ? applyTechStatDecay(old, 1) : 1;
+          // 守備は守備補強（`defense_sub`）と同じ努力系の減衰（70から）。技術系（50から）だと
+          // ストレッチだけ守備が伸びにくかった（2026-11-24 監査）
+          gain = picked.key === 'fielding.defense' ? applyTechStatDecay(old, 1, EFFORT_DAMP.defense)
+            : picked.isTech ? applyTechStatDecay(old, 1) : 1;
         }
         if (gain > 0) {
           // ⚠ スタミナは 1〜200 の物差し（`executeCampTraining` の maxValue と同じ）
@@ -1485,8 +1488,11 @@ export function executeCampTraining(player, trainingType, newPitchType, staffBon
       // ⚠ 最低保証にも高能力値の減衰を掛ける（2026-11-23）。そのままの+1だと、代償の出る半分の
       //    クールで減衰を素通りして必ず+1入り、集中した能力が天井なく伸び続けた（制球が
       //    能力62でも1年+1.6。10年でリーグの制球 49→69・四球が半分）。期待値で丸める
+      // ⚠ 制球の集中は、最低保証にも投げ込みと同じ係数（0.2）を掛ける（上の `focusStatMult` と同じ。
+      //    掛けないと制球60未満ではほぼ毎回+1が入り、係数を下げた効き目がほとんど無かった。2026-11-24 監査）
+      const floorStatMult = targetStat === 'control' ? TRAINING_MENUS.control.growthMultipliers.control : 1.0;
       if (menu.intensive && penaltyCount > 0 && totalGrowth < INTENSIVE_PENALTY_FLOOR)
-        totalGrowth = Math.max(totalGrowth, stochasticRound(INTENSIVE_PENALTY_FLOOR * dampFactor));
+        totalGrowth = Math.max(totalGrowth, stochasticRound(INTENSIVE_PENALTY_FLOOR * dampFactor * floorStatMult));
       const armForCap = getNestedValue(updatedPlayer, getStatPath('arm')) || 50;
       // ⚠ 1〜99 の物差しの能力は ABILITY_CAP で止める（100 で止めていて、98 から練習すると100になった。2026-11-20 監査）
       const maxValue = targetStat === 'velocity' ? getVelocityCap(armForCap) : targetStat === 'stamina' ? 200 : ABILITY_CAP;

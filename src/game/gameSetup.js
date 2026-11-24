@@ -4,11 +4,11 @@
 // ========================================================================
 
 import { TEAMS_DATA, LEAGUE_SETTINGS } from '../teams-data.js';
-import { generateAILineup, singleFielderGameFatigue, accrueBatterExperience, accruePitcherExperience } from './autoSimulation.js';
+import { generateAILineup, writeBackGameStats } from './autoSimulation.js';
 import { applyBattingOrderEntries } from './lineup.js';
 import { recordGameResult } from '../season/dateProgression.js';
 import { decidePitchers, recordDecisions } from './pitcherDecisions.js';
-import { adjustGrowthModifier, applyFatigueGrowthPenalty, addFatigue } from '../utils/constants.js';
+
 import { advanceQualifierWithResult, autoPlayBracket, isBracketComplete, getBracketRankings, buildLosersBracket, recordResult } from '../corporate/toshitaikou.js';
 
 /**
@@ -298,130 +298,20 @@ export function executeHandleManagedGameEnd(ctx) {
     const gameStarterId = (decisionLog?.appearances?.[side] || []).find(a => a.isStarter)?.id
       ?? decisionLog?.appearances?.[side]?.[0]?.id ?? null;
 
+    const starterIds = new Set(teamData.pitchingRotation?.starters || []);
     teamState.players.forEach(p => {
       const playerData = teamData.players.find(pl => pl.id === p.id);
       if (!playerData) return;
 
       const gs = p.gameStats || {};
-
-      // 出場した選手はその日の疲労回復を行わない（recoverAllPitcherFatigueでスキップ）。
-      // 打席・登板が無くても、打順を持っていれば途中出場（代走・守備固め）とみなす。
-      {
-        const gp = gs.pitching || {};
-        const appeared = (gs.atBats || 0) > 0 || (gs.walks || 0) > 0 || (gs.hitByPitch || 0) > 0
-          || (gp.outs || 0) > 0 || (gp.pitches || 0) > 0
-          || (p.battingOrder || 0) > 0;
-        if (appeared) playerData._playedToday = true;
-      }
-
-      if (gs.atBats > 0 || gs.walks > 0 || gs.hitByPitch > 0 || gs.sacrificeBunts > 0) {
-        if (!playerData.seasonStats) playerData.seasonStats = { batting: {}, pitching: {} };
-        if (!playerData.seasonStats.batting) playerData.seasonStats.batting = {};
-        const season = playerData.seasonStats.batting;
-        season.games = (season.games || 0) + 1;
-        season.atBats = (season.atBats || 0) + (gs.atBats || 0);
-        season.hits = (season.hits || 0) + (gs.hits || 0);
-        // ⚠ 二塁打・三塁打・犠打は以前ここで集計しておらず、采配した試合の分だけ落ちていた
-        season.doubles = (season.doubles || 0) + (gs.doubles || 0);
-        season.triples = (season.triples || 0) + (gs.triples || 0);
-        season.sacrificeBunts = (season.sacrificeBunts || 0) + (gs.sacrificeBunts || 0);
-        season.homeruns = (season.homeruns || 0) + (gs.homeruns || 0);
-        season.rbis = (season.rbis || 0) + (gs.rbis || 0);
-        season.strikeouts = (season.strikeouts || 0) + (gs.strikeouts || 0);
-        season.walks = (season.walks || 0) + (gs.walks || 0);
-        season.hitByPitch = (season.hitByPitch || 0) + (gs.hitByPitch || 0);
-        // 盗塁・盗塁死（采配モードは塁で走者を識別できるようになって初めて付く。baseState.js）
-        season.stolenBases = (season.stolenBases || 0) + (gs.stolenBases || 0);
-        season.caughtStealing = (season.caughtStealing || 0) + (gs.caughtStealing || 0);
-
-        // 成長率変動: 摩耗ペナルティはスタメン出場(3打席以上)時のみ、疲労度に応じて段階的に適用
-        // （代打・代走・守備固めではペナルティ無し）
-        const isStarterAppearance = (gs.atBats || 0) >= 3;
-        applyFatigueGrowthPenalty(playerData, isStarterAppearance);
-        if (season.games % 10 === 0) adjustGrowthModifier(playerData, 0.01);
-
-        // 野手疲労蓄積: スタメン出場(3打席以上)のみ（代打等は蓄積なし・回復もなし）。式は自動試合と同じ
-        addFatigue(playerData, singleFielderGameFatigue(playerData.physical?.bodyStamina || 50, gs));
-        // 死球の疲労は打席数に関わらず乗る（代打の1打席で当たっても痛い）
-        if (gs.hbpFatigue) addFatigue(playerData, gs.hbpFatigue);
-
-        // 経験値・ポジション別・打順別の経験。⚠ 以前は自動試合にしか無く、
-        //    采配した試合では一切増えなかった。式は自動試合と共有する
-        accrueBatterExperience(playerData, p, gs.atBats || 0);
-      }
-
-      // 守備成績。**采配モードにも自動シミュと同じ集計を持たせる**
-      // （打席が無くても守備には就いているので、打撃の集計とは別に見る）
-      if (gs.fieldingChances || gs.fieldErrors || gs.assists) {
-        if (!playerData.seasonStats) playerData.seasonStats = { batting: {}, pitching: {} };
-        if (!playerData.seasonStats.batting) playerData.seasonStats.batting = {};
-        const sb = playerData.seasonStats.batting;
-        sb.fieldingChances = (sb.fieldingChances || 0) + (gs.fieldingChances || 0);
-        sb.errors = (sb.errors || 0) + (gs.fieldErrors || 0);
-        sb.assists = (sb.assists || 0) + (gs.assists || 0);
-      }
-
-      const ps = p.stats?.pitching || {};
-      if (ps.outs > 0 || ps.pitches > 0) {
-        // ⚠ 打席の無い投手は上の打撃の集計を通らないので、seasonStats が無いままここへ来る
-        //    （新加入の選手など）。自動試合（updatePlayerSeasonStats）と同じく初期化する
-        if (!playerData.seasonStats) playerData.seasonStats = { batting: {}, pitching: {} };
-        if (!playerData.seasonStats.pitching) playerData.seasonStats.pitching = {};
-        const sp = playerData.seasonStats.pitching;
-        const prevTotalOuts = sp.inningsPitched || 0;
-        sp.games = (sp.games || 0) + 1;
-        sp.inningsPitched = (sp.inningsPitched || 0) + (ps.outs || 0);
-        sp.strikeouts = (sp.strikeouts || 0) + (ps.strikeouts || 0);
-        sp.walks = (sp.walks || 0) + (ps.walks || 0);
-        sp.hitBatters = (sp.hitBatters || 0) + (ps.hitBatters || 0);
-        sp.runsAllowed = (sp.runsAllowed || 0) + (ps.runsAllowed || 0);
-        // 自責点0（全て失策絡み）が失点で上書きされないよう ?? を使う
-        sp.earnedRuns = (sp.earnedRuns || 0) + (ps.earnedRuns ?? ps.runsAllowed ?? 0);
-        sp.hits = (sp.hits || 0) + (ps.hits || 0);
-        sp.homeruns = (sp.homeruns || 0) + (ps.homeruns || 0);
-        sp.pitches = (sp.pitches || 0) + (ps.pitches || 0);
-        sp.wildPitches = (sp.wildPitches || 0) + (ps.wildPitches || 0);
-
-        // 成長率変動: 摩耗ペナルティは10球以上投げた登板のみ、疲労度に応じて段階的に適用
-        // （10球以下のワンポイント起用ではペナルティ無し）
-        applyFatigueGrowthPenalty(playerData, (ps.pitches || 0) >= 10);
-
-        // 投手疲労蓄積: bodyStaminaが高いほど疲労が溜まりにくい
-        const bodyStamina = playerData.physical?.bodyStamina || 50;
-        const staminaBonus = (bodyStamina / 100) * 1.5;
-        const pitcherRoles = teamData.pitchingRotation?.pitcherRoles || {};
-        const starterIds = new Set(teamData.pitchingRotation?.starters || []);
-        const isStarter = gameStarterId != null ? p.id === gameStarterId : starterIds.has(p.id);
-        const baseDivisor = isStarter ? 1.5 : 3;
-        const pitchFatigue = Math.floor((ps.pitches || 0) / (baseDivisor + staminaBonus));
-        // 自動試合と同じく、1イニング以上投げた先発にだけ付ける
-        const startBonus = (isStarter && (ps.outs || 0) >= 3) ? 30 : 0;
-        if (isStarter) {
-          // 先発数・QS（6回以上・自責3以下）・HQS（7回以上・自責2以下）。自動試合と同じ判定
-          const er = ps.earnedRuns ?? ps.runsAllowed ?? 0;
-          sp.gamesStarted = (sp.gamesStarted || 0) + 1;
-          if ((ps.outs || 0) >= 18 && er <= 3) sp.qualityStarts = (sp.qualityStarts || 0) + 1;
-          if ((ps.outs || 0) >= 21 && er <= 2) sp.highQualityStarts = (sp.highQualityStarts || 0) + 1;
-        }
-        const fatigue = isStarter ? pitchFatigue + startBonus : Math.max(11, pitchFatigue);
-        addFatigue(playerData, fatigue);
-        // 経験値（登板1 + 投球回）。自動試合と共有する
-        accruePitcherExperience(playerData, ps.outs || 0);
-        if (isStarter) {
-          // 先発: 15イニング(45アウト)ごとに+0.01
-          if (Math.floor(sp.inningsPitched / 45) > Math.floor(prevTotalOuts / 45)) {
-            adjustGrowthModifier(playerData, 0.01);
-          }
-        } else {
-          // リリーフ: 登板数ベース（守護神/セットアッパー/中継ぎエースは4登板、その他は5登板ごと）
-          const role = pitcherRoles[p.id] || '';
-          const highPressureRoles = ['closer', 'setup', 'ace_relief'];
-          const threshold = highPressureRoles.includes(role) ? 4 : 5;
-          if (sp.games % threshold === 0) {
-            adjustGrowthModifier(playerData, 0.01);
-          }
-        }
-      }
+      // 書き戻しは自動の試合と同じ関数（autoSimulation.js の writeBackGameStats）。
+      // 采配の試合は打撃と守備を gameStats に平らに、投手を stats.pitching に持つので形をそろえて渡す
+      writeBackGameStats(playerData, teamData, p, {
+        batting: gs,
+        pitching: p.stats?.pitching || {},
+        fielding: { chances: gs.fieldingChances || 0, errors: gs.fieldErrors || 0, assists: gs.assists || 0 },
+        wasStarter: gameStarterId != null ? p.id === gameStarterId : starterIds.has(p.id),
+      });
     });
   };
 

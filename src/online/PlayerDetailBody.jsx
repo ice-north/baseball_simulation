@@ -166,11 +166,13 @@ function AbilityBlock({ title, note, rows, help }) {
 const hasRecord = (player, category) =>
   (player?.seasonStats?.[category]?.games || 0) > 0;
 
-export default function PlayerDetailBody({ player, shown, periodLabel }) {
+export default function PlayerDetailBody({ player, shown, periodLabel, lookTeam }) {
   const isPitcher = player.position === 'pitcher';
   // 新しい見た目（試作）: 成績の札（所属の分かる選手の今季だけ。通算・過去の年は平均が違う）
+  // `lookTeam` は開いた名簿の球団（スマホでほかの球団の名簿から開いたとき、行には札が出るのに
+  // 小窓に出なかった。2026-11-24 監査）
   const look = useLook();
-  const team = player.tradeTeam || (player.detailAvailable ? look.ownTeam : null);
+  const team = player.tradeTeam || lookTeam || (player.detailAvailable ? look.ownTeam : null);
   const baseline = look.on && periodLabel === '今季' ? look.baselineOf?.(team) : null;
   const abilities = (group) => abilityRows(player, group);
   // ⚠ **能力は投打の両方をいつも出す**（いしだ指摘: 二刀流が売りなので、投手の打撃・

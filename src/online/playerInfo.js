@@ -10,7 +10,7 @@ const handed = (value) =>
 // ============================================================
 // 能力の並べ方は**効き方で分ける**（いしだ指摘 2026-11-08: 体幹などの細かい値が
 // 結局何に効いているのか分からない）。試合に効くもの・疲れと勝負強さ・成長にだけ効くもの。
-// 項目ごとの一言の説明は `ABILITY_HELP`（アプリの `AbilityHelp.kt` と同じ文）。
+// 項目ごとの一言の説明は `ABILITY_HELP`（アプリの同じ文は mobile/tools/gen-tables.mjs が Tables.kt に書き出す）。
 // ============================================================
 export const ABILITY_GROUPS = [
   ['batting', '打撃・走塁'],
@@ -27,7 +27,8 @@ export const ABILITY_GROUPS = [
 /**
  * 能力の一言の説明（何に・どう効くか）。PC版は項目名に触れる・押すと出し、アプリは押すと出す。
  *
- * ⚠ **アプリの `AbilityHelp.kt` と同じ文にすること**（`online-ability-help-check` が照らし合わせる）。
+ * アプリの同じ文は `mobile/tools/gen-tables.mjs` がここから Tables.kt に書き出す（直したら書き出し直す。
+ *    `app-gen-tables` が食い違いを見る）。
  * ⚠ 数字はゲームの実際の値から書く（マニュアルの数字は古い箇所がある）。出どころ:
  *    - 体力・回復: src/game/autoSimulation.js（試合後の疲労・休養日の回復）
  *    - 精神力: src/game/autoSimulation.js（得点圏の補正）

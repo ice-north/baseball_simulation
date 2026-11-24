@@ -90,11 +90,20 @@ export default function PlayMotion({ game, scene, before, speed = 1, replayKey =
   useEffect(() => {
     const canvas = canvasRef.current;
     const ctx = canvas?.getContext('2d');
+    // ⚠ 描けないとき（2D の絵が使えない・球場の絵が作れない）も「終わった」と伝える。
+    //    伝えないと、自動で次へ進まず結果の文字も出ないまま止まる
+    if (canvas && !ctx) {
+      doneRef.current?.();
+      return undefined;
+    }
     if (!ctx || !width || !fonts) return undefined;
     // 球場の絵は、いちばん寄った時（2.8倍）でもぼけない細かさで1度だけ描く
     const scale = Math.min(4, Math.max(2, Math.ceil((width / VIEW_W) * 2.2)));
     const stadium = stadiumOf({ home, away, scene: stadiumScene(homeCity), scale, tag: fonts });
-    if (!stadium) return undefined;
+    if (!stadium) {
+      doneRef.current?.();
+      return undefined;
+    }
     const height = Math.round((width * VIEW_H) / VIEW_W);
     if (canvas.width !== width || canvas.height !== height) {
       canvas.width = width;

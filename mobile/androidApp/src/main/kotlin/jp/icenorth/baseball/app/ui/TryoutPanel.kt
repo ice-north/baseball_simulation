@@ -21,6 +21,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -284,7 +285,8 @@ private fun defaultMin(key: String): Int = when (key) {
 private fun AbilityFilters(filters: List<AbilityFilter>, onChange: (List<AbilityFilter>) -> Unit) {
     Text("能力で絞り込む", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
     if (filters.isEmpty()) Muted("投手の野手能力（ミートなど）・野手の投手能力（球速など）も、全員から探せます")
-    filters.forEachIndexed { i, f ->
+    // ⚠ 行ごとの開閉は key で行に結びつける（前の行を外すと、開いた状態が次の行へずれていた）
+    filters.forEachIndexed { i, f -> key(i, f.key) {
         val def = ABILITY_FILTERS.firstOrNull { it.key == f.key }
         var open by remember { mutableStateOf(false) }
         fun set(next: AbilityFilter) = onChange(filters.mapIndexed { j, x -> if (j == i) next else x })
@@ -305,7 +307,7 @@ private fun AbilityFilters(filters: List<AbilityFilter>, onChange: (List<Ability
             TextButton(onClick = { set(f.copy(min = f.min + 5)) }) { Text("＋") }
             TextButton(onClick = { onChange(filters.filterIndexed { j, _ -> j != i }) }) { Text("外す") }
         }
-    }
+    } }
     if (filters.size < ABILITY_FILTER_MAX) TextButton(onClick = { onChange(filters + AbilityFilter("meet", defaultMin("meet"))) }) { Text("＋ 条件を足す") }
 }
 

@@ -489,7 +489,12 @@ export function ScoreBoard({ game, ownTeam, compact = false }) {
       now && now.inning === inning && now.half === half ? null : { inning, half },
     );
   return (
-    <figure className={compact ? 'online-scoreboard is-compact' : 'online-scoreboard'} aria-label="スコアボード">
+    <figure
+      className={compact ? 'online-scoreboard is-compact' : 'online-scoreboard'}
+      aria-label="スコアボード"
+      // 延長戦は列が増えるので、スマホの小さい盤では枠を詰める（320px で11回が横にはみ出していた）
+      data-extra={board.innings > 9 || undefined}
+    >
       {compact && <small className="online-scoreboard-date">{turnLabel(game.date)}</small>}
       <table>
         <thead>
