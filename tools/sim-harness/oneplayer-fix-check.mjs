@@ -16,7 +16,7 @@ import { bootstrapWorld, TEAMS_DATA } from './lib/world.mjs';
 import { getTransferCandidates, transferManagerTo } from '../../src/game/managerTransfer.js';
 import { generateExpansionRoster, generateTryoutCandidates, updateReleasedPoolAfterTryout } from '../../src/season/tryoutSystem.js';
 import { releasedPlayersPool } from '../../src/teams-data.js';
-import { executeTeamCampTraining, executeSubTraining, campSubKey } from '../../src/season/campTraining.js';
+import { executeTeamCampTraining, executeSubTraining, executeCampTraining, campSubKey } from '../../src/season/campTraining.js';
 import { battingStanceOf } from '../../src/game/batterZone.js';
 import { LEAGUE_SETTINGS } from '../../src/teams-data.js';
 import { ensureCompleteLineup } from '../../src/game/lineup.js';
@@ -947,4 +947,26 @@ for (const [count, games] of [[4, 144], [4, 150], [6, 145], [5, 148], [7, 150]])
   assert.equal(campSubKey('switch_hit', batter, 'left'), 'switch_hit');
 }
 
-console.log('■ 一人用の進行の再発防止: OK（一人用のキャンプでサブポジ練習が自分の守備位置を動かさない・選んだフォームに変わったあと次のクールでまた変わらない / 采配した試合でも経験値を積む・DH は守備位置に数えない / オフの CHAMPION はプレーオフの優勝球団 / 翌年の球団名の変更は改名で名簿を引き継ぐ・使えない名前は確定しない / 翌年の球団数の変更で leagueConfig も揃う・ロードで直す / 控えに回った元の DH に印が残らず DH が2人にならない / DH制の采配試合で相手の先発が予告どおり / 1球団の設定で日程づくりが終わらない / 翌年のレギュレーションの確定で次の画面へ / 監督移籍で自チームが先頭 / 派遣中はキャンプ練習なし / 日程は4月〜10月9日で全試合を置く / 同じ日に同じ球団は1試合・入りきる試合数だけ選べる / DH制の先発と打順が食い違わない / 戦力外の選手を二重に加齢しない / マジックは点灯してから出す / 名簿を離れた選手もその年の成績に残る / FA枠は解雇された選手から引く / 大学の部の入れ替えのあとも先頭は自チーム）');
+// --- 集中練習の最低保証にも能力ごとの係数（才能・ミート/パワーの下げ）を掛ける ---
+// ⚠ 代償の出たクールの「最低+1」が才能の係数を素通りし、走力の集中は半分のクールで必ず+1入っていた
+//    （`TALENT_STAT_MULTIPLIERS` の注「保証のほうもこの率で引くこと」）。
+//    伸びがほぼ0になる選手（40歳・意識0）で測ると、伸びはほぼ最低保証だけになる:
+//    掛けないと 0.5（代償の出る確率）×1 ≈ 0.5、掛ければ 0.5×0.4（走力の才能係数）≈ 0.2
+{
+  const old = () => ({
+    id: 'old', name: '検査ベテラン', position: 'left', age: 40, experience: 0,
+    personality: { discipline: 0 }, physical: { speed: 50, dexterity: 50 },
+    batting: { meet: 40, power: 40, eye: 40 }, fielding: { defense: 40 },
+  });
+  let sum = 0;
+  const N = 4000;
+  for (let i = 0; i < N; i += 1) {
+    const { player } = executeCampTraining(old(), 'intensive_speed', null, null, 1.0, 1.0);
+    sum += player.physical.speed - 50;
+  }
+  const mean = sum / N;
+  assert.ok(mean < 0.3, `走力の集中の最低保証に才能の係数が掛かっていない（1クール平均 ${mean.toFixed(3)}、掛かれば約0.2）`);
+  assert.ok(mean > 0.1, `走力の集中の最低保証が効いていない（1クール平均 ${mean.toFixed(3)}）`);
+}
+
+console.log('■ 一人用の進行の再発防止: OK（一人用のキャンプでサブポジ練習が自分の守備位置を動かさない・選んだフォームに変わったあと次のクールでまた変わらない・集中練習の最低保証に才能の係数 / 采配した試合でも経験値を積む・DH は守備位置に数えない / オフの CHAMPION はプレーオフの優勝球団 / 翌年の球団名の変更は改名で名簿を引き継ぐ・使えない名前は確定しない / 翌年の球団数の変更で leagueConfig も揃う・ロードで直す / 控えに回った元の DH に印が残らず DH が2人にならない / DH制の采配試合で相手の先発が予告どおり / 1球団の設定で日程づくりが終わらない / 翌年のレギュレーションの確定で次の画面へ / 監督移籍で自チームが先頭 / 派遣中はキャンプ練習なし / 日程は4月〜10月9日で全試合を置く / 同じ日に同じ球団は1試合・入りきる試合数だけ選べる / DH制の先発と打順が食い違わない / 戦力外の選手を二重に加齢しない / マジックは点灯してから出す / 名簿を離れた選手もその年の成績に残る / FA枠は解雇された選手から引く / 大学の部の入れ替えのあとも先頭は自チーム）');

@@ -1442,7 +1442,7 @@ export function executeCampTraining(player, trainingType, newPitchType, staffBon
       // という反転が**既存の減衰カーブだけで**成立する（新しい係数を作らない）。
       const rawBase = (Math.floor(Math.random() * 3) + 1) * ageMultiplier * expBonus;
       const rawFocus = (Math.floor(Math.random() * 4) + 1) * ageMultiplier * expBonus;
-      // ⚠ 制球の集中にも、投げ込みと同じ係数（0.2）を掛ける（`TRAINING_MENUS.control` の注と同じ理由）。
+      // ⚠ 制球の集中にも、投げ込みと同じ係数（いまは0.4）を掛ける（`TRAINING_MENUS.control` の注と同じ理由）。
       //    指導者の「長所を伸ばす」は投手の技術を制球と守備の2つでしか比べないので、ほとんどの投手が
       //    毎年「制球集中」になる。野手の集中はミート・パワー・選球眼・守備・盗塁に散るので、制球だけが
       //    積み上がり、10年でリーグの制球が 49→69・四球が半分になった（10年の長期シミュ 2026-11-23）
@@ -1567,7 +1567,12 @@ export function executeCampTraining(player, trainingType, newPitchType, staffBon
       // ⚠ 制球の集中は、最低保証にも投げ込みと同じ係数（いまは0.4。`TRAINING_MENUS.control` を
       //    読むので値を書き写さない）を掛ける（上の `focusStatMult` と同じ。
       //    掛けないと制球60未満ではほぼ毎回+1が入り、係数を下げた効き目がほとんど無かった。2026-11-24 監査）
-      const floorStatMult = targetStat === 'control' ? TRAINING_MENUS.control.growthMultipliers.control : 1.0;
+      // ⚠ ミート・パワーの下げ（`CAMP_BAT_GROWTH_MULT`）と才能の係数（`TALENT_STAT_MULTIPLIERS`。
+      //    走力0.4・パワー0.5・球速0.8）も最低保証に掛ける（上の伸びと同じ能力ごとの係数。
+      //    `TALENT_STAT_MULTIPLIERS` の注「保証のほうもこの率で引くこと」）。掛けないと、代償の出た
+      //    クールは走力も必ず+1で、才能の係数が集中練習の半分のクールで効いていなかった
+      const floorStatMult = (targetStat === 'control' ? TRAINING_MENUS.control.growthMultipliers.control : 1.0)
+        * batGrowthMult * talentMult;
       if (menu.intensive && penaltyCount > 0 && totalGrowth < INTENSIVE_PENALTY_FLOOR)
         totalGrowth = Math.max(totalGrowth, stochasticRound(INTENSIVE_PENALTY_FLOOR * dampFactor * floorStatMult));
       const armForCap = getNestedValue(updatedPlayer, getStatPath('arm')) || 50;
