@@ -1332,7 +1332,7 @@ try {
   assert.deepEqual(activeAbilityFilters([{ key: 'meet', min: '' }, { key: 'x', min: 3 }, { key: 'arm', min: '50' }]), [{ key: 'arm', min: '50' }]);
   const pool = filterCandidates([pitcher, fielder], { abilities: [{ key: 'meet', min: 45 }] });
   assert.deepEqual(pool.map((p) => p.id).sort(), [1, 2], '投手・野手を問わず絞り込む');
-  // ⚠ アプリの Tryout.kt の ABILITY_FILTERS と同じ並び（OwnerThreeTest）
+  // ⚠ アプリの ABILITY_FILTERS はここから書き出す（gen-tables.mjs。並びは OwnerThreeTest も見る）
   assert.deepEqual(ABILITY_FILTERS.map((d) => d.key), ['meet', 'power', 'eye', 'speed', 'arm', 'defense', 'velocity', 'control', 'stamina', 'spin', 'breaking']);
 }
 

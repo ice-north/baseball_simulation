@@ -2,7 +2,7 @@ package jp.icenorth.baseball.shared
 
 /**
  * Web 版と同じ表記。出どころ: src/online/api.js / shared.js / src/utils/constants.js / src/game/condition.js
- * ⚠ SEASON_TURNS・SEASON_START_MONTH・POSITION_LABELS・STATUS_LABELS は Tables.kt（gen-tables.mjs が Web 版から書き出す）
+ * ⚠ SEASON_TURNS・SEASON_START_MONTH・POSITION_LABELS・STATUS_LABELS・CONDITION_ICONS・ABILITY_RANKS は Tables.kt（gen-tables.mjs が Web 版から書き出す）
  */
 
 /** リーグの名前（"A" → "1部"）。階層リーグの表（[PYRAMID_LEAGUES]）から作る */
@@ -10,10 +10,8 @@ val LEAGUE_NAMES: Map<String, String> = PYRAMID_LEAGUES.associate { it.id to it.
 
 fun positionLabel(pos: String?): String = POSITION_LABELS[pos] ?: (pos ?: "")
 
-/** 調子（0〜4）の顔。Web 版 CONDITION_ICONS と同じ */
-fun conditionIcon(condition: Int?): String = when (condition) {
-    4 -> "🔥"; 3 -> "😊"; 2 -> "😐"; 1 -> "😞"; 0 -> "😰"; else -> ""
-}
+/** 調子（0〜4）の顔。表は Tables.kt の CONDITION_ICONS（Web 版 condition.js から書き出す） */
+fun conditionIcon(condition: Int?): String = CONDITION_ICONS[condition] ?: ""
 
 /** 能力を0〜100の物差しにそろえる（球速は km/h、スタミナは0〜200）。Web 版 `normalizeAbility` と同じ */
 fun normalizedAbility(value: Int, velocity: Boolean = false, stamina: Boolean = false): Double = when {
@@ -32,9 +30,8 @@ fun abilityBarFraction(value: Int, velocity: Boolean = false, stamina: Boolean =
 /** 能力値のランク（S〜F）。球速は (v-115)×2.5、投手スタミナは v/2 に直してから測る（getAbilityRank） */
 fun abilityRank(value: Int, velocity: Boolean = false, stamina: Boolean = false): Char {
     val v = normalizedAbility(value, velocity, stamina)
-    return when {
-        v >= 90 -> 'S'; v >= 80 -> 'A'; v >= 70 -> 'B'; v >= 60 -> 'C'; v >= 50 -> 'D'; v >= 40 -> 'E'; else -> 'F'
-    }
+    // 境目は Tables.kt の ABILITY_RANKS（Web 版 getAbilityRank から書き出す）。下の段より低い値は一番下の段
+    return ABILITY_RANKS.firstOrNull { v >= it.first }?.second ?: ABILITY_RANKS.last().second
 }
 
 /** シーズンの何ターン目か。範囲外は null（shared.js の turnOfDate） */
