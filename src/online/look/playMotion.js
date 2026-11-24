@@ -12,6 +12,8 @@
 //    選手の姿勢は `motionPose.js`、描くのは `motionFigure.js`・`motionStadium.js`・`PlayMotion.jsx`。
 // ============================================================
 
+import { HOMERS } from './playByPlay.js';
+
 const BASE = 27.43;
 const HALF = BASE / Math.SQRT2;
 /** 本塁・一塁・二塁・三塁 */
@@ -258,7 +260,6 @@ function cutTrack(track, tMax) {
   return kept;
 }
 
-const HOMER_SUB = ['', 'ソロ', 'ツーラン', 'スリーラン', '満塁'];
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 
 /**
@@ -431,7 +432,7 @@ export function motionOf(scene, before = 0) {
       runTo(chaser, at(dir, wall - 2.5), CONTACT + 0.25, FIELD_SPRINT);
       main = { fielder: chaser, t: CONTACT + dur, at: land };
       events.push({ t: CONTACT + dur, kind: 'homer', x: land[0], y: land[1], z: 9 });
-      marks.push({ t: CONTACT + dur - 0.1, text: 'ホームラン！', tone: 'homer', sub: HOMER_SUB[Math.min(4, scene.runs || 1)] });
+      marks.push({ t: CONTACT + dur - 0.1, text: 'ホームラン！', tone: 'homer', sub: HOMERS[Math.min(4, scene.runs || 1)] });
       tAfter = CONTACT + dur;
     } else if (ground) {
       // ゴロ: 野手の定位置を打球の線に落とした所で捕る（外野手が捕るのは内野を抜けた打球）
@@ -780,5 +781,8 @@ export function basesBeforeOf(scenes, i) {
   const s = scenes[i];
   const prev = scenes[i - 1];
   if (!s || !prev || prev.inning !== s.inning || prev.half !== s.half) return 0;
-  return prev.basesAfter ?? 0;
+  // 塁の記録が無い行（古い形の「走」の行など）は、同じ半回をさかのぼって最後に分かる塁を使う
+  //（以前は空の塁から始めて、走者が無い所から現れていた）
+  if (prev.basesAfter == null) return basesBeforeOf(scenes, i - 1);
+  return prev.basesAfter;
 }
