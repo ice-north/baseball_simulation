@@ -47,6 +47,9 @@ import {
   squadStrength,
   tradeStrengthGap,
   STRENGTH_GAP_LIMIT,
+  playingTimeShare,
+  playingTimeFactor,
+  PLAYING_TIME_BONUS,
 } from '../../src/online/tradeSearch.js';
 
 const NOW = '2026-10-26T15:00:00.000Z';
@@ -725,8 +728,17 @@ try {
     const refreshJudge = async () => {
       judge = judgeFor(await live());
     };
-    // こちらが出す選手の値段（相手の事情は掛からない）
-    const value = (p) => judge.valueOf(p) * factor(p);
+    // こちらが出す選手の値段（相手の事情は掛からない）。
+    // ⚠ **相手の球団で出番があるかを乗せる**（いしだ 2026-11-24。`playingTimeFactor`）。
+    //    乗せないと逆提案の予算がサーバーと食い違い、「払える範囲を超えた」と誤検出する
+    // ⚠ `asked` を渡すと、その選手を抜いた名簿で出番を測る（サーバーと同じ土台）
+    const value = (p, roster = null, asked = null) =>
+      judge.valueOf(p) *
+      factor(p) *
+      playingTimeFactor(
+        roster ? roster.filter((q) => !asked || q.id !== asked.id) : [],
+        p,
+      );
     // CPUが出す選手の値段（その球団の事情こみ）
     const ownValue = (p) => judge.valueOf(p, cpu) * factor(p);
     const kindOf = (p) => rosterGroup(p.position);
@@ -806,12 +818,12 @@ try {
       for (const give of mine) {
         for (const ask of theirs) {
           if (kindOf(give) !== kindOf(ask)) continue;
-          if (value(give) >= ownValue(ask) * CPU_ACCEPT_MARGIN) continue;
+          if (value(give, theirs, ask) >= ownValue(ask) * CPU_ACCEPT_MARGIN) continue;
           const affordable = theirs.some(
             (p) =>
               p.id !== ask.id &&
               kindOf(p) === kindOf(ask) &&
-              ownValue(p) <= value(give) / CPU_ACCEPT_MARGIN,
+              ownValue(p) <= value(give, theirs, ask) / CPU_ACCEPT_MARGIN,
           );
           if (affordable) {
             pair = { give, ask };
@@ -840,8 +852,8 @@ try {
       assert.ok(chosen, '逆提案の選手が名簿にいない');
       assert.equal(kindOf(chosen), kindOf(pair.ask), '守備の括りが変わった');
       assert.ok(
-        ownValue(chosen) <= value(pair.give) / CPU_ACCEPT_MARGIN,
-        `払える範囲を超えた選手を出した（${ownValue(chosen)} > ${value(pair.give) / CPU_ACCEPT_MARGIN}）`,
+        ownValue(chosen) <= value(pair.give, theirs, pair.ask) / CPU_ACCEPT_MARGIN,
+        `払える範囲を超えた選手を出した（${ownValue(chosen)} > ${value(pair.give, theirs, pair.ask) / CPU_ACCEPT_MARGIN}）`,
       );
       // ⚠ CPUの逆提案に**こちらは逆提案で返せない**（投げ返しが続くと終わらない）
       await assert.rejects(
@@ -1284,6 +1296,52 @@ try {
   }
 }
 
+// ============================================================
+// 【活躍の場】いしだ 2026-11-24「トレードは戦力の充実はもちろんですが、選手に活躍の場を
+// 与える場にすべきです。もっとも得点が高いのは、余剰戦力が相手チームでレギュラーに
+// なれる場合です」。受け取る側で持ち場の一番になれる選手は値段が上がる。
+// ============================================================
+{
+  const fit = 90;
+  const mk = (id, v) => ({
+    id, name: `場${id}`, position: 'shortstop', isActive: true,
+    batting: { meet: v, power: v, eye: v, steal: 30, bunt: 30, bats: 'right' },
+    physical: { speed: v, arm: v, build: 'medium' },
+    fielding: { defense: v },
+    positionFitness: { catcher: 20, first: fit, second: fit, short: fit, third: fit, left: fit, center: fit, right: fit },
+  });
+  // ⚠ **持ち場を埋めた名簿で測ること**。3人だけの名簿は8つの持ち場のうち5つが空いていて、
+  //    どんな選手でも「持ち場の一番」になってしまう（実測で控え級でも 0.98）。
+  //    空きがある球団なら控え級でも上乗せが付くのは**狙いどおり**（出番のある球団に行く）で、
+  //    ここで見たいのは「埋まっている球団に押し込んでも上乗せが付かない」ほう
+  const weak = Array.from({ length: 10 }, (_, i) => mk(i + 1, 30));
+  const strong = Array.from({ length: 10 }, (_, i) => mk(i + 1, 80));
+  const star = mk(99, 80);
+  const scrub = mk(98, 20);
+  // ⚠ 測っているのは「**持ち場の一番になって、どれだけ新しい力になるか**」。
+  //    弱い球団（30）に強い選手（80）が入ると 50/80 = 0.625。満額(1)は持ち場が空のときだけ。
+  //    この形だと「持ち場を取る」と「ちゃんと上積みになる」の両方が要るので、
+  //    控え級を押し込むだけでは上乗せが付かない
+  assert.ok(playingTimeShare(weak, star) > 0.5, `強い選手が持ち場の一番にならない（${playingTimeShare(weak, star)}）`);
+  // 同じ選手でも、すでに強い球団なら上乗せは小さい（出番が無い）
+  assert.ok(
+    playingTimeShare(strong, star) < playingTimeShare(weak, star) / 2,
+    '強い球団でも上乗せが変わらない（出番を見ていない）',
+  );
+  // ⚠ **弱い選手を押し込んでも上乗せは小さい**（上乗せはその選手自身の力に比例する）。
+  //    ここが崩れると「足りない持ち場へ安い選手を放り込んで値段を満たす」抜け道になる
+  assert.ok(playingTimeShare(strong, scrub) < 0.1, `控え止まりに上乗せが付く（${playingTimeShare(strong, scrub)}）`);
+  assert.equal(playingTimeFactor(strong, scrub), 1, '控え止まりで倍率が1でない');
+  // 持ち場が空なら満額
+  assert.ok(
+    Math.abs(playingTimeFactor([], star) - (1 + PLAYING_TIME_BONUS)) < 0.05,
+    `空いた持ち場で倍率が満額にならない（${playingTimeFactor([], star)}）`,
+  );
+  assert.ok(PLAYING_TIME_BONUS > 0, '活躍の場の上乗せが切れている');
+  assert.ok(playingTimeShare([], star) > 0.9, '空の名簿で一番にならない');
+  assert.equal(playingTimeShare(weak, { id: 0, name: '守れない' }), 0, '守れない選手に上乗せが付く');
+}
+
 console.log(
-  '■ トレード: OK（提案→受ける／逆提案は1回だけ→受ける／断ると消える・手番を持つ側だけ返事できる・両球団の名簿を守る・打順を組み直す・CPU球団はその場で受ける/逆提案/断る・逆提案は同じ持ち場から・弱い選手で強い選手は取れない・成績と球団の事情が値段に効く・提案した側ばかり強くなる交換は断る）',
+  '■ トレード: OK（提案→受ける／逆提案は1回だけ→受ける／断ると消える・手番を持つ側だけ返事できる・両球団の名簿を守る・打順を組み直す・CPU球団はその場で受ける/逆提案/断る・逆提案は同じ持ち場から・弱い選手で強い選手は取れない・成績と球団の事情が値段に効く・相手でレギュラーになれる選手は値段が上がる・提案した側ばかり強くなる交換は断る）',
 );

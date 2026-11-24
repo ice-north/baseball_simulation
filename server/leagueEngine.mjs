@@ -115,7 +115,8 @@ import {
 } from '../src/online/trades.js';
 import { tradeValueOf } from './tradeValue.mjs';
 import { tradeJudgeForLeague } from './tradeJudge.mjs';
-import { tradeStrengthGap } from '../src/online/tradeSearch.js';
+import { tradeStrengthGap, playingTimeFactor,
+} from '../src/online/tradeSearch.js';
 import {
   planCpuTrade,
   CPU_OFFER_VALUE_FLOOR,
@@ -610,6 +611,8 @@ export { tradeValueOf };
  */
 function cpuDecisionFor(league, fromTeam, to, offerIds, wantIds, judge = tradeJudgeForLeague(league)) {
   const theirs = TEAMS_DATA[to];
+  // この交換で出ていく選手を抜いた名簿（受け取る選手に出番があるかを測る土台）
+  const theirsAfter = (theirs.players || []).filter((p) => !(wantIds || []).includes(p.id));
   // ⚠ CPU球団の監督の見る目（育成なら若手を高く、勝負なら主力の年齢を高く）
   const factor = tradeFactorFor(league, to);
   // ⚠ 値段は**画面に出すものと同じ関数**（`tradeJudge`。素質・いまの力・成績・
@@ -618,8 +621,16 @@ function cpuDecisionFor(league, fromTeam, to, offerIds, wantIds, judge = tradeJu
   // ⚠ `judge` は名簿が変わっていない間だけ使い回せる（球団の事情を名簿ごとに覚える）。
   //    1日のCPUトレード（`runCpuTrades`）は1回作って渡し、交換が成立したら作り直す
   return cpuTradeDecision({
-    // 受け取る選手（こちらが出す選手）は、相手の事情を抜いた値段で見る
-    valueOf: (player) => judge.valueOf(player) * factor(player),
+    // 受け取る選手（こちらが出す選手）は、相手の事情を抜いた値段で見る。
+    // ⚠ **その球団で出番があるかを乗せる**（いしだ 2026-11-24「トレードは…選手に活躍の場を
+    //    与える場にすべきです。もっとも得点が高いのは、余剰戦力が相手チームでレギュラーに
+    //    なれる場合です」）。持ち場の一番になれるなら満額（+35%）、控え止まりなら上乗せ0。
+    //    画面の見込みメーター（`TradeScreen.jsx`）も同じ関数を掛ける
+    //    ⚠ **出す選手を抜いた名簿で測ること**。1対1は同じ持ち場の交換になりやすく、
+    //       抜く前の名簿で測ると「いま居る主力（これから出す本人）に勝てないから控え止まり」と
+    //       判定され、上乗せが入るべき交換にほとんど入らなかった
+    valueOf: (player) =>
+      judge.valueOf(player) * factor(player) * playingTimeFactor(theirsAfter, player),
     // 自分が出す選手は、その球団の事情こみ（抜けると穴が空く選手ほど高い）
     valueOfOwn: (player) => judge.valueOf(player, to) * factor(player),
     // まとめて出すときは、まとめて抜けた穴で値段を付ける（`needFactors`）

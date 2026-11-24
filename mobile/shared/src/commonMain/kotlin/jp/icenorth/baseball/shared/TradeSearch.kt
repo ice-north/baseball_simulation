@@ -320,6 +320,30 @@ fun squadStrength(roster: List<Player>): Double {
 }
 
 /**
+ * 受け取る側で持ち場の一番になれるときの、値段の上乗せ（Web 版 `PLAYING_TIME_BONUS` と同じ）。
+ * いしだ 2026-11-24「トレードは…選手に活躍の場を与える場にすべきです。もっとも得点が高いのは、
+ * 余剰戦力が相手チームでレギュラーになれる場合です」。
+ */
+const val PLAYING_TIME_BONUS = 0.50
+
+/**
+ * その名簿に加えたとき、その選手が持ち場の一番になれる度合い（0〜1。Web 版 `playingTimeShare` と同じ）。
+ * ⚠ **出ていく選手を抜いた名簿で測ること**。抜く前で測ると、同じ持ち場の交換で
+ *    「これから出す本人に勝てないから控え止まり」と判定される。
+ */
+fun playingTimeShare(roster: List<Player>, player: Player): Double {
+    val own = bestSlot(player)?.second ?: 0.0
+    if (own <= 0.0) return 0.0
+    val before = squadStrength(roster)
+    val after = squadStrength(roster + player)
+    return ((after - before) / own).coerceIn(0.0, 1.0)
+}
+
+/** 受け取る側から見た値段の倍率（1 〜 1+[PLAYING_TIME_BONUS]。Web 版 `playingTimeFactor` と同じ） */
+fun playingTimeFactor(roster: List<Player>, player: Player): Double =
+    1.0 + PLAYING_TIME_BONUS * playingTimeShare(roster, player)
+
+/**
  * CPU球団が受ける「戦力の開き」の上限（[squadStrength] の点。Web 版 `STRENGTH_GAP_LIMIT` と同じ）。
  * 提案した側の伸びがCPUの伸びをこれより上回る交換は、値段が釣り合っても断る。
  * 画面はサーバーが渡す決まり（[CpuTradeRule.gapLimit]）を使う。
