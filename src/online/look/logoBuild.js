@@ -239,7 +239,9 @@ export const LOGO_TEMPLATE_KEYS = Object.keys(LOGO_TEMPLATES);
 
 // ---- 球団 → 型に渡す材料 --------------------------------------------------------
 const capitalize = (s) => (s ? s[0].toUpperCase() + s.slice(1).toLowerCase() : s);
-const clip = (s, max = LOGO_TEXT_MAX) => [...String(s || '')].slice(0, max).join('');
+/** 打った字: 字（か数）だけを受け取り、改行・制御文字を消して `max` 字まで（部品の字 `logoData.js` の `text` と同じ決まり） */
+const clip = (s, max = LOGO_TEXT_MAX) =>
+  [...(typeof s === 'string' || typeof s === 'number' ? String(s) : '').replace(/[\u0000-\u001f\u007f]/g, '')].slice(0, max).join('');
 
 /** レシピを使える値に直す（知らない型・台座・書体が来ても落ちない） */
 export function normalRecipe(R = {}) {
@@ -252,7 +254,7 @@ export function normalRecipe(R = {}) {
     ini: R.ini ? 1 : 0,
     word: R.word ? 1 : 0,
     // 打った頭文字は2字まで（画面の欄と同じ）
-    mono: clip(String(R.mono || '').trim(), 2),
+    mono: clip(clip(R.mono).trim(), 2),
     text: clip(R.text).trim(),
   };
 }

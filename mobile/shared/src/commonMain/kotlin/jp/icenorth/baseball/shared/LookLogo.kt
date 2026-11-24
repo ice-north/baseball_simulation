@@ -149,7 +149,8 @@ private fun textItems(L: LogoLayer, colors: List<String>, li: Int): List<LookIte
     val radius = abs(L.arc)
     val top = L.arc > 0
     val chars = L.t.codePointStrings()
-    val widths = chars.map { logoCharWidth(it, L.font) * fs * LOGO_ARC_GAP + L.ow * 0.5 }
+    // ⚠ ふちの太さを字送りに足すのは、ふちを描くときだけ（Web 版と同じ）
+    val widths = chars.map { logoCharWidth(it, L.font) * fs * LOGO_ARC_GAP + (if (edged) L.ow else 0.0) * 0.5 }
     val turn = (L.r * PI) / 180
     var at = -widths.fold(0.0) { a, b -> a + b } / 2 / radius
     val places = chars.mapIndexed { i, ch ->

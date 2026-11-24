@@ -7,7 +7,7 @@ import { emblemArt, faceArt, conditionArt } from './art.js';
 import { stadiumArt, stadiumScene, fieldArt } from './sceneArt.js';
 import { teamLook, NEUTRAL_LOOK } from './teamLook.js';
 import { logoArt, logoLayersFor, logoNeedsIcons } from './logoArt.js';
-import { loadLogoIcons, logoIconsNow, onLogoIcons } from './logoIcons.js';
+import { loadLogoIcons, logoIconsFailed, logoIconsNow, onLogoIcons } from './logoIcons.js';
 import { conditionValue } from '../statsView.js';
 import './look.css';
 import './feel.css';
@@ -40,18 +40,20 @@ function Shape({ s }) {
     opacity: s.op,
     strokeLinecap: s.cap,
     strokeLinejoin: s.join,
-    // ふちを先に描いてから塗る（ロゴの部品のふち。字はいつもこの順）
-    paintOrder: s.po ? 'stroke' : undefined,
   };
+  // ふちを先に描いてから塗る（ロゴの部品のふち）。字はいつもこの順（下の `<text>`）。
+  // ⚠ `paint` の中に `paintOrder: undefined` を入れない。`{...paint}` で広げると、字に書いた
+  //    `paintOrder="stroke"` を「無し」で上書きしてしまう（縁が塗りの上に乗って字が痩せる）
+  const po = s.po ? 'stroke' : undefined;
   switch (s.t) {
     case 'path':
-      return <path d={s.d} {...paint} />;
+      return <path d={s.d} {...paint} paintOrder={po} />;
     case 'circle':
-      return <circle cx={s.cx} cy={s.cy} r={s.r} {...paint} />;
+      return <circle cx={s.cx} cy={s.cy} r={s.r} {...paint} paintOrder={po} />;
     case 'ellipse':
-      return <ellipse cx={s.cx} cy={s.cy} rx={s.rx} ry={s.ry} {...paint} />;
+      return <ellipse cx={s.cx} cy={s.cy} rx={s.rx} ry={s.ry} {...paint} paintOrder={po} />;
     case 'rect':
-      return <rect x={s.x} y={s.y} width={s.w} height={s.h} {...paint} />;
+      return <rect x={s.x} y={s.y} width={s.w} height={s.h} {...paint} paintOrder={po} />;
     case 'text':
       return (
         <text
@@ -62,8 +64,8 @@ function Shape({ s }) {
           fontWeight={s.font === 'jp' ? 900 : undefined}
           fontSize={s.size}
           letterSpacing={s.ls || undefined}
-          paintOrder="stroke"
           {...paint}
+          paintOrder="stroke"
         >
           {s.text}
         </text>
@@ -154,6 +156,9 @@ export function useLogoIcons(want) {
   }, [want, icons]);
   return icons;
 }
+
+/** 球団ロゴの絵の形を読めなかったか（作る小窓が、読み直すボタンを出すのに使う） */
+export const useLogoIconsFailed = () => useSyncExternalStore(onLogoIcons, logoIconsFailed, () => false);
 
 /** 選手の所属（帽子の色）。`team` を渡さなければ、選手に付いた所属か自球団 */
 const teamOfPlayer = (player, team, ownTeam) =>

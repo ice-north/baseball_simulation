@@ -39,7 +39,9 @@ function textItems(L, colors, li) {
   const R = Math.abs(L.arc);
   const top = L.arc > 0;
   const chars = [...L.t];
-  const widths = chars.map((ch) => charWidth(ch, L.font) * fs * LOGO_ARC_GAP + (L.ow || 0) * 0.5);
+  // ⚠ ふちの太さを字送りに足すのは、ふちを描くときだけ（ふちの色が無い `ow` は保存の確かめで消えるので、
+  //    足すと作る小窓の見本と保存したロゴで字送りが変わる）
+  const widths = chars.map((ch) => charWidth(ch, L.font) * fs * LOGO_ARC_GAP + (edge ? L.ow : 0) * 0.5);
   const turn = (L.r * Math.PI) / 180;
   let at = -widths.reduce((a, b) => a + b, 0) / 2 / R;
   const places = chars.map((ch, i) => {

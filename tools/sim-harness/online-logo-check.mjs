@@ -14,7 +14,7 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { NICKNAMES, generatePyramidTeams } from '../../src/online/pyramidLeague.js';
-import { buildTeamLooks, nameSource } from '../../src/online/look/teamLook.js';
+import { PALETTES, buildTeamLooks, nameSource } from '../../src/online/look/teamLook.js';
 import {
   LOGO_SHAPES,
   LOGO_BASES,
@@ -39,7 +39,7 @@ import {
   logoTeam,
   normalRecipe,
 } from '../../src/online/look/logoBuild.js';
-import { cleanLogo, cleanLogoColors, openLayer, LOGO_MAX_CHARS } from '../../src/online/look/logoData.js';
+import { cleanLogo, cleanLogoColors, logoColorsProblem, openLayer, LOGO_MAX_CHARS, LOGO_ARC_MIN } from '../../src/online/look/logoData.js';
 import { logoArt, logoNeedsIcons, logoLayersFor, LOGO_BOX, LOGO_MINI_SIZE } from '../../src/online/look/logoArt.js';
 import { attachTeamLogos } from '../../src/online/look/teamLogo.js';
 import { applyProfile, applyJoin } from '../../src/online/membership.js';
@@ -209,6 +209,17 @@ assert.ok(biggest <= LOGO_MAX_CHARS * 0.6, `型どおりのロゴが保存の上
   assert.equal(T.font, 'graduate');
   assert.equal(T.arc, undefined);
   assert.equal(T.line, undefined, '字に線だけの指定が残った');
+  // 弧: 作る小窓のつまみと同じ下限（`LOGO_ARC_MIN`）。下限より小さければまっすぐ、下限からは残す
+  const arcOf = (arc) => cleanLogo({ layers: [{ k: 'text', t: 'A', arc }] }).layers[0].arc;
+  assert.equal(arcOf(LOGO_ARC_MIN - 0.01), undefined);
+  assert.equal(arcOf(-(LOGO_ARC_MIN - 0.01)), undefined);
+  assert.equal(arcOf(LOGO_ARC_MIN), LOGO_ARC_MIN);
+  assert.equal(arcOf(-LOGO_ARC_MIN), -LOGO_ARC_MIN);
+  // 種類は字だけ（配列の `['circle']` は表を引くと当たってしまう。アプリは字でない種類を読めない）
+  assert.equal(cleanLogo({ layers: [{ k: ['circle'] }, { k: ['text'], t: 'A' }, { k: 7 }, { k: null }] }), null, '字でない種類の部品を通した');
+  // 数でも数を書いた字でもないもの（null・空の字・真偽）は 0 や 1 にせず、既定に戻す
+  assert.deepEqual(cleanLogo({ layers: [{ k: 'star', x: null, y: '', s: true, r: false, c: 1, o: 2, ow: null }] }).layers[0], { k: 'star', c: 1 });
+  assert.deepEqual(cleanLogo({ layers: [{ k: 'star', x: ' ', y: [20], s: {}, r: '1e1', c: 1 }] }).layers[0], { k: 'star', r: 10, c: 1 });
   // 色: 番号 0〜4 か #rrggbb だけ。それ以外の文字列（url(...) など）は通さない
   assert.equal(cleanLogo({ layers: [{ k: 'circle', c: 'url(#x)' }] }).layers[0].c, 0);
   assert.equal(cleanLogo({ layers: [{ k: 'circle', c: 1, o: 'red', ow: 2 }] }).layers[0].o, undefined);
@@ -222,6 +233,22 @@ assert.ok(biggest <= LOGO_MAX_CHARS * 0.6, `型どおりのロゴが保存の上
   assert.ok(isLogoIcon(rec.motif));
   assert.ok(Number.isInteger(rec.scheme) && rec.scheme >= 0);
   assert.ok((rec.mono || '').length <= 2 && [...(rec.text || '')].length <= LOGO_TEXT_MAX);
+  // 控えの打った字も、部品の字と同じに確かめる（改行・制御文字を消す。字でないものは空）
+  const typedRec = cleanLogo({ layers: [ok], rec: { mono: 'A\nB', text: 'NEW\u0000 YORK\r\n' } }).rec;
+  assert.equal(typedRec.mono, 'AB');
+  assert.equal(typedRec.text, 'NEW YORK', '打ったことばの間の空白が消えた・制御文字が残った');
+  const oddRec = cleanLogo({ layers: [ok], rec: { mono: { toString: () => 'XX' }, text: ['a', 'b'] } }).rec;
+  assert.equal(oddRec.mono, undefined, '字でない頭文字を字にして残した');
+  assert.equal(oddRec.text, undefined, '字でないことばを字にして残した');
+  assert.equal(normalRecipe({ mono: 7, text: 2026 }).mono, '7');
+  assert.equal(normalRecipe({ mono: 7, text: 2026 }).text, '2026');
+  // 球団の色: 地の色と差し色が近すぎる組は断る。お手本の24組（＝自動の色）は全部通る
+  for (const p of PALETTES) assert.equal(logoColorsProblem(p), null, `お手本の色の組が断られる: ${p.join(' ')}`);
+  assert.equal(logoColorsProblem(null), null);
+  assert.equal(logoColorsProblem(undefined), null);
+  assert.match(logoColorsProblem(['#102040', '#102040', '#ffffff']), /近すぎます/);
+  assert.match(logoColorsProblem(['#ffffff', '#f4f4f4', '#000000']), /近すぎます/);
+  assert.equal(logoColorsProblem(['#102040', '#ffcc00', '#102040']), null, '縁の色は見ない（縁はロゴの中で読める色に直す）');
   // 上限より大きいロゴは保存しない（8枚とも長い和文の字＋色を全部書いても収まるが、形を足したときの守り）
   const fat = { layers: Array.from({ length: 8 }, () => ({ k: 'text', t: '東'.repeat(14), x: 12.34, y: 56.78, s: 1.23, r: 45.67, c: '#123456', o: '#654321', ow: 1.5, f: 1, font: 'yellowtail', arc: -45.5 })) };
   const fatClean = cleanLogo(fat);
@@ -257,6 +284,9 @@ assert.ok(biggest <= LOGO_MAX_CHARS * 0.6, `型どおりのロゴが保存の上
   assert.deepEqual(myTeam.logo, cleanLogo(logo));
   // 使えないロゴは断って、前のロゴを残す
   assert.throws(() => applyProfile(league, { userId: 'u1', logo: { layers: [{ k: 'nope' }] } }), /このロゴは保存できません/);
+  assert.deepEqual(myTeam.logo, cleanLogo(logo));
+  // 地の色と差し色が見分けられない色は断って、前のロゴと色を残す（帽子の字がほかの人の画面で消える）
+  assert.throws(() => applyProfile(league, { userId: 'u1', logo: { ...logo, colors: ['#102040', '#132344', '#ffffff'] } }), /近すぎます/);
   assert.deepEqual(myTeam.logo, cleanLogo(logo));
   // ほかの球団には付かない
   assert.equal(league.teams.filter((t) => t.logo).length, 1);

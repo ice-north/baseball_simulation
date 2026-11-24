@@ -10,10 +10,13 @@
 // ⚠ 保存するまでサーバーは変わらない。保存は `profile` 命令（`membership.js` の `applyProfile`）で、
 //    送ったものはサーバーがもう一度確かめる（`logoData.js` の `cleanLogo`）。
 // ⚠ 3で手を入れたあとに1・2を触ると、型から作り直すので手直しは消える（その旨を画面に出す）。
+// ⚠ 見本は保存されるロゴと同じに保つ。保存の確かめ（`cleanLogo`）が直すもの（半径の小さい弧・ふちの色の無い太さ・
+//    箱の外の位置）は、つまみの側でも同じ決まりで止める。
 // ⚠ 描く手順は `logoArt.js`、候補と型は `logoBuild.js`。ここは画面の状態だけを持つ。
 // ============================================================
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { ArtSvg, useLogoIcons } from './Art.jsx';
+import { ArtSvg, useLogoIcons, useLogoIconsFailed } from './Art.jsx';
+import { loadLogoIcons } from './logoIcons.js';
 import { teamLook, PALETTES } from './teamLook.js';
 import {
   LOGO_SHAPES,
@@ -23,6 +26,8 @@ import {
   LOGO_LATIN_FONTS,
   LOGO_MAX_LAYERS,
   LOGO_TEXT_MAX,
+  INK,
+  WHITE,
   logoColors,
   textWidth,
 } from './logoParts.js';
@@ -39,7 +44,7 @@ import {
   teamMotifs,
 } from './logoBuild.js';
 import { LOGO_ICON_NAMES } from './logoMotifs.js';
-import { cleanLogo, openLayer } from './logoData.js';
+import { cleanLogo, openLayer, logoColorsProblem, LOGO_ARC_MIN } from './logoData.js';
 import { logoArt, LOGO_BOX } from './logoArt.js';
 import { logoTeamOf } from './teamLogo.js';
 import './logo.css';
@@ -179,6 +184,18 @@ const TABS = [
   ['craft', '3 こだわる'],
 ];
 
+/** つまんで動かした位置を、保存できる範囲（`cleanLogo` の −30〜130）に収める */
+const inBox = (v) => Math.min(130, Math.max(-30, Math.round(v)));
+/**
+ * アーチのつまみ: 半径の小さい弧（`LOGO_ARC_MIN` より小さい）は字が1点に重なって読めず、保存するとまっすぐになる。
+ * つまみにはその幅を作らず、0（まっすぐ）の隣がいちばん小さい弧になるようにする（矢印キーでも1つずつ送れる）
+ */
+const ARC_SKIP = LOGO_ARC_MIN - 1;
+const arcToKnob = (arc) => (Math.abs(arc) < LOGO_ARC_MIN ? 0 : Math.sign(arc) * (Math.abs(arc) - ARC_SKIP));
+const knobToArc = (knob) => (knob === 0 ? 0 : Math.sign(knob) * (Math.abs(knob) + ARC_SKIP));
+/** 保存してある重ねが、型から作ったままか（保存の形に直して比べる） */
+const sameAsBuilt = (savedLayers, built) => JSON.stringify(cleanLogo({ layers: built })?.layers) === JSON.stringify(savedLayers);
+
 export function LogoEditor({ view, busy, run, command, close }) {
   const dialog = useRef(null);
   const name = view.teamName;
@@ -187,6 +204,7 @@ export function LogoEditor({ view, busy, run, command, close }) {
   const saved = labels.logo && !labels.logo.auto ? labels.logo : null;
   const start = labels.logo || null;
   const icons = useLogoIcons(true);
+  const iconsFailed = useLogoIconsFailed();
 
   const [colors, setColors] = useState(() => start?.colors || [look.c1, look.c2, look.c3]);
   // ⚠ 「球団」は色を選び直すたびに作り直す（配色の候補が色で変わる）
@@ -197,14 +215,14 @@ export function LogoEditor({ view, busy, run, command, close }) {
   const [layers, setLayers] = useState(() => start?.layers || buildLogoLayers(team, rec));
   // 小さい表示: 'keep' は保存してあるものをそのまま使う（開いた直後だけ）
   const [miniKind, setMiniKind] = useState(() => (saved ? (saved.mini ? 'keep' : 'same') : 'mono'));
-  // こだわって手を入れたか（型から作り直すと消えるので、知らせる）
-  const [crafted, setCrafted] = useState(false);
-  // いまの重ねが型どおりか（色を選び直したときに作り直してよいか）。保存してあるロゴは、手を入れたものかもしれない
-  const [byRecipe, setByRecipe] = useState(!saved);
-  const touch = () => {
-    setCrafted(true);
-    setByRecipe(false);
-  };
+  // いまの重ねが型どおりか。型どおりでなければ「3 こだわる」の手直しが入っていて、型から作り直すと消える（知らせる）。
+  // 色を選び直したときに作り直してよいかにも使う。⚠ 保存してあるロゴも、型から作ったままなら型どおり
+  //   （開き直すたびに「手直しなし」と決めつけない・「手直しあり」と決めつけない）
+  const [byRecipe, setByRecipe] = useState(() => !saved || sameAsBuilt(saved.layers, buildLogoLayers(team, rec)));
+  const touch = () => setByRecipe(false);
+  // 打っている途中の字。⚠ 欄の字を型の決まり（前後の空白を取る・字数で切る。`normalRecipe`）で書き換えない。
+  //   書き換えると、単語の間の空白が打てず（NEW YORK）、日本語の変換の途中で字が切れる。型には決まりを通した字を渡す
+  const [typed, setTyped] = useState({ mono: rec.mono, text: rec.text });
   const [sel, setSel] = useState(-1);
   const [tab, setTab] = useState('pick');
   const [error, setError] = useState('');
@@ -220,15 +238,19 @@ export function LogoEditor({ view, busy, run, command, close }) {
     return () => node.open && node.close();
   }, []);
 
-  /** 型から作り直す（1・2の操作）。手直しは消える */
-  const remake = (next, nextTeam = team) => {
+  /** 型から作り直す（1・2の操作）。手直しは消える。`typing` は欄に打っている途中（欄の字はそのままにする） */
+  const remake = (next, typing = false) => {
     const r = normalRecipe(next);
     setRec(r);
-    setLayers(buildLogoLayers(nextTeam, r));
+    if (!typing) setTyped({ mono: r.mono, text: r.text });
+    setLayers(buildLogoLayers(team, r));
     setSel(-1);
-    setCrafted(false);
     setByRecipe(true);
     if (miniKind === 'keep') setMiniKind('mono');
+  };
+  const type = (key, value) => {
+    setTyped((t) => ({ ...t, [key]: value }));
+    remake({ ...rec, [key]: value }, true);
   };
   /** 球団の色を変える。色は番号で持っているので、重ねはそのまま色だけ変わる */
   const recolor = (next) => {
@@ -252,6 +274,7 @@ export function LogoEditor({ view, busy, run, command, close }) {
     touch();
   };
   const S = schemes[rec.scheme % schemes.length];
+  const colorProblem = logoColorsProblem(colors);
 
   const save = async (logo) => {
     setError('');
@@ -294,7 +317,7 @@ export function LogoEditor({ view, busy, run, command, close }) {
                 setSel(i);
                 if (i >= 0) setTab('craft');
               }}
-              onMove={(i, x, y) => patch(i, { x: Math.round(x), y: Math.round(y) })}
+              onMove={(i, x, y) => patch(i, { x: inBox(x), y: inBox(y) })}
             />
           </div>
           <div className="online-logo-small" aria-label="小さく出したときの見え方">
@@ -340,6 +363,11 @@ export function LogoEditor({ view, busy, run, command, close }) {
               </label>
             ))}
           </div>
+          {colorProblem && (
+            <p role="alert" className="online-error-text">
+              {colorProblem}
+            </p>
+          )}
         </div>
 
         <div className="online-logo-main">
@@ -350,9 +378,17 @@ export function LogoEditor({ view, busy, run, command, close }) {
               </button>
             ))}
           </div>
-          {crafted && tab !== 'craft' && (
+          {!byRecipe && tab !== 'craft' && (
             <p className="online-muted" role="note">
-              ここで選び直すと、「3 こだわる」で入れた手直しは消えます。
+              ここで選び直すと型から作り直すので、「3 こだわる」で入れた手直しは消えます。
+            </p>
+          )}
+          {iconsFailed && !icons && (
+            <p role="alert" className="online-error-text online-logo-row">
+              絵を読み込めませんでした（見本に絵が出ません）。
+              <button type="button" onClick={() => loadLogoIcons()}>
+                もう一度読み込む
+              </button>
             </p>
           )}
 
@@ -397,11 +433,11 @@ export function LogoEditor({ view, busy, run, command, close }) {
               <div className="online-logo-row">
                 <label>
                   頭文字を打つ
-                  <input value={rec.mono} maxLength={2} size={3} onChange={(e) => remake({ ...rec, mono: e.target.value })} />
+                  <input value={typed.mono} maxLength={2} size={3} onChange={(e) => type('mono', e.target.value)} />
                 </label>
                 <label>
                   ことばを打つ
-                  <input value={rec.text} maxLength={LOGO_TEXT_MAX} size={12} onChange={(e) => remake({ ...rec, text: e.target.value })} />
+                  <input value={typed.text} maxLength={LOGO_TEXT_MAX} size={12} onChange={(e) => type('text', e.target.value)} />
                 </label>
               </div>
               <MotifPicker icons={icons} mine={mine} value={rec.motif} onPick={(motif) => remake({ ...rec, motif })} />
@@ -483,7 +519,7 @@ export function LogoEditor({ view, busy, run, command, close }) {
         </p>
       )}
       <footer className="online-logo-foot">
-        <button type="button" className="online-primary" disabled={busy} onClick={submit}>
+        <button type="button" className="online-primary" disabled={busy || !!colorProblem} onClick={submit}>
           このロゴを保存する
         </button>
         {saved && (
@@ -503,7 +539,9 @@ export function LogoEditor({ view, busy, run, command, close }) {
 /** 絵を選ぶ一覧（愛称に合う絵が先頭） */
 function MotifPicker({ icons, mine, value, onPick }) {
   const order = useMemo(() => [...new Set([...mine, ...LOGO_ICON_NAMES])], [mine]);
-  if (!icons) return <p className="online-muted">絵を読み込んでいます…</p>;
+  const failed = useLogoIconsFailed();
+  // 読めなかったときの知らせと読み直すボタンは、小窓の上に出している
+  if (!icons) return failed ? null : <p className="online-muted">絵を読み込んでいます…</p>;
   return (
     <div className="online-logo-picker" role="group" aria-label="絵をえらぶ">
       {order.map((m) => (
@@ -521,16 +559,25 @@ function MotifPicker({ icons, mine, value, onPick }) {
 function LayerControls({ L, colors, change, act, icons, mine, isIcon }) {
   const isText = L.k === 'text';
   const isShape = !isText && !isIcon;
-  const slider = (key, label, min, max, step, value, unit = '') => (
+  /** つまみの値を部品に入れる。⚠ 保存の確かめ（`cleanLogo`）と同じ決まりで止める（見本と保存したロゴを同じにする） */
+  const set = (key, v) => {
+    if (key === 's') return change({ s: v / 100 });
+    if (key === 'arc') return change({ arc: knobToArc(v) });
+    // ふちの色が無いまま太さだけ上げても何も出ない（保存でも消える）。色を一緒に付ける
+    if (key === 'ow' && v > 0 && L.o === undefined) return change({ ow: v, o: L.c === INK ? WHITE : INK });
+    return change({ [key]: v });
+  };
+  const slider = (key, label, min, max, step, value, unit = '', shown = value) => (
     <label>
       {label}
-      <input type="range" min={min} max={max} step={step} value={value} onChange={(e) => change({ [key]: key === 's' ? Number(e.target.value) / 100 : Number(e.target.value) })} />
+      <input type="range" min={min} max={max} step={step} value={value} onChange={(e) => set(key, Number(e.target.value))} />
       <output>
-        {value}
+        {shown}
         {unit}
       </output>
     </label>
   );
+  const arc = Math.round(L.arc || 0);
   return (
     <div className="online-logo-controls">
       <div className="online-logo-sliders">
@@ -539,7 +586,7 @@ function LayerControls({ L, colors, change, act, icons, mine, isIcon }) {
         {slider('s', '大きさ', 5, 250, 1, Math.round(L.s * 100), '%')}
         {slider('r', '回転', -180, 180, 1, Math.round(L.r || 0), '°')}
         {!L.line && slider('ow', 'ふちの太さ', 0, 10, 0.5, L.ow || 0)}
-        {isText && slider('arc', 'アーチ', -80, 80, 1, Math.round(L.arc || 0))}
+        {isText && slider('arc', 'アーチ', -80 + ARC_SKIP, 80 - ARC_SKIP, 1, arcToKnob(arc), '', Math.abs(arc) < LOGO_ARC_MIN ? 0 : arc)}
       </div>
       <ColorChips label="色" value={L.c} colors={colors} onPick={(c) => change({ c })} />
       {!L.line && (

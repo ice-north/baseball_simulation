@@ -17,6 +17,7 @@ import {
   LOGO_MINI_MAX_LAYERS,
   LOGO_TEXT_MAX,
   isHexColor,
+  contrast,
 } from './logoParts.js';
 import { isLogoIcon } from './logoMotifs.js';
 import { normalRecipe } from './logoBuild.js';
@@ -24,8 +25,14 @@ import { normalRecipe } from './logoBuild.js';
 /** 保存するロゴの大きさの上限（JSON の字数）。8枚＋小さい版4枚＋レシピでも 1.5KB に届かない */
 export const LOGO_MAX_CHARS = 2400;
 
+/** 半径がこれより小さい弧は、字が1点に重なって読めないのでまっすぐにする（作る小窓のつまみも同じ数で止める） */
+export const LOGO_ARC_MIN = 8;
+/** 球団の色: 地の色と差し色の読みやすさの下限（1 同じ色〜21 白と黒。お手本の24組は 2.4 以上） */
+export const LOGO_COLOR_MIN_CONTRAST = 2;
+
+/** 数（数か、数を書いた字）だけを範囲に丸める。⚠ `Number(null)`・`Number('')`・`Number(true)` は 0 や 1 になるので、型を先に見る */
 const num = (v, min, max, fallback) => {
-  const n = Number(v);
+  const n = typeof v === 'number' ? v : typeof v === 'string' && v.trim() !== '' ? Number(v) : NaN;
   if (!Number.isFinite(n)) return fallback;
   return Math.round(Math.min(max, Math.max(min, n)) * 100) / 100;
 };
@@ -42,6 +49,8 @@ const text = (v) =>
 /** 部品1枚を確かめる。使えないものは null */
 function cleanLayer(input) {
   if (!input || typeof input !== 'object') return null;
+  // ⚠ 種類は字だけ（`['circle']` のような配列も `Object.hasOwn` を通ってしまう。アプリは字でない種類を読まない）
+  if (typeof input.k !== 'string') return null;
   const isText = input.k === 'text';
   if (!isText && !Object.hasOwn(LOGO_SHAPES, input.k) && !isLogoIcon(input.k)) return null;
   const L = { k: input.k };
@@ -71,7 +80,7 @@ function cleanLayer(input) {
     L.font = Object.hasOwn(LOGO_FONTS, input.font) ? input.font : 'graduate';
     const arc = num(input.arc, -90, 90, 0);
     // ⚠ 半径の小さい弧は字が1点に重なって読めないので、まっすぐにする
-    if (Math.abs(arc) >= 8) L.arc = arc;
+    if (Math.abs(arc) >= LOGO_ARC_MIN) L.arc = arc;
   }
   return L;
 }
@@ -83,6 +92,19 @@ export function cleanLogoColors(input) {
   if (!Array.isArray(input) || input.length !== 3) return null;
   const out = input.map((c) => (typeof c === 'string' ? c.toLowerCase() : ''));
   return out.every(isHexColor) ? out : null;
+}
+
+/**
+ * 選んだ球団の色が使えないときの理由（使えるなら null）。
+ * 球団の色は、ロゴのほかに帽子・ユニフォーム・帯にも使い、ほかの人の画面にも出る。地の色と差し色が
+ * 見分けられないと、帽子の字やユニフォームの線が消える（ロゴの中は `logoSchemes` が読める組に直すが、帽子は直さない）
+ * @param colors `cleanLogoColors` を通した3色
+ */
+export function logoColorsProblem(colors) {
+  if (!colors) return null;
+  return contrast(colors[0], colors[1]) >= LOGO_COLOR_MIN_CONTRAST
+    ? null
+    : '地の色と差し色が近すぎます。見分けられる色にしてください';
 }
 
 /**

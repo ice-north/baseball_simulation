@@ -8,6 +8,9 @@
 //     3 こだわる＝見本の部品を押して選ぶ・大きさと色を変える・足す・消す
 //   - 保存すると `profile` 命令でロゴが送られ、左メニューのマークが変わる。開き直すと「自動のロゴに戻す」が出て、戻せる
 //   - 絵の素材の作者の表示が小窓にある（利用条件。消さない）
+//   - 字はどこでも縁を先に描く（`paint-order`。縁が塗りの上に乗ると字が痩せる）
+//   - 欄に打った字は打ったとおりに残る（単語の間の空白）。見本は保存したロゴと同じ（小さいアーチ・色の無いふち）
+//   - 地の色と差し色が近すぎると保存できない。絵の形を読めなかったら知らせて、読み直せる
 //   - スマホ: メニュー（☰）から開ける。横にはみ出さない
 //   画面写真は `LOOK_SHOTS=<置き場>` を付けると書き出す
 import assert from 'node:assert/strict';
@@ -25,7 +28,8 @@ const errors = [];
 // ⚠ 絵の形を配布HTMLに埋め込むと、切の人まで重くなる（280KB）
 assert.ok(!html.includes('M253.7 20.4c-8.8 0.1-17.4 0.8-25.9 2.3'), '絵の形が配布HTMLに埋め込まれた');
 
-async function open(fixture, contextOptions, { look = false } = {}) {
+/** `iconsDown`: 絵の形の読み込みを失敗させる（読めなかったときの知らせの検査。戻り値の `iconLoads.down` を false にすると読める） */
+async function open(fixture, contextOptions, { look = false, iconsDown = false } = {}) {
   const context = await browser.newContext({ deviceScaleFactor: SHOTS ? 2 : 1, ...contextOptions });
   if (look) await context.addInitScript((key) => localStorage.setItem(key, 'new'), LOOK_KEY);
   const { commands } = await routeToService(context, fixture);
@@ -34,9 +38,10 @@ async function open(fixture, contextOptions, { look = false } = {}) {
     const name = new URL(route.request().url()).pathname.split('/').pop();
     return route.fulfill({ contentType: 'font/woff2', body: await readFile(new URL(`../../public/fonts/${name}`, import.meta.url)) });
   });
-  const iconLoads = { n: 0 };
+  const iconLoads = { n: 0, down: iconsDown };
   await context.route(`${base}/look/logo-icons.json`, async (route) => {
     iconLoads.n += 1;
+    if (iconLoads.down) return route.fulfill({ status: 503, body: '' });
     return route.fulfill({
       contentType: 'application/json',
       body: await readFile(new URL('../../public/look/logo-icons.json', import.meta.url)),
@@ -81,6 +86,10 @@ await withDeadline(
       assert.equal(await marks.count(), 12);
       await p.waitForFunction(() => document.querySelectorAll('.online-standings .online-team-mark [data-li]').length >= 12);
       assert.equal(new Set(await marks.evaluateAll((els) => els.map((e) => e.innerHTML))).size, 12, '同じロゴの球団がある');
+      // 字は縁を先に描く（ロゴの字も、ほかの絵の字も同じ部品 `Art.jsx` の `<text>`）
+      const texts = await p.locator('.online-look-art text').evaluateAll((els) => els.map((e) => e.getAttribute('paint-order')));
+      assert.ok(texts.length >= 12, '字のある絵が見つからない');
+      assert.ok(texts.every((po) => po === 'stroke'), '縁を先に描く指定（paint-order）の無い字がある');
       const navMark = nav.locator('.online-nav-mark');
       // 絵の形が届くと、絵を使うロゴは絵つきで描き直す
       await p.waitForFunction(() => document.querySelector('.online-nav-mark path[d]'));
@@ -118,6 +127,12 @@ await withDeadline(
         await dialog.getByRole('button', { name: '型を次へ' }).click();
       await dialog.getByLabel('頭文字を打つ').fill('QZ');
       assert.ok((await stage.locator('text').allTextContents()).includes('QZ'), '打った頭文字がロゴに出ない');
+      // ことばは打ったとおりに欄に残る（1字ずつ打っても、単語の間の空白が消えない）
+      const word = dialog.getByLabel('ことばを打つ');
+      await word.fill('');
+      await word.pressSequentially('NEW YORK');
+      assert.equal(await word.inputValue(), 'NEW YORK', '打っている途中の空白が欄から消えた');
+      assert.ok((await stage.locator('text').allTextContents()).includes('QZ'), 'ことばを打つと頭文字が消えた');
       assert.ok((await dialog.locator('.online-logo-picker button').count()) >= 200, '絵の一覧が出ない');
       await shot(dialog, 'logo-editor-tune-pc');
 
@@ -130,6 +145,29 @@ await withDeadline(
       const crafted0 = await markOf(stage);
       await size.fill('40');
       assert.notEqual(await markOf(stage), crafted0, '大きさを変えても見本が変わらない');
+      // 見本は保存したロゴと同じ: 半径の小さいアーチ（8より小さい）は保存でまっすぐになるので、つまみに無い。
+      // まっすぐの隣がいちばん小さい弧で、矢印キーで1つずつ送れる
+      const arc = dialog.getByLabel('アーチ');
+      const arcShown = arc.locator('xpath=following-sibling::output');
+      assert.equal(await arcShown.textContent(), '0');
+      const straight = await markOf(stage);
+      await arc.press('ArrowRight');
+      assert.equal(await arcShown.textContent(), '8', 'まっすぐの隣が、保存できるいちばん小さい弧でない');
+      assert.notEqual(await markOf(stage), straight, 'アーチを付けても見本が変わらない');
+      await arc.press('ArrowLeft');
+      await arc.press('ArrowLeft');
+      assert.equal(await arcShown.textContent(), '-8');
+      await arc.press('ArrowRight');
+      assert.equal(await arcShown.textContent(), '0');
+      assert.equal(await markOf(stage), straight);
+      // ふちの色が無いまま太さを上げたら、色も一緒に付く（色の無いふちは保存で消える）
+      const li = await stage.locator('[data-li]:has(text)').first().getAttribute('data-li');
+      const picked0 = stage.locator(`[data-li="${li}"] text`).first();
+      await dialog.getByRole('button', { name: 'ふちなし' }).click();
+      assert.equal(await picked0.getAttribute('stroke'), null);
+      await dialog.getByLabel('ふちの太さ').fill('3');
+      assert.ok(await picked0.getAttribute('stroke'), 'ふちの太さを上げてもふちが出ない');
+      assert.equal(await picked0.getAttribute('paint-order'), 'stroke');
       await dialog.getByRole('button', { name: '＋台座・飾り' }).click();
       assert.equal(await dialog.locator('.online-logo-layers li').count(), layersBefore + 1);
       await shot(dialog, 'logo-editor-craft-pc');
@@ -144,6 +182,18 @@ await withDeadline(
       await dialog.locator('.online-logo-palettes button[aria-pressed="false"]').nth(5).click();
       assert.notEqual(await markOf(stage), colored0, '色の組を変えても見本が変わらない');
 
+      // 地の色と差し色が近すぎると保存できない（帽子の字がほかの人の画面で消える）。直すと保存できる
+      const saveButton = dialog.getByRole('button', { name: 'このロゴを保存する' });
+      const ground = dialog.getByLabel('地の色');
+      const accent = dialog.getByLabel('差し色');
+      const accent0 = await accent.inputValue();
+      await accent.fill(await ground.inputValue());
+      assert.match(await dialog.getByRole('alert').textContent(), /近すぎます/);
+      assert.equal(await saveButton.isDisabled(), true, '見分けられない色のまま保存できる');
+      await accent.fill(accent0);
+      assert.equal(await dialog.getByRole('alert').count(), 0);
+      assert.equal(await saveButton.isDisabled(), false);
+
       // 保存: profile 命令でロゴが送られ、左メニューのマークが変わる
       const want = await markOf(stage);
       await dialog.getByRole('button', { name: 'このロゴを保存する' }).click();
@@ -151,6 +201,7 @@ await withDeadline(
       const sent = commands.filter((c) => c.type === 'profile').at(-1);
       assert.ok(sent?.payload?.logo?.layers?.length, 'ロゴが送られていない');
       assert.equal(sent.payload.logo.colors.length, 3);
+      assert.equal(sent.payload.logo.rec.text, 'NEW YORK', '打ったことばが控えに残っていない');
       await p.waitForFunction((old) => document.querySelector('.online-nav-mark')?.innerHTML !== old, before);
       assert.ok((await navMark.locator('text').allTextContents()).includes('QZ'), '保存したロゴが左メニューに出ない');
       assert.ok(want.includes('QZ'));
@@ -164,11 +215,34 @@ await withDeadline(
       await nav.getByRole('button', { name: 'ロゴを作る' }).click();
       await dialog.waitFor();
       assert.ok((await stage.locator('text').allTextContents()).includes('QZ'), '保存したロゴから始まらない');
+      // 手直しして保存したロゴは、開き直しても「選び直すと手直しは消えます」と知らせる
+      assert.match(await dialog.getByRole('note').textContent(), /手直しは消えます/, '開き直すと、手直しが消える知らせが出ない');
       await dialog.getByRole('button', { name: '自動のロゴに戻す' }).click();
       await dialog.waitFor({ state: 'detached' });
       assert.equal(commands.filter((c) => c.type === 'profile').at(-1).payload.logo, null);
       await p.waitForFunction(() => !document.querySelector('.online-nav-mark')?.textContent.includes('QZ'));
       assert.equal(iconLoads.n, 2, '絵の形を何度も読んでいる（開くたびに1回のはず）');
+      await context.close();
+    }
+
+    // --- 絵の形を読めないとき: 知らせて、読み直せる ---------------------------
+    {
+      const { p, context, iconLoads } = await open(fixture, { viewport: { width: 1440, height: 1000 } }, { look: true, iconsDown: true });
+      const nav = p.locator('.online-page-nav');
+      await nav.getByRole('button', { name: 'ロゴを作る' }).click();
+      const dialog = p.locator('.online-logo-dialog[open]');
+      await dialog.waitFor();
+      const retry = dialog.getByRole('button', { name: 'もう一度読み込む' });
+      await retry.waitFor();
+      assert.match(await dialog.getByRole('alert').textContent(), /絵を読み込めませんでした/);
+      // 絵が無くても候補は選べる（絵の部品を飛ばして描く）
+      assert.equal(await dialog.locator('.online-logo-cands button').count(), 12);
+      const tried = iconLoads.n;
+      assert.ok(tried >= 1 && tried <= 4, `読めないときに何度も読みにいっている（${tried}回）`);
+      iconLoads.down = false;
+      await retry.click();
+      await p.waitForFunction(() => document.querySelectorAll('.online-logo-cands path[d]').length >= 12);
+      assert.equal(await retry.count(), 0, '読めたのに、読めなかった知らせが残っている');
       await context.close();
     }
 

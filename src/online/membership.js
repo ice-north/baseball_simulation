@@ -17,7 +17,7 @@ import { cleanText, OWNER_COMMENT_MAX } from './social.js';
 import { PACK_STYLE } from './rosterPack.js';
 import { PYRAMID_LEAGUES, PYRAMID_TEAM_COUNT } from './pyramidLeague.js';
 import { REGION_OPTIONS } from './hometown.js';
-import { cleanLogo } from './look/logoData.js';
+import { cleanLogo, logoColorsProblem } from './look/logoData.js';
 
 /** 参加できる上限。球団数と同じ（全球団が人間でも成立する） */
 export const MAX_MEMBERS = PYRAMID_TEAM_COUNT; // 12（2部制）
@@ -332,6 +332,9 @@ export function applyProfile(league, { userId, teamName, cityName, nickname, reg
     } else {
       const cleaned = cleanLogo(logo);
       requireOnline(cleaned, 'このロゴは保存できません（部品が無いか、大きすぎます）', 400);
+      // 地の色と差し色が近すぎると、ロゴも帽子の字もほかの人の画面で読めない（作る小窓も同じ決まりで止める）
+      const colorProblem = logoColorsProblem(cleaned.colors);
+      requireOnline(!colorProblem, colorProblem, 400);
       team.logo = cleaned;
     }
   }

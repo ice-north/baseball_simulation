@@ -70,7 +70,11 @@ import jp.icenorth.baseball.shared.faceArt
 import jp.icenorth.baseball.shared.logoArt
 import jp.icenorth.baseball.shared.logoLayersFor
 import jp.icenorth.baseball.shared.logoNeedsIcons
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonPrimitive
@@ -302,17 +306,22 @@ internal fun readLogoIcons(context: android.content.Context): Map<String, String
     Json.parseToJsonElement(text).jsonObject.mapValues { (it.value as JsonPrimitive).content }
 }.getOrNull()
 
-/** 絵の形は、絵を使う大きいロゴを描くときに1回だけ読む。読めなければ null のまま（今までのマークを出す） */
+/**
+ * 絵の形は、絵を使う大きいロゴを描くときに1回だけ読む。読めなければ null のまま（今までのマークを出す）。
+ * ⚠ 読むのは画面の持ち物（`LaunchedEffect` の中）にしない。読んでいる途中でその画面を離れると読み込みが
+ *    取り消され、「読んでいる途中」の印だけが残って、アプリを閉じるまでどの画面のロゴも絵が出なくなる。
+ *    アプリの持ち物（この [scope]）で読めば、頼んだ画面が消えても最後まで読む
+ */
 private object LogoIcons {
     var icons: Map<String, String>? by mutableStateOf(null)
         private set
-    private var loading = false
+    private var job: Job? = null
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
 
-    suspend fun ensure(context: android.content.Context) {
-        if (icons != null || loading) return
-        loading = true
-        icons = withContext(Dispatchers.IO) { readLogoIcons(context) }
-        loading = false
+    /** ⚠ 画面のスレッドから呼ぶ（[job] を守る鍵を持たない） */
+    fun ensure(context: android.content.Context) {
+        if (icons != null || job != null) return
+        job = scope.launch { icons = withContext(Dispatchers.IO) { readLogoIcons(context) } }
     }
 }
 
