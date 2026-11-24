@@ -585,7 +585,7 @@ function assertNoPendingPack(league, teamNames) {
   for (const name of teamNames)
     requireOnline(
       !hasPendingPack(league, name),
-      `${name}は開幕前に初期メンバーへ入れ替わるため、それまではトレードできません`,
+      `${teamLabelIn(league, name)}は開幕前に初期メンバーへ入れ替わるため、それまではトレードできません`,
       409,
     );
 }
@@ -719,13 +719,13 @@ export function openTrade(league, userId, { to, offer, want, note }, now) {
   // ⚠ 断られたら**何も残さない**。`requireOnline` で画面に理由を出す
   requireOnline(
     decision.reason !== 'lopsided',
-    `${to} は、この交換ではそちらの戦力ばかり上がるので応じませんでした。もらう選手を見直してください`,
+    `${teamLabelIn(league, to)} は、この交換ではそちらの戦力ばかり上がるので応じませんでした。もらう選手を見直してください`,
     409,
     'trade',
   );
   requireOnline(
     false,
-    `${to} はこの内容では応じませんでした。出す選手を足すか、もらう選手を見直してください`,
+    `${teamLabelIn(league, to)} はこの内容では応じませんでした。出す選手を足すか、もらう選手を見直してください`,
     409,
     'trade',
   );
@@ -794,7 +794,7 @@ export function respondTrade(league, userId, { tradeId, action, offer, want, not
       // ⚠ 応じないときは例外で返す（命令ごと取り消されるので、元の提案がそのまま残る）
       requireOnline(
         answer.action === 'accept',
-        `${trade.fromTeam} はこの逆提案には応じませんでした。元の提案のまま受けるか、断ってください`,
+        `${teamLabelIn(league, trade.fromTeam)} はこの逆提案には応じませんでした。元の提案のまま受けるか、断ってください`,
         409,
         'trade',
       );
@@ -829,7 +829,7 @@ export function respondTrade(league, userId, { tradeId, action, offer, want, not
       trade.toTeam,
       trade.offer,
       trade.want,
-      `${trade.toTeam} は、名簿や選手の力が変わったので、この逆提案ではもう応じません。断ってから出し直してください`,
+      `${teamLabelIn(league, trade.toTeam)} は、名簿や選手の力が変わったので、この逆提案ではもう応じません。断ってから出し直してください`,
     );
   if (trade.from === null)
     rejudge(
@@ -837,7 +837,7 @@ export function respondTrade(league, userId, { tradeId, action, offer, want, not
       trade.fromTeam,
       trade.want,
       trade.offer,
-      `${trade.fromTeam} は、名簿や選手の力が変わったので、この提案をもう続けません。断って閉じてください`,
+      `${teamLabelIn(league, trade.fromTeam)} は、名簿や選手の力が変わったので、この提案をもう続けません。断って閉じてください`,
     );
   drop();
   applyTrade(league, trade, now);
@@ -1915,7 +1915,7 @@ function resolvePackSelect(league, plans) {
   for (const name of names) {
     if (assigned[name]) continue;
     const pack = free.shift();
-    requireOnline(pack, `${name}に渡す初期メンバーが足りません`, 409);
+    requireOnline(pack, `${teamLabelIn(league, name)}に渡す初期メンバーが足りません`, 409);
     pack.takenBy = name;
     assigned[name] = pack;
   }
@@ -2884,7 +2884,7 @@ function advanceOneDay(league, key, now) {
         // ⚠ 知らせるのは指名したときだけ（ローテの順の投手が疲れて回るのは今までどおり黙って）
         if (pick != null && (!lock || lock.picked))
           pickReports.push({ name, game, pick, report, shownName: lock?.name });
-        return prepareDailyLineup(TEAMS_DATA[name], name, { pick, report, outside: !!lock });
+        return prepareDailyLineup(TEAMS_DATA[name], name, { pick, report, outside: !!lock, label: teamLabelIn(league, name) });
       });
     // その日の采配（指導者の考え方）。⚠ 保存した設定は書き換えず、試合の後に戻す
     for (const name of league.season.settings.teamNames)

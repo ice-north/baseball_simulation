@@ -189,7 +189,7 @@ export function playExhibition(league, ex) {
   TEAMS_DATA[away] = structuredClone(saved[away]);
   try {
     for (const name of [home, away]) {
-      prepareDailyLineup(TEAMS_DATA[name], name);
+      prepareDailyLineup(TEAMS_DATA[name], name, { label: teamLabelIn(league, name) });
       applyStaffTactics(league, name, TEAMS_DATA[name]);
     }
     const events = [];
