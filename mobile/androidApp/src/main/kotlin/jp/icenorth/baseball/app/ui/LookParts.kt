@@ -99,7 +99,7 @@ private val LookBody = FontFamily(
     Font(R.font.look_body_bold, FontWeight.Bold),
 )
 
-/** 見出し（Dela Gothic One。JIS 第1水準＋画面に出る字に絞ったもの。`tools/look-fonts.py`） */
+/** 見出し（M PLUS 1p Black。JIS 第1水準＋画面に出る字に絞ったもの。`tools/look-fonts.py`） */
 private val LookHead = FontFamily(Font(R.font.look_head))
 
 /**
