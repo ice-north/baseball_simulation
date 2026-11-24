@@ -127,7 +127,7 @@ const CHECKS = [
   },
   // アプリの共通部（mobile/shared）に写した表と計算の期待値が、Web 版と食い違っていないか（どれも0.2秒未満）。
   // ⚠ 写し元（src/）だけを変えたときに気づくため、mobile を触らなくても毎回回す（android.yml は paths で絞っている）
-  ...['gen-tables', 'expect-logic', 'expect-social', 'expect-chronicle', 'expect-paper'].map((tool) => ({
+  ...['gen-tables', 'expect-logic', 'expect-social', 'expect-chronicle', 'expect-paper', 'expect-look'].map((tool) => ({
     name: `app-${tool}`,
     group: 'quick',
     slow: 1,

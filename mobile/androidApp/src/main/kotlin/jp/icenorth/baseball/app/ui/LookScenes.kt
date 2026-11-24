@@ -241,7 +241,7 @@ private const val AUTO_MS = 1800L
 @Composable
 fun LivePlays(view: LeagueView, game: JsonObject) {
     if (!LocalLook.current.on) return
-    val scenes = remember(game) { liveScenes(game) { view.teamShort(it) } }
+    val scenes = remember(game, view.teamLabels) { liveScenes(game) { view.teamShort(it) } }
     val highlights = remember(scenes) { highlightIndexes(scenes) }
     // 画面を回しても、いまの打席から続ける
     var index by rememberSaveable(game) { mutableIntStateOf(0) }
