@@ -71,6 +71,16 @@ const lerp = (a, b, u) => a + (b - a) * u;
 
 /** 打者が出るはずの塁（記号から）。null は打者アウト */
 const BATTER_TARGET = { 安: 1, 二: 2, 三: 3, 本: 4, 四: 1, 死: 1, 失: 1, 振: null, 犠: null, 凡: null, 併: null };
+/** 安打で打者が進む塁の数 */
+const HIT_BASES = { 安: 1, 二: 2, 三: 3, 本: 4 };
+/** 安打の大きな文字 */
+const hitCaption = (code) => (code === '二' ? 'ツーベース' : code === '三' ? 'スリーベース' : 'ヒット');
+/** 折れ線の長さ */
+const pathLength = (path) => {
+  let len = 0;
+  for (let i = 1; i < path.length; i++) len += dist2(path[i - 1], path[i]);
+  return len;
+};
 
 /**
  * 走者の行き先を決める。`runners` は `[{ start }]`（0 は打者、1〜3 は塁）。
@@ -82,7 +92,7 @@ export function assignRunners({ code, before, after, runs, outs, threeOuts, batt
   if (batter) runners.push({ start: 0 });
   if (!runners.length) return runs === 0 && outs === 0 ? [] : null;
   const fly = batted && batted.la >= 10;
-  const hitBases = { 安: 1, 二: 2, 三: 3, 本: 4 }[code] || 0;
+  const hitBases = HIT_BASES[code] || 0;
   // 押し出されるか（後ろの塁が全部埋まっている）
   const forced = (start) => {
     if (!batter) return false;
@@ -353,9 +363,7 @@ export function motionOf(scene, before = 0) {
   const arriveAt = (r, base) => {
     const path = basePath(r.start, base);
     if (r.start > 0) path[0] = leadPoint(r.start);
-    let len = 0;
-    for (let i = 1; i < path.length; i++) len += dist2(path[i - 1], path[i]);
-    return runnerStart + len / STRETCH_SPEED;
+    return runnerStart + pathLength(path) / STRETCH_SPEED;
   };
 
   if (!hasBatter) {
@@ -538,7 +546,7 @@ export function motionOf(scene, before = 0) {
       if (hit) {
         // 安打で刺された走者は、余分に1つ先を狙って刺されている（シミュの `tryExtraAdvance`:
         // 単打の一塁走者は三塁、単打の二塁走者と二塁打の一塁走者は本塁）。前の走者が止まった塁は越えない
-        const hitBases = code === '安' ? 1 : code === '二' ? 2 : 3;
+        const hitBases = HIT_BASES[code];
         for (const r of outRunners) {
           const ahead = assigned.filter((o) => o.start > r.start && o.target !== 'out' && o.target < 4).map((o) => o.target - 1);
           stretchBase.set(r, Math.max(r.start + 1, Math.min(4, r.start + hitBases + 1, ...ahead)));
@@ -578,7 +586,7 @@ export function motionOf(scene, before = 0) {
         events.push({ t: outsAt.get(r), kind: 'out', base });
         marks.push({ t: outsAt.get(r) + 0.05, text: 'アウト', tone: 'out' });
       }
-      if (hit && throwOuts.length) marks.unshift({ t: hitT ?? fieldTime, text: code === '二' ? 'ツーベース' : code === '三' ? 'スリーベース' : 'ヒット', tone: 'hit' });
+      if (hit && throwOuts.length) marks.unshift({ t: hitT ?? fieldTime, text: hitCaption(code), tone: 'hit' });
       if (errorKind === 'throw') {
         // 失策: 一塁への送球がそれる。一塁に入った野手が追う
         const cover = coverOf(1, fielder, dir);
@@ -600,7 +608,7 @@ export function motionOf(scene, before = 0) {
         const back = dist2(plate, fieldPoint) > 48 ? 2 : 1;
         const spot = baseAt(back);
         if (errorKind === 'drop') marks.push({ t: hitT, text: 'エラー', tone: 'error' });
-        else marks.push({ t: hitT ?? fieldTime, text: code === '二' ? 'ツーベース' : code === '三' ? 'スリーベース' : 'ヒット', tone: 'hit' });
+        else marks.push({ t: hitT ?? fieldTime, text: hitCaption(code), tone: 'hit' });
         if (dist2(fieldPoint, spot) < 4.5) {
           tAfter = fieldTime;
         } else {
@@ -685,8 +693,7 @@ export function motionOf(scene, before = 0) {
         const t0 = code === '刺' ? PITCH_RELEASE - 0.45 : tagging ? catchT + 0.08 : runnerStart;
         const path = basePath(r.start, base);
         path[0] = tagging ? base0 : lead;
-        let len = 0;
-        for (let i = 1; i < path.length; i++) len += dist2(path[i - 1], path[i]);
+        const len = pathLength(path);
         const sp = clamp(len / Math.max(0.3, outT + (through ? 0.12 : 0.05) - t0), 4.5, 10.8);
         if (through) {
           const b1 = BASES[1];

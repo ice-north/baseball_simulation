@@ -39,6 +39,7 @@ import {
   campPlan,
   VIEWS,
   delegationOf,
+  ROLE_LABELS,
 } from '../src/online/coaches.js';
 import { PYRAMID_LEAGUES } from '../src/online/pyramidLeague.js';
 import { requireOnline } from '../src/online/shared.js';
@@ -501,7 +502,7 @@ export function validateStaffMoves(league, teamName, moves) {
   if (!Object.keys(clean).length) return null;
   const seats = league.coaches?.teams?.[teamName] || {};
   for (const [role, to] of Object.entries(clean)) {
-    requireOnline(seats[role], `${role === 'manager' ? '監督' : role === 'pitching' ? '投手コーチ' : '野手コーチ'}の席が空いています`, 409);
+    requireOnline(seats[role], `${ROLE_LABELS[role]}の席が空いています`, 409);
     if (role === 'manager' && to !== 'leave') {
       requireOnline(seats[to], '昇格させるコーチがいません', 409);
       requireOnline(clean[to] !== 'leave', '監督に上げるコーチを退任にはできません');
@@ -571,7 +572,7 @@ function applyStaffMoves(c, year) {
 export function scheduledStaffLines(league, teamName) {
   const c = league.coaches;
   if (!c) return [];
-  const label = { manager: '監督', pitching: '投手コーチ', batting: '野手コーチ' };
+  const label = ROLE_LABELS;
   const nameOf = (id) => c.people[id]?.name || '';
   const out = [];
   const moves = c.moves?.[teamName] || {};
