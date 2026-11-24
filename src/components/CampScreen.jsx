@@ -7,6 +7,7 @@ import { DIRECTIONS, PHASES, resolveTraining, moodMultiplier, describeMood, play
 import { TRAINING_MENUS, SUB_TRAINING_MENUS, executeTeamCampTraining, executeSubTraining, ALL_PITCH_TYPES, getPitchTypeName, FORM_PITCH_AFFINITY, calcSecondAffinity, DISPATCH_DESTINATIONS, DISPATCH_LIMITS, checkDispatchEligibility, executeDispatchTraining, resolveDispatchTraining, calcPlayerOverall, applyMotivationEffect, applyBatteryMentalEffect, getUniversityDispatchOptions, getAvailableDispatchKeys } from '../season/yearProgressionSystem.js';
 import { POSITION_NAMES, POSITION_ORDER, getAbilityColor, POSITION_GROUP_COLORS, FORM_SHORT } from '../utils/constants.js';
 import { AbilityValue } from './AbilityValue.jsx';
+import { BATTING_STANCES, battingStanceOf } from '../game/batterZone.js';
 import { getTeamStaffBonus } from '../corporate/staffData.js';
 import { SPECIALTY_LABELS, SPECIALTY_ICONS } from '../university/universityTeamsData.js';
 import { naturalGrowthOf, naturalGrowthText, naturalGrowthColor, naturalGrowthTitle } from '../utils/naturalGrowth.js';
@@ -72,6 +73,10 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
   // 変化球練習で1球種を指定して集中練習する（未指定なら従来どおり全球種に分配）
   const [subPitchSelections, setSubPitchSelections] = useState({});
   const [formSelections, setFormSelections] = useState({});
+  // ⚠ 打撃フォーム（オープン/スクエア/クローズ）の行き先。野手の「フォーム改造」で選ぶ
+  //    （いしだ 2026-11-24「キャンプの練習に、打撃フォーム変更を追加してください」）。
+  //    選ばなければ中で別のフォームが選ばれる（投手のフォーム改造と同じ）
+  const [stanceSelections, setStanceSelections] = useState({});
   const [batsSelections, setBatsSelections] = useState({});
   const [roundResults, setRoundResults] = useState(null);
   const [viewMode, setViewMode] = useState('select');
@@ -298,6 +303,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
         targetPosition: subPositionSelections[p.id],
         targetPitch: subPitchSelections[p.id],
         targetForm: formSelections[p.id],
+        targetStance: stanceSelections[p.id],
         targetBats: batsSelections[p.id],
       };
       const { growthReport: subGrowth } = executeSubTraining(p, subType, subOptions, userStaffBonus);
@@ -1015,6 +1021,21 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
                                 {Object.entries(FORM_SHORT)
                                   .filter(([k]) => k !== player.pitching?.form)
                                   .map(([k,v]) => <option key={k} value={k}>{v}</option>)}
+                              </select>
+                            )}
+                            {/* ⚠ 野手のフォーム改造＝打撃フォーム（内外角の得手不得手が動く。
+                                `src/game/batterZone.js`）。投手の投球フォームと同じ欄の使い方 */}
+                            {(subAssignments[player.id] || 'physique') === 'form_change' && player.position !== 'pitcher' && (
+                              <select
+                                value={stanceSelections[player.id] || ''}
+                                onChange={(e) => setStanceSelections(prev => ({ ...prev, [player.id]: e.target.value }))}
+                                className="bg-gray-600 text-white text-xs px-1.5 py-0.5 rounded w-24"
+                                title="打撃フォーム（オープン=内角が得意 / クローズ=外角が得意）"
+                              >
+                                <option value="">自動</option>
+                                {Object.entries(BATTING_STANCES)
+                                  .filter(([k]) => k !== battingStanceOf(player))
+                                  .map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
                               </select>
                             )}
                             {(subAssignments[player.id] || 'physique') === 'switch_hit' && (
