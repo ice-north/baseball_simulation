@@ -861,7 +861,12 @@ private fun ConfirmStep(
             }
             if (theirs != null) Section("${view.teamShort(partner)}へのメリット") {
                 // 弱い持ち場の順位は相手以外の球団（自球団を含む。PC版と同じ）の中で
-                val merits = remember(theirPlayers, giving, draft.get, league.teams) { tradeMerits(theirPlayers, giving, draft.get, league.teams - partner) }
+                // ⚠ 順位は**全球団が読めてから**出す（PC版の `othersReady` と同じ）。読めた球団だけで比べると、
+                //    開いた直後に「弱い遊撃（3位/3）」が出て、読み終わると変わる。読めない球団があるときも出さない
+                val othersReady = league.complete && league.failed == 0
+                val merits = remember(theirPlayers, giving, draft.get, league.teams, othersReady) {
+                    tradeMerits(theirPlayers, giving, draft.get, if (othersReady) league.teams - partner else emptyMap())
+                }
                 val odds = if (rule != null && counter == null) cpuOddsOf(
                     givingValues, gettingTradeValues(theirPlayers, getting), rule,
                     strengthGapOf(rule, myPlayers, theirPlayers, draft.give, draft.get),
