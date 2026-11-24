@@ -29,7 +29,10 @@ jobs:
           cache: npm
       - run: npm ci
       - name: Long run
-        run: node --max-old-space-size=6144 tools/sim-harness/long-run-probe.mjs ${{ github.event.inputs.years || '10' }} ${{ matrix.seed }} long-sim-${{ matrix.seed }}.json > long-sim-${{ matrix.seed }}.log
+        # 手で回すときの年数は env で渡す（式を run に直接書くと、入力がそのままシェルに入る）
+        env:
+          YEARS: ${{ github.event.inputs.years || '10' }}
+        run: node --max-old-space-size=6144 tools/sim-harness/long-run-probe.mjs "$YEARS" ${{ matrix.seed }} long-sim-${{ matrix.seed }}.json > long-sim-${{ matrix.seed }}.log
       # 結果の JSON をログにも出す（成果物を落とせない環境からも `gh api .../jobs/<id>/logs` で読める）
       - name: Result
         if: always()

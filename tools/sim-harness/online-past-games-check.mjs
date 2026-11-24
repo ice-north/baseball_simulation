@@ -154,4 +154,18 @@ assert.notEqual(JSON.stringify((await view()).currentDate), dayBefore, '日が�
   assert.equal(back.league.records.seasons[1].games[firstGame].note, 'touched', '読み直した変更が残らない');
   assert.equal(Object.keys(back.league.records.seasons[1].games).length, pastCount);
 }
+// 2年目に版が上がった後の定期処理: 移行して進む（終わった年の試合を読まない形で移行の複製が
+// DataCloneError になり、握りつぶされて、誰かが操作するまで止まっていた。2026-11-24 監査）
+{
+  await store.transaction((b) => { b.league.schema -= 1; return { value: 1 }; }, { full: 'all' });
+  const before = (await store.read()).league;
+  assert.equal(before.status, 'running', '前提: 2年目のシーズン中');
+  const at = new Date(Date.parse(before.nextAdvanceAt) + 60000).toISOString();
+  const ticker = new LeagueService(store, { local: true, adminId: 'p1', members: [{ userId: 'p1' }], clock: () => at });
+  const result = await quietAsync(() => ticker.tick());
+  const after = (await store.read()).league;
+  assert.equal(after.schema, before.schema + 1, '2年目の定期処理で移行しない');
+  assert.ok(result?.advanced, '2年目の定期処理で移行の後に進まない');
+  assert.ok(Object.keys(after.records.seasons[1].games).length > 100, '移行で終わった年の試合が消えた');
+}
 console.log(`online-past-games-check PASS（2年目・1年目の試合 ${Object.keys(bundle.league.records.seasons[1].games).length} 件は別の部分）`);

@@ -1493,7 +1493,9 @@ import { useEscapeToClose } from './components/useEscapeToClose.js';
             if (extraAdvance) {
               // 中継ミス: 送球が乱れているので走者が余分に1つ進む（自動試合と同じ）
               newBase++;
-            } else if (outsFromThrow === 0) {
+            } else if (outsFromThrow === 0 && !(newBase + 1 < 3 && newBases[newBase + 1])) {
+              // ⚠ 先を走る走者がその先の塁に止まっていたら狙わない（自動試合と同じ。以前は狙って
+              //    刺されることがあった）
               // 打球を処理した野手の肩で判定する（自動シミュと同じ）。
               // avgArm だけだと「強肩の外野手を置く」意味が出ない
               const thrower = fieldingPosition ? def?.[fieldingPosition] : null;
@@ -1507,9 +1509,7 @@ import { useEscapeToClose } from './components/useEscapeToClose.js';
                 recordFielding(fieldingPosition, { chance: 1, assist: 1 });   // 捕殺
                 continue;
               }
-              // ⚠ 先を走る走者が既にその塁に居たら止まる（以前は同じ塁に2人が重なり、
-              //    boolean の塁では1人が黙って消えていた）
-              if (attempt && (newBase + 1 >= 3 || !newBases[newBase + 1])) newBase++;
+              if (attempt) newBase++;
             }
             if (newBase >= 3) {
               runsScored++;

@@ -44,6 +44,14 @@ assert.equal(targets({ code: '刺', before: 1, after: 0, runs: 0, outs: 1, batte
   assert.ok(Math.hypot(x, y) < 1.5, '刺された走者が、刺された塁まで来ていない');
   assert.deepEqual(m.marks.map((k) => k.text), ['ツーベース', 'アウト']);
 }
+// 打球の記録の無い犠打（サーバーはバントに打球を書かない）: 四球の絵にせず、転がして打者が一塁へ走る
+{
+  const m = motionOf({ code: '犠', runs: 0, outsBefore: 0, outs: 1, basesAfter: 2, batter: { id: 1, name: 'x' }, batted: null, offense: 'home' }, 1);
+  assert.ok(!m.marks.some((k) => k.text === '四球'), 'バントが四球の絵になる');
+  const batter = m.runners.find((r) => r.start === 0);
+  assert.ok(batter.track.length > 1, 'バントの打者が打席から動かない');
+  assert.ok(m.events.some((e) => e.kind === 'out'), 'バントの打者のアウトが出ない');
+}
 // 合わない記録は null（動かさずに置く）
 assert.equal(assignRunners({ code: '安', before: 0, after: 7, runs: 0, outs: 0, batter: true }), null);
 
@@ -73,6 +81,8 @@ for (const game of games) {
     }
     for (const e of [...m.events, ...m.marks]) assert.ok(Number.isFinite(e.t) && e.t >= 0 && e.t <= m.duration, `できごとの時間が場面の外: ${where} ${e.kind || e.text}`);
     if (!m.guessed) assert.equal(m.scoreTimes.length, scene.runs, `点が入る回数が記録と違う: ${where}`);
+    // 「四球」の文字は四球の打席だけ（打球の無いバントが四球の絵になっていた）
+    if (scene.code !== '四') assert.ok(!m.marks.some((k) => k.text === '四球'), `四球でない打席に「四球」: ${where}`);
     // カメラ
     const track = cameraTrack(m);
     for (const row of track) {

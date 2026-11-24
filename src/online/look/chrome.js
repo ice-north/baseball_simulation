@@ -28,7 +28,7 @@ export function useLookChrome(on) {
       document.head.appendChild(el);
       return el;
     });
-    // 地の色を html にも（引っぱって戻すときに見える余白・スクロールバーの溝）
+    // html にも印（引っぱって戻すときの色の作り・スクロールバーの溝。`feel.css` の html.online-look-root）
     document.documentElement.classList.add('online-look-root');
     return () => {
       for (const el of added) el.remove();

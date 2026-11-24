@@ -25,6 +25,10 @@
   `tools/expect-logic.mjs` が書き出す期待値（`logic-expected.json`）と `LogicTest` で答え合わせする。
 - 得点経過・最終ログイン・留守中のまとめの文（`social.js`・`awaySummary.js`）は `Social.kt`・`AwaySummary.kt` に写してあり、
   `tools/expect-social.mjs` が書き出す期待値（`social-expected.json`）と `SocialTest` で答え合わせする。
+- 新しい見た目（試作。`src/online/look/` と打席の色分け `gamePlays.js` の `playTone`）は `Look*.kt`・`TodayGame.kt` に写してあり、
+  `tools/expect-look.mjs` が書き出す期待値（`look-expected.json`）と `LookTest` で答え合わせする。
+  新しい見た目がビューから読む項目はどれも、古いサーバーでは無くてよい（無ければ出さない）: `teamLabels` の `city`・`nickname`、
+  `nextGames[]` の `homeStarter`・`awayStarter`（`age`・`condition`）、`teamStreaks`、`teamStats` の `obp`・`slg`、試合の版20の `plays` の行。
 - CI はどれも `--check` で、Web 版だけ直して写しが古くなっていないかを見る（`npm run check:quick` の `app-*`。`tools/sim-harness/run-checks.mjs`）。
 
 - 接続先の既定は本番（`https://baseball-simulation-neon.vercel.app/api/online`）。ログイン画面の「接続先を変える（開発用）」でローカルの開発サーバーにも繋げる（エミュレーターから PC へは `http://10.0.2.2:3002/`）。

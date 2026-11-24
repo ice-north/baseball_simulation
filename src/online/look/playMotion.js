@@ -12,6 +12,8 @@
 //    選手の姿勢は `motionPose.js`、描くのは `motionFigure.js`・`motionStadium.js`・`PlayMotion.jsx`。
 // ============================================================
 
+import { HOMERS } from './playByPlay.js';
+
 const BASE = 27.43;
 const HALF = BASE / Math.SQRT2;
 /** 本塁・一塁・二塁・三塁 */
@@ -69,6 +71,16 @@ const lerp = (a, b, u) => a + (b - a) * u;
 
 /** 打者が出るはずの塁（記号から）。null は打者アウト */
 const BATTER_TARGET = { 安: 1, 二: 2, 三: 3, 本: 4, 四: 1, 死: 1, 失: 1, 振: null, 犠: null, 凡: null, 併: null };
+/** 安打で打者が進む塁の数 */
+const HIT_BASES = { 安: 1, 二: 2, 三: 3, 本: 4 };
+/** 安打の大きな文字 */
+const hitCaption = (code) => (code === '二' ? 'ツーベース' : code === '三' ? 'スリーベース' : 'ヒット');
+/** 折れ線の長さ */
+const pathLength = (path) => {
+  let len = 0;
+  for (let i = 1; i < path.length; i++) len += dist2(path[i - 1], path[i]);
+  return len;
+};
 
 /**
  * 走者の行き先を決める。`runners` は `[{ start }]`（0 は打者、1〜3 は塁）。
@@ -80,7 +92,7 @@ export function assignRunners({ code, before, after, runs, outs, threeOuts, batt
   if (batter) runners.push({ start: 0 });
   if (!runners.length) return runs === 0 && outs === 0 ? [] : null;
   const fly = batted && batted.la >= 10;
-  const hitBases = { 安: 1, 二: 2, 三: 3, 本: 4 }[code] || 0;
+  const hitBases = HIT_BASES[code] || 0;
   // 押し出されるか（後ろの塁が全部埋まっている）
   const forced = (start) => {
     if (!batter) return false;
@@ -258,7 +270,6 @@ function cutTrack(track, tMax) {
   return kept;
 }
 
-const HOMER_SUB = ['', 'ソロ', 'ツーラン', 'スリーラン', '満塁'];
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 
 /**
@@ -275,8 +286,17 @@ const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
  *   - `marks` 大きな文字 `[{ t, text, tone, sub }]`（tone: out・hit・run・homer・walk・error）
  *   - `scoreTimes` 点が入る時、`main` 打球を捕る野手と時、`guessed` 走者の割り当てが合わず動かさずに置いたとき true
  */
+/** 打球の記録が無くても前へ転がった打席（バント。記録は四球・三振と同じく塁だけ） */
+const BUNT_CODES = new Set(['犠', '安', '凡', '失']);
+/** バントの打球を作る: 安打（セーフティ）は三塁線、ほかは投手の前へ */
+const buntBall = (code) => (code === '安' ? { pos: 5, dir: -28, dist: 14, la: -15 } : { pos: 1, dir: -8, dist: 10, la: -15 });
+
 export function motionOf(scene, before = 0) {
-  const { code, batted } = scene;
+  const { code } = scene;
+  // サーバーはバント（犠打・バント安打・バントの凡退）に打球を書かない。打球の無いまま描くと
+  // 四球の絵（捕手が捕って「四球」、打者が打席に残る）になるので、転がした打球を作って描く
+  const bunt = !scene.batted && BUNT_CODES.has(code);
+  const batted = bunt ? buntBall(code) : scene.batted;
   const rowOuts = Math.max(0, (scene.outs || 0) - (scene.outsBefore || 0));
   const hasBatter = code !== '走' && code !== '刺';
   const assigned = assignRunners({
@@ -343,9 +363,7 @@ export function motionOf(scene, before = 0) {
   const arriveAt = (r, base) => {
     const path = basePath(r.start, base);
     if (r.start > 0) path[0] = leadPoint(r.start);
-    let len = 0;
-    for (let i = 1; i < path.length; i++) len += dist2(path[i - 1], path[i]);
-    return runnerStart + len / STRETCH_SPEED;
+    return runnerStart + pathLength(path) / STRETCH_SPEED;
   };
 
   if (!hasBatter) {
@@ -377,7 +395,7 @@ export function motionOf(scene, before = 0) {
       tAfter = got;
     }
   } else if (!batted) {
-    // 打球の無い打席（三振・四球・死球）
+    // 打球の無い打席（三振・四球・死球。バントは上で打球を作るのでここに来ない）
     if (code === '死') {
       ball.push([CONTACT + 0.4, -0.5, 1.4, 0.05]);
       events.push({ t: CONTACT, kind: 'hbp', x: -0.95, y: 0.5 });
@@ -401,7 +419,7 @@ export function motionOf(scene, before = 0) {
     }
     tAfter = CONTACT + 0.7;
   } else {
-    swingAt = code === '犠' ? null : CONTACT - 0.07;
+    swingAt = code === '犠' || bunt ? null : CONTACT - 0.07;
     const fielder = mainPos;
     const homer = code === '本';
     const dir = clamp(batted.dir, -45, 45);
@@ -422,7 +440,7 @@ export function motionOf(scene, before = 0) {
       runTo(chaser, at(dir, wall - 2.5), CONTACT + 0.25, FIELD_SPRINT);
       main = { fielder: chaser, t: CONTACT + dur, at: land };
       events.push({ t: CONTACT + dur, kind: 'homer', x: land[0], y: land[1], z: 9 });
-      marks.push({ t: CONTACT + dur - 0.1, text: 'ホームラン！', tone: 'homer', sub: HOMER_SUB[Math.min(4, scene.runs || 1)] });
+      marks.push({ t: CONTACT + dur - 0.1, text: 'ホームラン！', tone: 'homer', sub: HOMERS[Math.min(4, scene.runs || 1)] });
       tAfter = CONTACT + dur;
     } else if (ground) {
       // ゴロ: 野手の定位置を打球の線に落とした所で捕る（外野手が捕るのは内野を抜けた打球）
@@ -436,10 +454,10 @@ export function motionOf(scene, before = 0) {
             ? clamp(batted.dist * 0.3, 2.5, 7)
             : Math.max(along * 0.6, Math.min(along, batted.dist));
       fieldPoint = at(dir, d);
-      const roll = code === '犠' ? 11 : through ? 24 : 30;
+      const roll = code === '犠' || bunt ? 11 : through ? 24 : 30;
       const need = dist2(fHome, fieldPoint) / FIELD_SPRINT;
       const tRoll = Math.max(dist2(plate, fieldPoint) / roll, need);
-      ball.push(...hopTrack(plate, fieldPoint, CONTACT, tRoll, 0.8, code === '犠' ? 0.2 : 0.5));
+      ball.push(...hopTrack(plate, fieldPoint, CONTACT, tRoll, 0.8, code === '犠' || bunt ? 0.2 : 0.5));
       const hop = at(dir, d * 0.16);
       events.push({ t: CONTACT + tRoll * 0.16, kind: 'bounce', x: hop[0], y: hop[1] });
       fieldTime = CONTACT + tRoll + 0.05;
@@ -528,7 +546,7 @@ export function motionOf(scene, before = 0) {
       if (hit) {
         // 安打で刺された走者は、余分に1つ先を狙って刺されている（シミュの `tryExtraAdvance`:
         // 単打の一塁走者は三塁、単打の二塁走者と二塁打の一塁走者は本塁）。前の走者が止まった塁は越えない
-        const hitBases = code === '安' ? 1 : code === '二' ? 2 : 3;
+        const hitBases = HIT_BASES[code];
         for (const r of outRunners) {
           const ahead = assigned.filter((o) => o.start > r.start && o.target !== 'out' && o.target < 4).map((o) => o.target - 1);
           stretchBase.set(r, Math.max(r.start + 1, Math.min(4, r.start + hitBases + 1, ...ahead)));
@@ -568,7 +586,7 @@ export function motionOf(scene, before = 0) {
         events.push({ t: outsAt.get(r), kind: 'out', base });
         marks.push({ t: outsAt.get(r) + 0.05, text: 'アウト', tone: 'out' });
       }
-      if (hit && throwOuts.length) marks.unshift({ t: hitT ?? fieldTime, text: code === '二' ? 'ツーベース' : code === '三' ? 'スリーベース' : 'ヒット', tone: 'hit' });
+      if (hit && throwOuts.length) marks.unshift({ t: hitT ?? fieldTime, text: hitCaption(code), tone: 'hit' });
       if (errorKind === 'throw') {
         // 失策: 一塁への送球がそれる。一塁に入った野手が追う
         const cover = coverOf(1, fielder, dir);
@@ -590,7 +608,7 @@ export function motionOf(scene, before = 0) {
         const back = dist2(plate, fieldPoint) > 48 ? 2 : 1;
         const spot = baseAt(back);
         if (errorKind === 'drop') marks.push({ t: hitT, text: 'エラー', tone: 'error' });
-        else marks.push({ t: hitT ?? fieldTime, text: code === '二' ? 'ツーベース' : code === '三' ? 'スリーベース' : 'ヒット', tone: 'hit' });
+        else marks.push({ t: hitT ?? fieldTime, text: hitCaption(code), tone: 'hit' });
         if (dist2(fieldPoint, spot) < 4.5) {
           tAfter = fieldTime;
         } else {
@@ -675,8 +693,7 @@ export function motionOf(scene, before = 0) {
         const t0 = code === '刺' ? PITCH_RELEASE - 0.45 : tagging ? catchT + 0.08 : runnerStart;
         const path = basePath(r.start, base);
         path[0] = tagging ? base0 : lead;
-        let len = 0;
-        for (let i = 1; i < path.length; i++) len += dist2(path[i - 1], path[i]);
+        const len = pathLength(path);
         const sp = clamp(len / Math.max(0.3, outT + (through ? 0.12 : 0.05) - t0), 4.5, 10.8);
         if (through) {
           const b1 = BASES[1];
@@ -755,7 +772,7 @@ export function motionOf(scene, before = 0) {
     ball,
     fielders,
     runners,
-    batter: hasBatter ? { swingAt, bunt: code === '犠', walk: code === '四', hbp: code === '死' } : null,
+    batter: hasBatter ? { swingAt, bunt: code === '犠' || bunt, walk: code === '四', hbp: code === '死' } : null,
     acts,
     events,
     marks,
@@ -771,5 +788,8 @@ export function basesBeforeOf(scenes, i) {
   const s = scenes[i];
   const prev = scenes[i - 1];
   if (!s || !prev || prev.inning !== s.inning || prev.half !== s.half) return 0;
-  return prev.basesAfter ?? 0;
+  // 塁の記録が無い行（古い形の「走」の行など）は、同じ半回をさかのぼって最後に分かる塁を使う
+  //（以前は空の塁から始めて、走者が無い所から現れていた）
+  if (prev.basesAfter == null) return basesBeforeOf(scenes, i - 1);
+  return prev.basesAfter;
 }

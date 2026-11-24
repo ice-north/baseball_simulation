@@ -28,6 +28,7 @@ on:
       - 'src/online/firstWeek.js'
       - 'src/online/paper/**'
       - 'src/online/look/**'
+      - 'src/online/gamePlays.js'
       - 'src/utils/constants.js'
   pull_request:
     paths:
@@ -50,6 +51,7 @@ on:
       - 'src/online/firstWeek.js'
       - 'src/online/paper/**'
       - 'src/online/look/**'
+      - 'src/online/gamePlays.js'
       - 'src/utils/constants.js'
   workflow_dispatch:
 

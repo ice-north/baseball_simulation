@@ -332,10 +332,6 @@ export function weightedRanked(candidates, weights, roster = [], limit = TRYOUT_
 }
 
 /**
- * 候補の絞り込みと並べ替え。
- * ⚠ **並びを決定的にすること**。同点で順番が揺れると、押した行と動く行がずれる。
- */
-/**
  * 能力で絞り込む条件に使える能力（先方要望 2026-11-23「投手の野手能力や、野手の投手能力を検索するのが
  * 面倒なので、全選手から希望の能力値を絞って検索できるように」）。
  * ⚠ 値は**画面に出している数そのまま**（球速は km/h、スタミナは 0〜200）。評価値の 0〜100 に揃えた値
@@ -383,6 +379,10 @@ export const activeAbilityFilters = (filters = []) =>
     (f) => ABILITY_FILTERS.some((d) => d.key === f.key) && f.min !== '' && f.min != null && Number.isFinite(Number(f.min)),
   );
 
+/**
+ * 候補の絞り込みと並べ替え。
+ * ⚠ **並びを決定的にすること**。同点で順番が揺れると、押した行と動く行がずれる。
+ */
 export function filterCandidates(
   candidates,
   { group = 'all', query = '', sortKey = 'overall', desc = true, scoreOf = null, abilities = [] } = {},
