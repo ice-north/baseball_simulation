@@ -1,4 +1,4 @@
-// アプリの共通部（Kotlin の Look.kt・LookArt.kt・LookScene.kt・LookPlay.kt・TodayGame.kt・LookStory.kt・LookGrade.kt）に写した「新しい見た目（試作）」の表と描く手順が
+// アプリの共通部（Kotlin の Look.kt・LookArt.kt・LookScene.kt・LookPlay.kt・TodayGame.kt・LookStory.kt・LookGrade.kt・LookLogo.kt）に写した「新しい見た目（試作）」の表と描く手順が
 // Web 版（src/online/look/）と同じ答えを出すかの検査用に、期待値を書き出す。
 //   node mobile/tools/expect-look.mjs > mobile/shared/src/jvmTest/resources/look-expected.json
 // CI は `--check`（Web 版だけ直したときに気づく）。答え合わせは `LookTest`。
@@ -13,6 +13,11 @@ import { playTone } from '../../src/online/gamePlays.js';
 import { todayGameCard } from '../../src/online/look/todayGame.js';
 import { reporterOf, reporterChat, eventScene } from '../../src/online/look/story.js';
 import { leagueBaseline, statGrade } from '../../src/online/look/statGrade.js';
+import { logoArt, logoLayersFor, logoNeedsIcons } from '../../src/online/look/logoArt.js';
+import { logoFromRecipe, LOGO_TEMPLATE_KEYS } from '../../src/online/look/logoBuild.js';
+import { LOGO_BASES, LOGO_LATIN_FONTS, LOGO_SHAPES, charWidth } from '../../src/online/look/logoParts.js';
+import { cleanLogo } from '../../src/online/look/logoData.js';
+import { attachTeamLogos, logoTeamOf } from '../../src/online/look/teamLogo.js';
 
 const labelsOf = (teams) =>
   Object.fromEntries(
@@ -311,6 +316,154 @@ const grades = gradeViews.map((view) => {
   };
 });
 
+// ---- 球団ロゴ（描く側だけ。型・おまかせの候補・作る画面はアプリに写していない） -------------
+// アプリが受け取るのは、サーバーがビューの `teamLabels[].logo` に載せる形（`attachTeamLogos`・`cleanLogo`）。
+// ⚠ 図形と絵の `d` は長いので、期待値にはその `hash` を書く（アプリの検査も同じ `lookHash` に直して比べる。
+//    図形の `d` そのものは `gen-tables.mjs` が Tables.kt に書き出して `--check` で比べている）。
+// ⚠ 絵の形は本物（280KB）の代わりに、名前ごとに違う短い形を使う（描く手順は形の中身を読まない）。
+const logoIcons = {};
+const iconStub = (name) => (logoIcons[name] ??= `M${hash(name) % 400} 24h88v${40 + (hash(name) % 37)}h-88Z`);
+const noteIcons = (layers) => {
+  for (const L of layers || []) if (L.k !== 'text' && !Object.hasOwn(LOGO_SHAPES, L.k)) iconStub(L.k);
+};
+const hashD = (art) => ({ ...art, items: art.items.map((it) => ('d' in it ? { ...it, d: hash(it.d) } : it)) });
+const logoArtOf = (layers, colors, icons) => hashD(logoArt(layers, colors, icons));
+const logoCase = (note, colors, layers) => {
+  noteIcons(layers);
+  const needs = logoNeedsIcons(layers);
+  // 絵の形がまだ届いていないとき（`bare`）は、絵の部品を飛ばして描く
+  return { note, colors, layers, needs, art: logoArtOf(layers, colors, logoIcons), ...(needs ? { bare: logoArtOf(layers, colors, null) } : null) };
+};
+// 手で組んだ重ね（保存の確かめ `cleanLogo` を通した形。1枚も捨てられないこと）
+const wire = (layers) => {
+  const out = cleanLogo({ layers })?.layers;
+  if (out?.length !== layers.length) throw new Error(`手で組んだロゴの部品が保存の確かめで捨てられた: ${JSON.stringify(layers)}`);
+  return out;
+};
+const HAND = [
+  // 図形: 反転・回転・ふち・線だけ・色の番号と '#rrggbb'・ボールの縫い目（2つ目の形）
+  ['図形', ['#13294b', '#c8102e', '#ffffff'], [
+    { k: 'shield', c: 0, o: 2, ow: 3 },
+    { k: 'bat', x: 40, y: 52, s: 0.8, r: -35, c: 3, f: 1 },
+    { k: 'bat', x: 60, y: 52, s: 0.8, r: 35, c: '#ff8800', o: 4, ow: 1.5 },
+    { k: 'ball', y: 30, s: 0.3, c: 3 },
+    { k: 'ball', y: 72.5, s: 0.25, c: 3, o: 1, ow: 1, f: 1 },
+  ]],
+  ['線だけ', ['#0b3d2e', '#f4c430', '#14161c'], [
+    { k: 'circle', c: 1, line: 2.5 },
+    { k: 'star', s: 0.5, r: 18, c: 2, line: 1 },
+    { k: 'pennant', x: 30.5, y: 61.25, s: 0.45, r: 200, c: 4, f: 1, o: 3, ow: 0.8 },
+    { k: 'ball', x: 70, y: 70, s: 0.33, c: 1, line: 0.6 },
+    { k: 'seal', x: -30, y: 130, s: 3, r: 360, c: 0 },
+    { k: 'swoosh', s: 0.03, r: -360, c: '#00ff7f' },
+  ]],
+  // 字: まっすぐ・上の弧・下の弧・ふち・反転・回転・和文・2単位の字
+  ['字まっすぐ', ['#5b2a86', '#ffd166', '#ffffff'], [
+    { k: 'text', t: 'TIGERS', font: 'alfa', c: 1 },
+    { k: 'text', y: 30, s: 0.5, r: -8, t: 'Sapporo', font: 'yellowtail', c: 3, o: 4, ow: 2 },
+    { k: 'text', y: 74, s: 0.45, t: '札幌 2026', font: 'jp', c: 2, o: 0, ow: 1.2, f: 1 },
+    { k: 'text', x: 12, y: 88, s: 0.3, r: 90, t: 'Q~ {|}', c: 4 },
+  ]],
+  ['字の弧', ['#13294b', '#c8102e', '#ffffff'], [
+    { k: 'circle', c: 0 },
+    { k: 'text', s: 0.4, t: 'NORTH STARS', c: 3, o: 1, ow: 2, arc: 38 },
+    { k: 'text', s: 0.3, t: 'BASEBALL CLUB', font: 'alfa', c: 2, arc: -38 },
+    { k: 'text', y: 55, s: 0.45, r: 20, t: 'あ伊う', font: 'jp', c: 4, f: 1, arc: 30 },
+  ]],
+  ['字の弧（2単位の字・小さい半径・横向き）', ['#0b3d2e', '#f4c430', '#14161c'], [
+    { k: 'text', s: 0.5, t: '𠮷a😀', font: 'jp', c: 0, o: 2, ow: 1, arc: -24 },
+    { k: 'text', x: 60, s: 0.6, r: -90, t: 'Wi 1', font: 'yellowtail', c: 1, arc: 60 },
+    { k: 'text', s: 0.2, t: 'A', font: 'alfa', c: 2, o: 3, ow: 0.5, f: 1, arc: 8 },
+    { k: 'text', s: 0.35, t: 'HIGASHIOSAKA', c: 3, arc: -90 },
+  ]],
+  // 絵（別に読む形）: 塗る・ふち・線だけ・反転
+  ['絵', ['#7a1f2b', '#e2ad84', '#ffffff'], [
+    { k: 'hex', c: 0, o: 1, ow: 4 },
+    { k: 'bear-head', y: 46, s: 0.62, c: 3 },
+    { k: 'eagle-emblem', x: 24, y: 80, s: 0.2, r: 15, c: 1, f: 1, o: 4, ow: 1 },
+    { k: 'baseball-bat', s: 0.4, r: -45, c: 2, line: 1.2 },
+    { k: 'text', y: 88, s: 0.28, t: 'BEARS', font: 'alfa', c: 3 },
+  ]],
+];
+const logoCases = HAND.map(([note, colors, layers]) => logoCase(note, colors, wire(layers)));
+
+// 型から作ったロゴ（11の型。台座・書体・配色は型ごとに回す）。英字の球団と、英字にできない球団
+const logoLabels = structuredClone(leagues[9].labels);
+const logoNames = Object.keys(logoLabels);
+logoLabels[logoNames[3]] = { label: 'ほげ 球団', city: '', nickname: '' };
+const logoLooks0 = buildTeamLooks(logoLabels);
+const recipeOf = (ti, i, motif) => ({
+  tpl: LOGO_TEMPLATE_KEYS[ti],
+  base: LOGO_BASES[(ti * 3 + i * 5) % LOGO_BASES.length],
+  font: LOGO_LATIN_FONTS[(ti + i) % LOGO_LATIN_FONTS.length],
+  scheme: ti + i,
+  ini: i % 2,
+  word: (ti + i) % 2,
+  motif,
+});
+[[logoNames[0], 'tiger-head'], [logoNames[3], 'mountains']].forEach(([name, motif], t) => {
+  const team = logoTeamOf(name, logoLabels[name], logoLooks0[name]);
+  LOGO_TEMPLATE_KEYS.forEach((tpl, ti) => {
+    for (let i = 0; i < 2; i++) {
+      const logo = cleanLogo(logoFromRecipe(team, recipeOf(ti, i + t, motif)));
+      logoCases.push(logoCase(`型 ${tpl} ${name}`, team.colors, logo.layers));
+      if (!i) logoCases.push(logoCase(`型 ${tpl} ${name}（小さい版）`, team.colors, logo.mini));
+    }
+  });
+});
+
+// サーバーが載せる形から球団の見た目へ（`buildTeamLooks`）。作っていない球団は自動のロゴ、
+// 1球団は色も選んだロゴ、1球団は色を選んでいないロゴ、1球団は小さい版を持たないロゴ
+const logoLeagues = [
+  ['pyramid', structuredClone(leagues[4].labels)],
+  ['renamed', structuredClone(renamed)],
+  ['kana', structuredClone(kana)],
+].map(([seed, labels]) => {
+  const names = Object.keys(labels);
+  const looks0 = buildTeamLooks(labels);
+  const picked = ['#0b3d2e', '#f4c430', '#ffffff'];
+  const made = (name, recipe, colors, miniKind) => {
+    const logo = cleanLogo(logoFromRecipe(logoTeamOf(name, labels[name], looks0[name], colors), recipe, miniKind));
+    return colors ? { ...logo, colors } : logo;
+  };
+  const saved = {
+    [names[0]]: made(names[0], recipeOf(2, 1, 'wolf-head'), picked),
+    [names[1]]: made(names[1], recipeOf(7, 0, 'anchor'), null),
+    [names[2]]: made(names[2], recipeOf(4, 2, 'fox-head'), null, 'same'),
+  };
+  attachTeamLogos(labels, (name) => saved[name]);
+  const looks = buildTeamLooks(labels);
+  const teamsOut = {};
+  for (const name of names) {
+    const { logo, ...look } = looks[name];
+    const colors = [look.c1, look.c2, look.c3];
+    noteIcons(logo.layers);
+    noteIcons(logo.mini);
+    const full = logoLayersFor(logo, 68);
+    const small = logoLayersFor(logo, 22);
+    teamsOut[name] = {
+      look,
+      // 大きく出すとき（68）と、表の中（22）
+      full: logoArtOf(full, colors, logoIcons),
+      small: logoArtOf(small, colors, logoIcons),
+      smallIsMini: small !== full,
+      needs: [logoNeedsIcons(full), logoNeedsIcons(small)],
+    };
+  }
+  return { seed, labels, teams: teamsOut };
+});
+// 小さい版に替わる境目
+const pickLogo = { layers: [{ k: 'circle', c: 0 }], mini: [{ k: 'star', c: 1 }] };
+const logoPicks = [12, 22, 32, 32.5, 33, 68].flatMap((size) => [
+  { size, mini: true, usesMini: logoLayersFor(pickLogo, size) === pickLogo.mini },
+  { size, mini: false, usesMini: logoLayersFor({ layers: pickLogo.layers }, size) === pickLogo.mini },
+]);
+// 字の幅（表の数。測らない）
+const logoWidths = [' ', '!', 'A', 'W', 'i', 'm', '0', '~', 'あ', '札', '𠮷', '😀', 'é'].flatMap((ch) =>
+  ['graduate', 'alfa', 'yellowtail', 'jp', 'nope'].map((font) => ({ ch, font, w: charWidth(ch, font) })),
+);
+const logo = { icons: logoIcons, cases: logoCases, leagues: logoLeagues, picks: logoPicks, widths: logoWidths };
+
 const text = JSON.stringify({
   tables: { cityEn: CITY_EN, nickEn: NICK_EN, palettes: PALETTES, styles: STYLES, neutral: NEUTRAL_LOOK },
   hashes,
@@ -324,12 +477,13 @@ const text = JSON.stringify({
   stage3,
   stage4,
   grades: { players: gradePlayers, views: grades },
+  logo,
 });
 if (process.argv.includes('--check')) {
   const file = new URL('../shared/src/jvmTest/resources/look-expected.json', import.meta.url);
   if (fs.readFileSync(file, 'utf8').trim() !== text) {
     console.error(
-      'look-expected.json が古い。node mobile/tools/expect-look.mjs > mobile/shared/src/jvmTest/resources/look-expected.json で書き出し直し、アプリの Look.kt・LookArt.kt・LookScene.kt・LookPlay.kt・TodayGame.kt・LookStory.kt・LookGrade.kt も揃えること',
+      'look-expected.json が古い。node mobile/tools/expect-look.mjs > mobile/shared/src/jvmTest/resources/look-expected.json で書き出し直し、アプリの Look.kt・LookArt.kt・LookScene.kt・LookPlay.kt・TodayGame.kt・LookStory.kt・LookGrade.kt・LookLogo.kt も揃えること',
     );
     process.exit(1);
   }

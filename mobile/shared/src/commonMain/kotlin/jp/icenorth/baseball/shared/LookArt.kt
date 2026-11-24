@@ -9,6 +9,7 @@ import kotlin.math.floor
 // mobile/tools/expect-look.mjs が書き出す）。どちらかの絵を変えたら両方を直し、期待値を書き出し直す。
 //
 //   図形は path / circle / ellipse / rect / text の5種類だけ。`c` の図形は `clip` の丸で切る。
+//   球団ロゴの部品（`LookLogo.kt`）には変形 `tf` が付く。
 //   字はいつも中央ぞろえ（x が字の中心、y が字の並ぶ線）。
 // ⚠ 乱数を引く回数は年齢や調子で変えない（誕生日を境に別人の顔になる）。
 // ⚠ 数は Web と同じ形の字にする（`jsNum`）。path の字を Web と字面で比べる。
@@ -39,6 +40,12 @@ data class LookItem(
     val cap: String? = null,
     val join: String? = null,
     val c: Boolean = false,
+    /** 変形 [x, y, r, sx, sy, ox, oy]（球団ロゴの部品。`LookLogo.kt`） */
+    val tf: List<Double>? = null,
+    /** 何枚目の部品か（球団ロゴ） */
+    val li: Int? = null,
+    /** 1 なら、ふちを先に描いてから塗る（球団ロゴの部品のふち） */
+    val po: Int? = null,
 )
 
 @Serializable

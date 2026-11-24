@@ -1,11 +1,13 @@
 // 新しい見た目（試作）の絵を描く部品。描く手順は `art.js`、色と字は `teamLook.js`。
 // ⚠ マークと顔は**切のときは何も描かない**（null を返す）。呼ぶ側で入／切を分けない。
 //    調子の顔（`ConditionFace`）だけは絵文字と差しかえるので、入／切は呼ぶ側（`ConditionMark`）が見る。
-import React, { useId, useMemo } from 'react';
+import React, { useEffect, useId, useMemo, useSyncExternalStore } from 'react';
 import { useLook } from './LookContext.jsx';
 import { emblemArt, faceArt, conditionArt } from './art.js';
 import { stadiumArt, stadiumScene, fieldArt } from './sceneArt.js';
 import { teamLook, NEUTRAL_LOOK } from './teamLook.js';
+import { logoArt, logoLayersFor, logoNeedsIcons } from './logoArt.js';
+import { loadLogoIcons, logoIconsFailed, logoIconsNow, onLogoIcons } from './logoIcons.js';
 import { conditionValue } from '../statsView.js';
 import './look.css';
 import './feel.css';
@@ -17,7 +19,20 @@ const FONTS = {
   jp: '"Hiragino Kaku Gothic ProN", "Noto Sans JP", "Noto Sans CJK JP", "Yu Gothic", sans-serif',
 };
 
+/** 図形の変形（`logoArt.js` の `tf`: ずらす→倍にする→回す→動かす） */
+const transformOf = ([x, y, r, sx, sy, ox, oy]) =>
+  `translate(${x} ${y}) rotate(${r}) scale(${sx} ${sy})${ox || oy ? ` translate(${ox} ${oy})` : ''}`;
+
 function Shape({ s }) {
+  // 変形つきの図形（球団ロゴの部品）は、変形の入れ物に包む。`li` は何枚目の部品か
+  if (s.tf) {
+    const { tf, li, ...rest } = s;
+    return (
+      <g transform={transformOf(tf)} data-li={li}>
+        <Shape s={rest} />
+      </g>
+    );
+  }
   const paint = {
     fill: s.fill || 'none',
     stroke: s.stroke,
@@ -26,15 +41,19 @@ function Shape({ s }) {
     strokeLinecap: s.cap,
     strokeLinejoin: s.join,
   };
+  // ふちを先に描いてから塗る（ロゴの部品のふち）。字はいつもこの順（下の `<text>`）。
+  // ⚠ `paint` の中に `paintOrder: undefined` を入れない。`{...paint}` で広げると、字に書いた
+  //    `paintOrder="stroke"` を「無し」で上書きしてしまう（縁が塗りの上に乗って字が痩せる）
+  const po = s.po ? 'stroke' : undefined;
   switch (s.t) {
     case 'path':
-      return <path d={s.d} {...paint} />;
+      return <path d={s.d} {...paint} paintOrder={po} />;
     case 'circle':
-      return <circle cx={s.cx} cy={s.cy} r={s.r} {...paint} />;
+      return <circle cx={s.cx} cy={s.cy} r={s.r} {...paint} paintOrder={po} />;
     case 'ellipse':
-      return <ellipse cx={s.cx} cy={s.cy} rx={s.rx} ry={s.ry} {...paint} />;
+      return <ellipse cx={s.cx} cy={s.cy} rx={s.rx} ry={s.ry} {...paint} paintOrder={po} />;
     case 'rect':
-      return <rect x={s.x} y={s.y} width={s.w} height={s.h} {...paint} />;
+      return <rect x={s.x} y={s.y} width={s.w} height={s.h} {...paint} paintOrder={po} />;
     case 'text':
       return (
         <text
@@ -45,8 +64,8 @@ function Shape({ s }) {
           fontWeight={s.font === 'jp' ? 900 : undefined}
           fontSize={s.size}
           letterSpacing={s.ls || undefined}
-          paintOrder="stroke"
           {...paint}
+          paintOrder="stroke"
         >
           {s.text}
         </text>
@@ -60,7 +79,7 @@ function Shape({ s }) {
  * 描く手順の一覧（`art.js`）を SVG にする。ふつうは正方形（`size`）。
  * `fill` なら入れ物いっぱいに広げ、はみ出すぶんは切る（今日の一戦の札の背景・打席速報の球場の図）
  */
-function ArtSvg({ art, size, className = '', label, fill = false }) {
+export function ArtSvg({ art, size, className = '', label, fill = false }) {
   const id = `lk${useId().replace(/[^a-zA-Z0-9_-]/g, '')}`;
   const [x, y, w, h] = art.box;
   // `c` の付いた図形を続けて1つの切り抜きにまとめる
@@ -114,10 +133,32 @@ function ArtSvg({ art, size, className = '', label, fill = false }) {
 export function TeamMark({ team, size = 18, className = '' }) {
   const { on } = useLook();
   const look = on ? teamLook(team) : null;
-  const art = useMemo(() => (look ? emblemArt(look) : null), [look]);
+  // 球団ロゴ（ビューに載っていれば）。小さく出すときは小さい版の重ね
+  const layers = look?.logo ? logoLayersFor(look.logo, size) : null;
+  const icons = useLogoIcons(!!layers && logoNeedsIcons(layers));
+  const art = useMemo(() => {
+    if (!look) return null;
+    // ⚠ 絵の形がまだ届いていない間は、今までの帽子のマークを出す（部品の欠けたロゴを見せない）
+    if (!layers || (logoNeedsIcons(layers) && !icons)) return emblemArt(look);
+    return logoArt(layers, [look.c1, look.c2, look.c3], icons);
+  }, [look, layers, icons]);
   if (!art) return null;
   return <ArtSvg art={art} size={size} className={`online-team-mark ${className}`} />;
 }
+
+/**
+ * 球団ロゴの絵の形（別に読む約280KB）。`want` のときだけ読みにいき、届いたら描き直す
+ */
+export function useLogoIcons(want) {
+  const icons = useSyncExternalStore(onLogoIcons, logoIconsNow, () => null);
+  useEffect(() => {
+    if (want && !icons) loadLogoIcons();
+  }, [want, icons]);
+  return icons;
+}
+
+/** 球団ロゴの絵の形を読めなかったか（作る小窓が、読み直すボタンを出すのに使う） */
+export const useLogoIconsFailed = () => useSyncExternalStore(onLogoIcons, logoIconsFailed, () => false);
 
 /** 選手の所属（帽子の色）。`team` を渡さなければ、選手に付いた所属か自球団 */
 const teamOfPlayer = (player, team, ownTeam) =>

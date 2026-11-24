@@ -239,6 +239,44 @@ class AppUiTest {
         rule.onAllNodesWithTag("team-mark", useUnmergedTree = true).assertCountEquals(0)
     }
 
+    @Test fun teamLogosAreDrawnAsTeamMarks() {
+        // 球団ロゴ（新しい見た目（試作））: ビューの `teamLabels[].logo` が載っていれば、球団マークの場所にロゴを描く。
+        // 形のおかしいロゴの球団は今までのマークのまま（画面は止まらない）。切のときは何も描かない
+        val logo = """{"layers":[{"k":"shield","c":0,"o":2,"ow":3},{"k":"baseball-bat","y":46,"s":0.6,"c":3},""" +
+            """{"k":"text","y":80,"s":0.3,"c":3,"t":"STARS","font":"alfa","arc":-30}],""" +
+            """"mini":[{"k":"shield","c":0},{"k":"text","s":1.1,"c":3,"t":"S","font":"graduate"}],"colors":["#0b3d2e","#f4c430","#ffffff"]}"""
+        open(
+            """"roster":[],"standings":[{"team":"team","wins":2},{"team":"rival","wins":1}],""" +
+                """"teamLabels":{"team":{"label":"札幌レッドスターズ","short":"札幌","city":"札幌","nickname":"レッドスターズ","logo":$logo},""" +
+                """"rival":{"label":"那覇シーサーズ","short":"那覇","city":"那覇","nickname":"シーサーズ","logo":{"layers":"x"}}}""",
+        )
+        rule.onNodeWithTag("tab-Games").performClick()
+        rule.onNodeWithTag("chip-standings").performClick()
+        rule.onAllNodesWithTag("team-mark", useUnmergedTree = true).assertCountEquals(0)
+        rule.runOnIdle { model.changeLookOn(true) }
+        rule.onAllNodesWithTag("team-mark", useUnmergedTree = true).assertCountEquals(2)
+        // 色を選んだ球団は、その色が球団の色になる
+        val looks = jp.icenorth.baseball.shared.buildTeamLooks(model.view!!.teamLabels)
+        assertEquals("#0b3d2e", looks.getValue("team").c1)
+        assertEquals(3, looks.getValue("team").logo?.layers?.size)
+        assertNull(looks.getValue("rival").logo)
+        // 作者の表示は、入の間メニューに出ている
+        rule.onNodeWithTag("tab-Home").performClick()
+        rule.onAllNodesWithContentDescription("メニュー").onFirst().performClick()
+        rule.onAllNodesWithTag("logo-credit", useUnmergedTree = true).assertCountEquals(1)
+    }
+
+    @Test fun logoIconsArePackagedWithCredit() {
+        // 球団ロゴの絵の形は Web 版と同じファイルを assets に入れてある（`build.gradle.kts`）。作者の表示も一緒に入る
+        val app = RuntimeEnvironment.getApplication()
+        val icons = jp.icenorth.baseball.app.ui.readLogoIcons(app)
+        assertNotNull(icons)
+        assertTrue(icons!!.size >= 200)
+        assertTrue(icons.getValue("baseball-bat").startsWith("M"))
+        val license = app.assets.open("LICENSE-game-icons.txt").use { it.readBytes().decodeToString() }
+        assertTrue(license.contains("CC BY 3.0"))
+    }
+
     @Test fun newLookPutsGradeChipsOnStatTable() {
         // 新しい見た目（試作）: 成績の数字の頭に S〜F の札（リーグ平均比）。切のときは付けない
         val players = (1..3).map { i ->

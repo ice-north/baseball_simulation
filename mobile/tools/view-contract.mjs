@@ -49,6 +49,8 @@ export const VIEW_CONTRACT = {
     // 通知（ResultWorker）
     { path: 'teamName', live: true, why: '通知・ウィジェットの見出し' },
     { path: 'teamLabels', live: true, why: '通知・ウィジェットの球団の表示名' },
+    { path: 'teamLabels{}.logo.layers', live: true, why: '球団ロゴの部品の重ね（LookLogo.kt の teamLogoOf。無ければ今までの帽子のマーク）' },
+    { path: 'teamLabels{}.logo.colors', live: true, why: '球団ロゴと一緒に選んだ球団の色（帽子・帯もこの色）' },
     { path: 'recentGames[].id', live: true, why: '試合結果の通知の「新しい試合か」' },
     { path: 'recentGames[].homeScore', live: true, why: '試合結果の通知・ウィジェット' },
     { path: 'recentGames[].lineScore', live: true, why: 'ウィジェットのスコア' },

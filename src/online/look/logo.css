@@ -1,0 +1,353 @@
+/* 球団ロゴを作る小窓（`LogoEditor.jsx`）。
+   ⚠ どの指定も `.online-logo-dialog` の下に書く（ほかの画面に当てない）。
+   ⚠ `.online button`・`.online label`・`.online input`（高さ44px・上下14pxの余白・幅100%）が効くので、
+      `.online .online-logo-dialog …` で詳細度を上げて打ち消す。 */
+.online-desktop dialog.online-player-dialog.online-logo-dialog {
+  width: min(960px, calc(100% - 48px));
+}
+.online-mobile dialog.online-player-dialog.online-logo-dialog {
+  height: 100dvh;
+}
+/* 見出しと保存の帯は留めて、あいだ（`.online-logo-editor`）だけを送る。
+   ⚠ `[open]` を付ける（閉じた <dialog> に display を当てると、閉じても見えたままになる） */
+.online-logo-dialog[open] {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.online-logo-dialog > header,
+.online-logo-dialog > footer,
+.online-logo-dialog > p {
+  flex: none;
+}
+.online .online-logo-dialog label {
+  margin: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+}
+.online .online-logo-dialog button {
+  min-height: 32px;
+  padding: 4px 10px;
+}
+.online .online-logo-dialog input:not([type='checkbox']),
+.online .online-logo-dialog select {
+  width: auto;
+  min-height: 32px;
+  padding: 4px 8px;
+}
+.online .online-logo-dialog input[type='range'] {
+  flex: 1;
+  min-width: 0;
+  min-height: 28px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  accent-color: var(--accent-strong);
+}
+.online .online-logo-dialog input[type='color'] {
+  width: 34px;
+  min-height: 28px;
+  height: 28px;
+  padding: 1px;
+}
+.online-logo-dialog section > * + * {
+  margin-top: 12px;
+}
+.online-logo-dialog p {
+  margin: 0;
+}
+
+/* ---- 左: 見本と色。右: 作り方 ------------------------------------------- */
+.online-logo-editor {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  display: grid;
+  grid-template-columns: 280px minmax(0, 1fr);
+  gap: 20px;
+  align-items: start;
+  /* 押した印の枠（outline）が端で切れないように */
+  padding: 3px;
+}
+.online-logo-side {
+  display: grid;
+  gap: 12px;
+  position: sticky;
+  top: 0;
+}
+.online-logo-main {
+  min-width: 0;
+  display: grid;
+  gap: 12px;
+  align-content: start;
+}
+.online .online-logo-main > .online-segments {
+  margin-bottom: 0;
+}
+.online-logo-stage {
+  position: relative;
+  aspect-ratio: 1;
+  border-radius: 12px;
+  border: 1px solid #ffffff2e;
+  /* 濃い面と明るい面のどちらに出ても見えるかを、見本の地で確かめられるようにする */
+  background: linear-gradient(135deg, #1b2636 0 50%, #dfe5ec 50% 100%);
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.online-logo-stage svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+.online-logo-stage [data-li] {
+  cursor: grab;
+}
+.online-logo-frame {
+  position: absolute;
+  border: 1.5px dashed #fff;
+  outline: 1.5px dashed #0f172a;
+  outline-offset: -3px;
+  border-radius: 3px;
+  pointer-events: none;
+}
+.online-logo-small {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.online-logo-small label {
+  margin-left: auto;
+}
+.online-logo-palettes {
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  gap: 4px;
+}
+.online .online-logo-palettes button {
+  display: flex;
+  min-height: 0;
+  height: 22px;
+  padding: 0;
+  overflow: hidden;
+  border-radius: 5px;
+}
+.online-logo-palettes i {
+  flex: 1;
+}
+.online-logo-palettes i:first-child {
+  flex: 2;
+}
+.online .online-logo-palettes button[aria-pressed='true'] {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+.online-logo-own-colors {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+/* ---- 行・候補・矢印の欄 -------------------------------------------------- */
+.online-logo-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+}
+.online-logo-row > p {
+  flex: 1 1 200px;
+}
+.online-logo-cands {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+  gap: 8px;
+}
+.online .online-logo-cands button {
+  display: grid;
+  justify-items: center;
+  gap: 2px;
+  padding: 8px 4px 6px;
+  white-space: normal;
+}
+.online-logo-cands small {
+  font-size: 11px;
+  opacity: 0.8;
+}
+.online-logo-knobs {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px 16px;
+}
+.online-logo-knob {
+  display: grid;
+  grid-template-columns: 4em 32px minmax(0, 1fr) 32px;
+  align-items: center;
+  gap: 4px;
+  font-size: 13px;
+}
+.online .online-logo-knob button {
+  padding: 0;
+}
+.online-logo-knob output {
+  text-align: center;
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ---- 絵の一覧 ----------------------------------------------------------- */
+.online-logo-picker {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(40px, 1fr));
+  gap: 4px;
+  max-height: 232px;
+  overflow: auto;
+  padding: 4px;
+  border-radius: 8px;
+  background: #0000002e;
+}
+.online .online-logo-picker button {
+  min-height: 0;
+  aspect-ratio: 1;
+  padding: 5px;
+  line-height: 0;
+}
+.online-logo-picker svg {
+  width: 100%;
+  height: 100%;
+}
+.online .online-logo-picker button.is-mine {
+  border-color: var(--accent);
+}
+.online .online-logo-picker button[aria-pressed='true'],
+.online .online-logo-layers button[aria-pressed='true'] {
+  background: var(--accent-soft);
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+/* ---- 部品の一覧と、1枚の直し --------------------------------------------- */
+.online .online-logo-layers {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px;
+}
+.online .online-logo-layers button {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  text-align: left;
+  overflow: hidden;
+}
+.online-logo-layers small {
+  margin-left: auto;
+  font-size: 11px;
+  opacity: 0.75;
+}
+.online-logo-controls {
+  display: grid;
+  gap: 10px;
+  padding: 10px;
+  border-radius: 8px;
+  background: #0000002e;
+}
+.online-logo-sliders {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px 16px;
+}
+.online .online-logo-sliders label {
+  display: grid;
+  grid-template-columns: 5.5em minmax(0, 1fr) 3.2em;
+}
+.online-logo-sliders output {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.online-logo-chips {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+}
+.online-logo-chips > span {
+  width: 3em;
+}
+.online .online-logo-chips button {
+  width: 26px;
+  min-height: 0;
+  height: 26px;
+  padding: 0;
+  border-radius: 50%;
+  border: 2px solid #ffffff59;
+}
+.online .online-logo-chips button.is-none {
+  background: linear-gradient(135deg, transparent 46%, #f87171 46% 54%, transparent 54%);
+}
+.online .online-logo-chips button[aria-pressed='true'] {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* ---- 下の帯（保存） ------------------------------------------------------ */
+.online-logo-foot {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid #ffffff1f;
+}
+.online-logo-foot small {
+  flex: 1 1 260px;
+  font-size: 11px;
+}
+
+/* ---- スマホ: 見本を上に留めて、その下を送る ------------------------------ */
+.online-mobile .online-logo-editor {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 12px;
+}
+/* ⚠ 見本だけを上に留めたいので、左の列の入れ物を外して、中身を1列に並べ直す */
+.online-mobile .online-logo-side {
+  display: contents;
+}
+.online-mobile .online-logo-stage-wrap {
+  position: sticky;
+  top: -3px;
+  z-index: 2;
+  margin: -3px -3px 0;
+  padding: 0 0 8px;
+  background: var(--surface-2);
+  border-bottom: 1px solid #ffffff1f;
+}
+.online-mobile .online-logo-stage {
+  width: 168px;
+  margin: 0 auto;
+}
+.online-mobile .online-logo-main {
+  order: 1;
+}
+.online-mobile .online-logo-small,
+.online-mobile .online-logo-palettes,
+.online-mobile .online-logo-own-colors {
+  order: 2;
+}
+.online-mobile .online-logo-knobs,
+.online-mobile .online-logo-sliders,
+.online-mobile .online-logo-layers {
+  grid-template-columns: minmax(0, 1fr);
+}
+.online-mobile .online-logo-cands {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}

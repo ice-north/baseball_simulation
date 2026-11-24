@@ -62,6 +62,8 @@ import {
 import { rosterGroup } from '../utils/constants.js';
 import { InvitesAdmin } from './Invites.jsx';
 import { TeamMark } from './look/Art.jsx';
+import { useLook } from './look/LookContext.jsx';
+import { LogoEditor } from './look/LogoEditor.jsx';
 import { NavIcon } from './look/NavIcon.jsx';
 import { SeasonProgress } from './look/Parts.jsx';
 // ============================================================
@@ -183,7 +185,7 @@ const UnsavedDot = () => (
  * 左メニューの上の「いまの状況」。⚠ **ここ1か所だけに出す**
  * （以前は全ページの本文の上に同じ帯があった）。
  */
-function NavStatus({ view, busy, run, reload, showTimes, onRename }) {
+function NavStatus({ view, busy, run, reload, showTimes, onRename, onLogo }) {
   const waiting = packWaiting(view);
   return (
     <div className="online-nav-context">
@@ -206,6 +208,12 @@ function NavStatus({ view, busy, run, reload, showTimes, onRename }) {
       <button className="online-nav-link" onClick={onRename}>
         名前を変える
       </button>
+      {/* 球団ロゴを作る（新しい見た目（試作）を入にしているときだけ。切の人にはマークが出ない） */}
+      {onLogo && (
+        <button className="online-nav-link" onClick={onLogo}>
+          ロゴを作る
+        </button>
+      )}
       <div className="online-nav-clock">
         <p>
           {/* ⚠ オンラインは**ターンで進む**。ゲーム内の日付は出さない
@@ -442,6 +450,9 @@ export function RenameDialog({ view, busy, run, command, close }) {
 export default function DesktopView(props) {
   const { view, tab, setTab, busy, run, command, reload, showTimes } = props;
   const [renaming, setRenaming] = useState(false);
+  // 球団ロゴを作る小窓（`look/LogoEditor.jsx`）
+  const [logoEditing, setLogoEditing] = useState(false);
+  const lookOn = useLook().on;
   // 選手の詳細から始めたトレード（相手・欲しい選手）。トレードの画面へ渡す
   const [tradeSeed, setTradeSeed] = useState(null);
   const startTrade = useCallback(
@@ -567,6 +578,7 @@ export default function DesktopView(props) {
           reload={reload}
           showTimes={showTimes}
           onRename={() => setRenaming(true)}
+          onLogo={lookOn ? () => setLogoEditing(true) : null}
         />
         <button
           className="online-nav-home"
@@ -633,6 +645,7 @@ export default function DesktopView(props) {
         )}
       </nav>
       {renaming && <RenameDialog {...props} close={() => setRenaming(false)} />}
+      {logoEditing && <LogoEditor {...props} close={() => setLogoEditing(false)} />}
       {/* ⚠ **自分が決める手続きは、どのページにいても上に帯で出す**（いしだ指摘:
           初期メンバー選び・人員整理・キャンプが左メニューの「手続き」の中にあり、
           うっかり見逃して飛ばす危険があった）。決めるまで消さない */}
