@@ -1370,7 +1370,7 @@ CLAUDE.md の各所で潰してきたのと同じ型の誤り:
   正しいのは「実装に合わせて直す」か「もう無いと明記する」のどちらか
 
 ## 主要ファイル
-- `src/App.jsx` (~3490行) - メインアプリ、試合シミュレーション、画面遷移（下記セクション参照）
+- `src/App.jsx` (~520行) - メインアプリ、画面遷移。采配の試合は 2026-11-24 に `src/game/useManagedGame.jsx`（state と処理）と `src/components/ManagedGameScreen.jsx`（画面）へ移した（下記セクション参照）
 - `src/game/autoSimulation.js` (~1850行) - 自動シミュレーション・buildDefense
 - aiManager.js（2026-11-24 に削除）- 采配の試合の監督AI（自動投手交代・代打・守備固め・盗塁判定）。いまは自動の試合と同じ `src/game/cpuTactics.js` を `src/game/managedTactics.js` から呼ぶ
 - `src/game/lineupGenerator.js` (~690行) - AIオーダー編成・投手ローテーション生成・`ensureAllTeamsReady`
