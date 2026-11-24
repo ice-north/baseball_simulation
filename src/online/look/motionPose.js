@@ -9,13 +9,14 @@
 //   - `dir` は投げる・捕る・滑る向き（画面の右が +1）
 // ============================================================
 import { BASES, CONTACT, PITCH_RELEASE, FIELDER_HOME, sample } from './playMotion.js';
+import { UMPIRE_HOME as UMPIRE_SPOTS } from './motionField.js';
 import { project } from './motionCamera.js';
 
 /** 打席（右打者。本塁の三塁側） */
 export const BATTER_BOX = [-1.25, 0.2];
-/** 球審（捕手の後ろ。打者の反対側に半歩ずれて、捕手を隠さない） */
-const UMPIRE_HOME = [1.3, -3.1];
-const UMPIRES = [null, [BASES[1][0] + 3, BASES[1][1] + 5], [-5, BASES[2][1] + 7], [BASES[3][0] - 3, BASES[3][1] + 5]];
+/** 球審と塁審の定位置（動く先は `playMotion.js` の `umpires`） */
+const UMPIRE_HOME = UMPIRE_SPOTS[0];
+const UMPIRES = [null, UMPIRE_SPOTS[1], UMPIRE_SPOTS[2], UMPIRE_SPOTS[3]];
 const COACHES = [
   [BASES[1][0] + 5.5, BASES[1][1] - 3],
   [BASES[3][0] - 5.5, BASES[3][1] - 3],
@@ -83,6 +84,11 @@ function fielderPose(motion, n, t, ball) {
   }
   if (v.speed > 0.9) return { pos, pose: { kind: 'run', phase: t * 13 + n, face: screenDir(v.from, v.to) } };
   if (n === 1 && t < PITCH_RELEASE + 0.5) return { pos, pose: { kind: 'pitch', t, face: [0, 1] } };
+  // 本塁打を打たれた投手はうなだれる
+  if (n === 1 && motion.code === '本') {
+    const gone = motion.events.find((e) => e.kind === 'homer');
+    if (gone && t > gone.t + 0.3) return { pos, pose: { kind: 'slump', face: [0.3, 1] } };
+  }
   if (n === 2) {
     // 捕手: 投球まではしゃがむ。打球が出たら立つ
     const up = clamp01((t - (CONTACT + 0.15)) / 0.3);
@@ -94,6 +100,10 @@ function fielderPose(motion, n, t, ball) {
     const set = clamp01((t - (PITCH_RELEASE - 0.35)) / 0.35);
     return { pos, pose: { kind: n >= 7 ? 'ready-of' : 'ready', u: set, face: toHome, phase: t * 2 + n } };
   }
+  // 塁に入った・中継に出た・逸れに備えた野手は、球が生きている間は腰を落として待つ
+  const role = motion.roles?.[n];
+  if ((role === 'cover' || role === 'relay' || role === 'cut' || role === 'backup') && t < motion.settle + 0.2)
+    return { pos, pose: { kind: n >= 7 ? 'ready-of' : 'ready', u: 1, face: toBall, phase: t * 2 + n } };
   return { pos, pose: { kind: 'stand', face: toBall, phase: t * 2 + n } };
 }
 
@@ -127,7 +137,8 @@ function runnerPose(motion, r, t, ball) {
   }
   if (r.homeAt != null && t >= r.homeAt) return { pos, alpha, pose: { kind: 'cheer', phase: (t - r.homeAt) * 10, face: [0, 1] } };
   if (r.outAt != null && t >= r.outAt + 0.3 && v.speed < 2) return { pos, alpha, pose: { kind: 'slump', face: face || [0, 1] } };
-  if (v.speed > 0.9) return { pos, alpha, pose: { kind: motion.code === '本' ? 'trot' : 'run', phase: t * (motion.code === '本' ? 11 : 14) + r.start, face } };
+  const jog = motion.code === '本' || motion.code === '四' || motion.code === '死';
+  if (v.speed > 0.9) return { pos, alpha, pose: { kind: jog ? 'trot' : 'run', phase: t * (jog ? 11 : 14) + r.start, face } };
   // 塁の上: 投球までは離れて構え、あとは球を見る
   if (r.start > 0 && t < CONTACT + 0.2) return { pos, alpha, pose: { kind: 'lead', face: screenDir(pos, [0, 9]), phase: t * 3 + r.start } };
   return { pos, alpha, pose: { kind: 'stand', face: screenDir(pos, ball), phase: t * 2 + r.start } };
@@ -149,19 +160,34 @@ export function actorsAt(motion, t, info = {}) {
     const p = runnerPose(motion, r, t, ball);
     if (p.alpha > 0) out.push({ key: `r${i}`, pos: p.pos, kit: 'off', role: 'runner', pose: p.pose, alpha: p.alpha });
   });
-  // 球審: 投球まで構える。三振と本塁のアウトで拳を上げる
+  // 審判の居る所（`motion.umpires`。古い形の動きには無いので定位置）と、動いているときの走る姿勢
+  const umpire = (i) => {
+    const track = motion.umpires?.[i];
+    if (!track) return { pos: i ? UMPIRES[i] : UMPIRE_HOME, run: null };
+    const v = velocity(track, t);
+    return { pos: sample(track, t).slice(0, 2), run: v.speed > 0.9 ? { kind: 'trot', phase: t * 10 + i, face: screenDir(v.from, v.to) } : null };
+  };
+  // 球審: 投球まで構える。三振と本塁のアウトで拳を上げ、滑りこんでセーフなら両手を広げる
   const punch = motion.events.find((e) => (e.kind === 'punch' || (e.kind === 'out' && e.base === 4)) && t >= e.t && t <= e.t + 0.9);
+  const safeHome = motion.runners.find((r) => r.slide && r.homeAt != null && t >= r.slide[1] && t <= r.slide[1] + 0.9);
+  const u0 = umpire(0);
   out.push({
     key: 'u0',
-    pos: UMPIRE_HOME,
+    pos: u0.pos,
     kit: 'ump',
     role: 'umpire',
-    pose: punch ? { kind: 'call-out', u: clamp01((t - punch.t) / 0.25), face: [0.3, -1] } : t < CONTACT + 0.25 ? { kind: 'ready', u: 1, face: [0, -1] } : { kind: 'stand', face: screenDir(UMPIRE_HOME, ball) },
+    pose: punch
+      ? { kind: 'call-out', u: clamp01((t - punch.t) / 0.25), face: punch.kind === 'punch' ? [0.3, -1] : screenDir(u0.pos, BASES[0]) }
+      : safeHome
+        ? { kind: 'call-safe', u: clamp01((t - safeHome.slide[1]) / 0.2), face: screenDir(u0.pos, BASES[0]) }
+        : t < CONTACT + 0.25
+          ? { kind: 'ready', u: 1, face: [0, -1] }
+          : u0.run || { kind: 'stand', face: screenDir(u0.pos, ball) },
     alpha: 1,
   });
   // 塁審: 自分の塁のアウトで拳、滑りこんでセーフなら両手を広げる
   for (let b = 1; b <= 3; b++) {
-    const pos = UMPIRES[b];
+    const { pos, run } = umpire(b);
     const call = motion.events.find((e) => e.kind === 'out' && e.base === b && t >= e.t + 0.05 && t <= e.t + 1);
     const base = BASES[b];
     const safe = motion.runners.find((r) => r.slide && r.outAt == null && r.target === b && t >= r.slide[1] && t <= r.slide[1] + 0.9);
@@ -176,7 +202,7 @@ export function actorsAt(motion, t, info = {}) {
           ? { kind: 'call-safe', u: clamp01((t - safe.slide[1]) / 0.2), face: screenDir(pos, base) }
           : t < CONTACT
             ? { kind: 'ready-of', u: 1, face: screenDir(pos, [0, 0]) }
-            : { kind: 'stand', face: screenDir(pos, ball) },
+            : run || { kind: 'stand', face: screenDir(pos, ball) },
       alpha: 1,
     });
   }
