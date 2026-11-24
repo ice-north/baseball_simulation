@@ -12,7 +12,7 @@ import { PHYSICAL_STATS, getAgeGrowthBase, getStatPath, getStatName, getNestedVa
 import { PITCHING_FORM_EFFECTS, FORM_PITCH_SYNERGY, getPitchTypeName, FORM_SHORT, BATS_SHORT, ABILITY_CAP, ALL_PITCH_TYPES } from '../utils/constants.js';
 import { syncPositionToFitness, getVelocityCap, getVelocityCatchupMult } from '../utils/physics.js';
 // ⚠ **確率的丸め**。年次成長（`growthSystem`）と同じものを使う（二重に書かない）
-import { stochasticRound } from './growthSystem.js';
+import { stochasticRound, dampBreakingGain } from './growthSystem.js';
 // 打撃フォーム（オープン/スクエア/クローズ）。得意ゾーンへの効き目は `batterZone.js` が持つ
 import { BATTING_STANCES, battingStanceOf } from '../game/batterZone.js';
 
@@ -132,7 +132,7 @@ export const TALENT_STAT_MULTIPLIERS = {
  *      すべてを決めている**（実測: スタミナ90でも190でも・意識50でも90でも 4クールで +4.0）。
  *      天井を足しても一度も効かないので入れない。効かせたいならメニューの係数
  *      （`control` の `stamina: 0.5`）の側を上げること。
- * ⚠ **変化球（`arsenal[].level`）は別の表**（`BREAKING_DAMP`）。メイン練習の対象ではなく
+ * ⚠ **変化球（`arsenal[].level`）は別の表**（`growthSystem.dampBreakingGain`）。メイン練習の対象ではなく
  *    （`getStatPath('breaking')` が無い）、サブ練習の独自の分配で決まるのでここには載せられない。
  * ⚠ 守備は `TECHNICAL_STATS` なので、放っておくと技術系の天井（50から3%）を受ける。
  *    それだと**ノックで守備を積む**という一番素直な育て方が潰れる（実測の到達点 79.9）。
@@ -198,7 +198,15 @@ export const TRAINING_MENUS = {
     // ⚠ 0.45 → **0.2**（2026-11-23、いしだ「3件とも直す」）。0.45 でも10年でリーグの制球が
     //    49→65 と伸び続け、選球眼（横ばい）との差で四球が半分になった。指導者の「長所を伸ばす」の
     //    制球集中にも同じ係数を掛ける（`executeCampTraining` の `focusStatMult`）
-    growthMultipliers: { control: 0.2, stamina: 0.5 },
+    // ⚠ 0.2 → **0.25**（2026-11-24、いしだ「制球も、あと少し上方修正」）。0.2 では
+    //    4クール（1年ぶん）の伸びが標準の19歳（制球40）で **+0.71** しかなく、
+    //    投げ込みを選んだ手触りが無かった（0.25 で +0.85、意識90・器用80 なら +1.32→+1.56）。
+    //    **この係数は到達点をほとんど動かさない**（19歳制球40から毎年4クール＋年次成長の
+    //    実測の15年後: 0.2 で 57.6 / 0.25 で 58.0 / 0.3 で 58.1）。天井は年次成長のアマの天井
+    //    （`AMA_CTL`。能力46から8%・下限3%）が握っているので、ここは「低い帯の伸びの速さ」
+    //    だけを決める＝四球が半分になる長期のずれは戻らない。
+    //    一度試して却下された 0.3 までは戻さない（`4c23b12`「最終の値は 0.2」）。
+    growthMultipliers: { control: 0.25, stamina: 0.5 },
     category: 'pitching'
   },
   velocity: {
@@ -463,30 +471,7 @@ function applyTechStatDecay(currentValue, growth, curve = TECH_SUB_DAMP) {
 }
 /** サブ練習の技術系の天井（メイン練習の技術系と同じ値） */
 const TECH_SUB_DAMP = { from: 50, rate: 0.03, floor: 0.15 };
-/**
- * 変化球レベルの天井（キャンプの「変化球練習」「スピン解析」）。
- * ⚠ **2026-11-24 まで減衰がまったく無かった**。変化球は `getStatPath` に無いので
- *    メイン練習の成長パイプライン（`dampFactor`・`EFFORT_DAMP`・才能係数・プロ意識・
- *    成長停止年齢）を**まるごと通らず**、`executeSubTraining` の独自の分配だけで決まる。
- *    実測（4000回・3球種）: 1クールの合計が **Lv10 で +8.80 / Lv95 で +8.77** と完全に平ら。
- *    素質0.4〜1.8・プロ意識10〜90でも +8.8 で変わらず、40歳でも0.66倍で伸び続けた。
- *    結果、19歳Lv25の平凡な投手（素質1.0・意識50）が変化球練習を続けるだけで
- *    4クール/年なら6年目・6クール/年なら5年目に**全球種80以上**（半数以上の投手が到達）。
- * ⚠ 変化球は「磨くもの」なので、才能で決まるミート・制球の天井（50から3%・`TECH_SUB_DAMP`）
- *    ではなく、努力で上がる守備（`EFFORT_DAMP.defense`）の側に寄せる。
- *    65までは素通し＝「変化球練習で磨く」という一番素直な育て方は残る。
- * ⚠ **守備と同じ値（70から5%・下限15%）では足りない**。1クール1球種あたりの生の伸びが
- *    守備の約4倍（変化球 2.9 対 ノックの守備 0.6）あるので、同じカーブだと下限 15% でも
- *    1クール +0.44 が残り、長期で100に貼り付く
- *    （実測・6クール/年・15年: 減衰なし 100.0 → 70/5%/15% でも **97.4**）。
- * ⚠ **見るのは「下限に届くレベル」**（`from + 0.95/rate`。ここが壁になり、全球種がその
- *    手前に密集する）。6%/pt だと壁が 80.8 で、**全球種が80台前半に貼り付いた**
- *    （6クール/年・7年目で 全球種80+ が45%）。9%/pt で壁を **75.6** に下げると、
- *    6クール/年でも 5年目 平均70.8・7年目 平均72.0 で 全球種80+ は 0〜1%。
- *    15年磨き続けた投手だけが 一番いい球 87.2（器用80で88.8）に届く＝
- *    「決め球は作れるが、全球種がプロトップにはならない」。
- */
-const BREAKING_DAMP = { from: 65, rate: 0.09, floor: 0.05 };
+// 変化球レベルの天井は `growthSystem.dampBreakingGain`（キャンプ・大学で共有する物差し）
 
 /**
  * サブ練習を実行（メイン練習の半分程度の効果）
@@ -823,9 +808,8 @@ export function executeSubTraining(player, subType, options = {}, staffBonus = n
           if (focus) {
             const formAff = getFormPitchAffinity(playerForm, focus.type);
             // 集中練習は分散させないぶん +2（適性があればさらに +1）
-            // ⚠ 高レベルの減衰（`BREAKING_DAMP`）を掛けてから足す
-            const growth = applyTechStatDecay(
-              focus.level, effectivePool + 2 + (formAff ? 1 : 0), BREAKING_DAMP);
+            // ⚠ 高レベルの減衰（`dampBreakingGain`）を掛けてから足す
+            const growth = dampBreakingGain(focus.level, effectivePool + 2 + (formAff ? 1 : 0));
             const before = focus.level;
             focus.level = Math.min(100, before + growth);
             growthReport.push({
@@ -846,8 +830,7 @@ export function executeSubTraining(player, subType, options = {}, staffBonus = n
               const formBonus = formAff ? 1 : 0;
               // ⚠ 減衰は**球種ごと**に掛ける（プールの分配は先に済ませる）。
               //    磨き上げた球だけが伸びにくくなり、低い球はそのまま伸びる
-              const growth = applyTechStatDecay(
-                pitch.level, base + (extraSet.has(i) ? 1 : 0) + formBonus, BREAKING_DAMP);
+              const growth = dampBreakingGain(pitch.level, base + (extraSet.has(i) ? 1 : 0) + formBonus);
               const before = pitch.level;
               pitch.level = Math.min(100, before + growth);
               const affinityTag = formAff ? ' [適性]' : '';
@@ -924,10 +907,10 @@ export function executeSubTraining(player, subType, options = {}, staffBonus = n
       if (upgradeable.length > 0) {
         const tgt = upgradeable[Math.floor(Math.random() * upgradeable.length)];
         const oldLv = tgt.level || 0;
-        // ⚠ 変化球練習と**同じ天井**（`BREAKING_DAMP`）を掛ける。掛けないと
+        // ⚠ 変化球練習と**同じ天井**（`dampBreakingGain`）を掛ける。掛けないと
         //    「変化球練習が止まったらスピン解析で磨く」に流れるだけで抜けが残る
         //    （実測で Lv30 でも Lv95 でも +3.0 固定だった）
-        const lv = applyTechStatDecay(oldLv, Math.floor(Math.random() * 3) + 2, BREAKING_DAMP);
+        const lv = dampBreakingGain(oldLv, Math.floor(Math.random() * 3) + 2);
         tgt.level = Math.min(100, oldLv + lv);
         growthReport.push({ statName: `${getPitchTypeName(tgt.type)}LV`, before: oldLv, after: tgt.level, growth: tgt.level - oldLv });
       }
