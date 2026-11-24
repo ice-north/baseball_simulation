@@ -13,7 +13,7 @@ import { getUniversityGrowthMultiplier, UNIVERSITY_TEAMS, getUniversityTeamsByRa
 import { assignHighSchool } from '../data/highSchoolData.js';
 import { getVelocityCap, getVelocityCatchupMult } from '../utils/physics.js';
 import { dexterityMult } from './growthUtils.js';
-import { STAT_GROWTH, growthThreshold, growthDecayRate, stochasticRound, ceilOf } from './growthSystem.js';
+import { STAT_GROWTH, growthThreshold, growthDecayRate, stochasticRound, ceilOf, dampBreakingGain } from './growthSystem.js';
 import { generateHandedness } from '../utils/handedness.js';
 import { releasedPlayersPool, TEAMS_DATA } from '../teams-data.js';
 import { buildToolNorms, toolProfile } from '../game/scoutTools.js';
@@ -1255,7 +1255,11 @@ function applyUniversityGrowth(player, universityRank = null, universityTeamId =
       const techBonus = has('technique') ? 1.3 : 1.0;
       player.pitching.arsenal.forEach(pitch => {
         if (pitch.type !== 'straight') {
-          pitch.level = Math.min(100, pitch.level + Math.floor(Math.random() * 4 * gp * rankMult * techBonus));
+          // ⚠ 高レベルの天井はキャンプと**同じ物差し**（`dampBreakingGain`）。
+          //    在学は最長4年なのでここ単独では80に届かないが、揃えないと
+          //    「大学だけ素通しで磨ける」という抜けが残る（2026-11-24）
+          const raw = Math.floor(Math.random() * 4 * gp * rankMult * techBonus);
+          pitch.level = Math.min(100, pitch.level + dampBreakingGain(pitch.level, raw));
         }
       });
     }
