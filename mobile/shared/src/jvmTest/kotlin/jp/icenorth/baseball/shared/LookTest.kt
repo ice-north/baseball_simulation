@@ -322,4 +322,126 @@ class LookTest {
             }
         }
     }
+
+    /** ロゴの絵は、図形と絵の `d` を `lookHash` に直して比べる（期待値の側も同じ。`expect-look.mjs`） */
+    private fun sameLogoArt(want: JsonElement?, got: LookArt, where: String) {
+        val json = artJson.encodeToJsonElement(LookArt.serializer(), got).jsonObject
+        val items = json["items"].list().map { e ->
+            val o = e.jsonObject
+            o["d"]?.let { d -> JsonObject(o + ("d" to JsonPrimitive(lookHash(d.str()!!)))) } ?: o
+        }
+        same(want, JsonObject(json + ("items" to JsonArray(items))), where)
+    }
+
+    private fun flag(e: JsonElement?) = (e as JsonPrimitive).booleanOrNull!!
+
+    @Test
+    fun logoArtMatchesWeb() {
+        val logo = expected.at("logo")
+        val icons = logo.at("icons").obj()!!.mapValues { it.value.str()!! }
+        assertTrue(icons.size >= 10)
+        for (c in logo.at("widths").list()) {
+            val ch = c.at("ch").str()!!
+            val font = c.at("font").str()!!
+            assertEquals(c.at("w").num(), logoCharWidth(ch, font), "字の幅 $ch（$font）")
+        }
+        val cases = logo.at("cases").list()
+        assertTrue(cases.size >= 60)
+        for (c in cases) {
+            val note = c.at("note").str()!!
+            val wire = c.at("layers").list()
+            // ⚠ 重ねはビューに載ってくる形（JSON）から読む。1枚も落とさないこと
+            val layers = teamLogoOf(buildJsonObject { put("layers", JsonArray(wire)) })?.layers ?: fail("$note: ロゴが読めない")
+            assertEquals(wire.size, layers.size, "$note の部品の数")
+            val colors = c.at("colors").list().map { it.str()!! }
+            assertEquals(flag(c.at("needs")), logoNeedsIcons(layers), "$note が絵を使うか")
+            sameLogoArt(c.at("art"), logoArt(layers, colors, icons), note)
+            // 絵の形がまだ届いていないときは、絵の部品を飛ばして描く
+            c.at("bare")?.let { sameLogoArt(it, logoArt(layers, colors, null), "$note（絵の形なし）") }
+        }
+        for (c in logo.at("picks").list()) {
+            val size = c.at("size").num()!!
+            val full = listOf(LogoLayer("circle"))
+            val mini = if (flag(c.at("mini"))) listOf(LogoLayer("star", c = LogoColor(1))) else emptyList()
+            val got = logoLayersFor(TeamLogo(full, mini), size)
+            assertEquals(flag(c.at("usesMini")), got !== full, "大きさ $size（小さい版 ${mini.isNotEmpty()}）")
+        }
+    }
+
+    @Test
+    fun teamLogosMatchWeb() {
+        val logo = expected.at("logo")
+        val icons = logo.at("icons").obj()!!.mapValues { it.value.str()!! }
+        val leagues = logo.at("leagues").list()
+        assertEquals(3, leagues.size)
+        for (league in leagues) {
+            val seed = league.at("seed").str()
+            // サーバーが載せる形（`teamLabels[].logo`）をそのまま読む
+            val got = buildTeamLooks(labelsOf(league.at("labels")))
+            val want = league.at("teams").obj()!!
+            assertEquals(want.keys, got.keys, "$seed の球団")
+            for ((name, w) in want) {
+                val look = got.getValue(name)
+                // 色を選んだ球団は、帽子・帯の色もその色になる
+                assertEquals(lookOf(w.at("look")), look.copy(logo = null), "$seed: $name の見た目")
+                val made = look.logo ?: fail("$seed: $name にロゴが無い")
+                val colors = listOf(look.c1, look.c2, look.c3)
+                val full = logoLayersFor(made, 68.0)
+                val small = logoLayersFor(made, 22.0)
+                assertEquals(flag(w.at("smallIsMini")), small !== full, "$seed: $name の小さい版")
+                assertEquals(w.at("needs").list().map(::flag), listOf(logoNeedsIcons(full), logoNeedsIcons(small)), "$seed: $name が絵を使うか")
+                sameLogoArt(w.at("full"), logoArt(full, colors, icons), "$seed: $name のロゴ")
+                sameLogoArt(w.at("small"), logoArt(small, colors, icons), "$seed: $name の小さいロゴ")
+            }
+        }
+    }
+
+    /** 形のおかしいロゴが来ても落ちない・ビューを止めない（サーバーは `cleanLogo` で確かめているが、アプリは古いまま残る） */
+    @Test
+    fun brokenLogosAreSkipped() {
+        fun parse(s: String) = teamLogoOf(OnlineJson.parseToJsonElement(s))
+        assertEquals(null, teamLogoOf(null))
+        for (s in listOf("null", "\"x\"", "7", "[]", "{}", """{"layers":[]}""", """{"layers":"circle"}""", """{"layers":[5,"a",null,[],{"x":3},{"k":7}]}"""))
+            assertEquals(null, parse(s), s)
+        // 読める部品だけ残す。数でない数・色でない色は既定の値
+        val logo = parse(
+            """{"layers":[{"k":"circle","x":"12","s":null,"r":1e999,"c":9,"o":"#123456","ow":2,"f":true},7,
+               {"k":"text","t":"A","c":"#abcdef","o":"red","ow":3,"arc":"x","font":5,"f":0},{"k":"star","c":2.5,"f":1,"line":1.5}],
+               "mini":{"k":"circle"},"colors":["#000000","#ffffff"]}""",
+        ) ?: fail("読める部品のあるロゴが読めない")
+        assertEquals(
+            listOf(
+                LogoLayer("circle", o = LogoColor(hex = "#123456"), ow = 2.0, f = true),
+                LogoLayer("text", c = LogoColor(hex = "#abcdef"), ow = 3.0, t = "A"),
+                LogoLayer("star", f = true, line = 1.5),
+            ),
+            logo.layers,
+        )
+        assertEquals(emptyList(), logo.mini)
+        assertEquals(null, logo.colors)
+        // 多すぎる部品は切る（大きい版8枚・小さい版4枚）
+        val many = (1..20).joinToString(",") { """{"k":"circle","s":0.$it}""" }
+        val cut = parse("""{"layers":[$many],"mini":[$many]}""")!!
+        assertEquals(LOGO_MAX_LAYERS to LOGO_MINI_MAX_LAYERS, cut.layers.size to cut.mini.size)
+        // 知らない絵・まだ届いていない絵の部品は飛ばして描く（ほかの部品は描く）
+        val colors = listOf("#111111", "#222222", "#333333")
+        val art = logoArt(listOf(LogoLayer("no-such-icon"), LogoLayer("circle", c = LogoColor(7)), LogoLayer("text", t = "")), colors, emptyMap())
+        assertEquals(listOf(1, 2), art.items.map { it.li })
+        assertEquals("#111111", art.items[0].fill)
+        // ビュー: おかしなロゴの球団は今までのマークと色のまま、ほかの球団のロゴは読める
+        val labels = labelsOf(
+            OnlineJson.parseToJsonElement(
+                """{"甲":{"label":"甲","logo":"x"},"乙":{"label":"乙","logo":{"layers":[{"k":"circle"}],"colors":["#111111","#222222","#333333"]}},
+                   "丙":{"label":"丙","logo":{"layers":[{"k":"star"}],"colors":["#111111","red","#333333"]}},"丁":{"label":"丁"}}""",
+            ),
+        )
+        val plain = buildTeamLooks(labels.mapValues { it.value.copy(logo = null) })
+        val looks = buildTeamLooks(labels)
+        assertEquals(plain.getValue("甲"), looks.getValue("甲"))
+        assertEquals(plain.getValue("丁"), looks.getValue("丁"))
+        assertEquals(colors, looks.getValue("乙").let { listOf(it.c1, it.c2, it.c3) })
+        assertEquals(plain.getValue("乙").copy(c1 = "#111111", c2 = "#222222", c3 = "#333333", logo = looks.getValue("乙").logo), looks.getValue("乙"))
+        // 色が3つそろっていないロゴは、絵だけ使って色は今までのまま
+        assertEquals(plain.getValue("丙").copy(logo = TeamLogo(listOf(LogoLayer("star")))), looks.getValue("丙"))
+    }
 }

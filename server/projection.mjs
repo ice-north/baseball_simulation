@@ -40,6 +40,7 @@ import { seasonReview } from './seasonReview.mjs';
 import { strategyStats } from '../src/online/strategyStats.js';
 import { tiesArticles } from '../src/online/hometown.js';
 import { teamDisplayOf, teamHomeOf, teamLabelIn } from '../src/online/membership.js';
+import { attachTeamLogos } from '../src/online/look/teamLogo.js';
 import {
   currentPlayerStats,
   currentSeasonStats,
@@ -502,6 +503,10 @@ function leagueWideOf(l, shared) {
     // ⚠ 名前ひとそろいの作り方は `membership.js` の `teamDisplayOf`（2か所に書かない）
     (l.teams || []).map((t) => [t.name, teamDisplayOf(t)]),
   );
+  // 球団ロゴ（版22）。人が作ったもの、無ければ「おまかせ」の1番目を載せる。
+  // ⚠ 自動のロゴもここで作って送る。画面（Web・アプリ）は載ってきた重ねを描くだけにする
+  const savedLogos = new Map((l.teams || []).map((t) => [t.name, t.logo]));
+  attachTeamLogos(teamLabels, (name) => savedLogos.get(name));
   const labelOf = (name) => teamLabels[name]?.label || name;
   // ⚠ 成績の引き当ては**1回だけ**。12球団×24人＝288人を、ベスト5と
   //    チーム打率・チーム防御率で別々に引くと、同じ計算を2度する

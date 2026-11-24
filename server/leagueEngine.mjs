@@ -201,6 +201,7 @@ import {
   assertMemberCount,
   assignmentOrder,
   clearTeamSplitName,
+  clearTeamLogo,
 } from '../src/online/membership.js';
 import {
   nextFromPlan,
@@ -1133,6 +1134,8 @@ export function releaseMember(league, adminId, targetUserId, now) {
     // ⚠ 分けた名前（地域名・チーム名・地方）も消す。表示名だけ戻すと略称・地元が前の人の
     //    ままで、次に入った人に引き継がれていた（2026-11-20 監査）
     clearTeamSplitName(team);
+    // 作ったロゴも消す（次に入る人は自動のロゴから始める）
+    clearTeamLogo(team);
   }
   if (league.phase) {
     delete league.phase.submissions?.[targetUserId];

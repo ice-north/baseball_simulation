@@ -82,6 +82,8 @@ const CHECKS = [
   { name: 'online-history-analysis-check', group: 'quick', online: true, slow: 1 },
   // 新しい見た目（試作）: 土地・愛称の表、12球団で色と字が重ならない、年齢で顔が変わらない
   { name: 'online-look-check', group: 'quick', online: true, slow: 1 },
+  // 球団ロゴ（絵の表と絵の形の突き合わせ・型どおりのロゴが保存できる・保存の確かめ・ビュー）
+  { name: 'online-logo-check', group: 'quick', online: true, slow: 15 },
   // 動きで見る: 走者の行き先の割り当てと軌跡（本物の試合の全打席）
   { name: 'online-motion-check', group: 'quick', online: true, slow: 19 },
   { name: 'online-migration-check', group: 'check', online: true, slow: 21 },
@@ -171,6 +173,7 @@ const DIST_UI = [
   { name: 'online-mobile-gameplay-ui-check', slow: 33 }, // check:online:mobile-gameplay-ui
   { name: 'online-paper-ui-check', slow: 12 }, // check:online:paper-ui
   { name: 'online-look-ui-check', slow: 20 }, // check:online:look-ui
+  { name: 'online-logo-ui-check', slow: 20 }, // check:online:logo-ui
 ];
 
 // ここに無い *-check.mjs は、別の手順で回すもの。サーバーやブラウザが要る通し検査と、

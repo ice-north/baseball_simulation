@@ -336,6 +336,38 @@ out(')');
 out(`val CONDITION_ICONS: Map<Int, String> = mapOf(${Object.entries(condition.CONDITION_ICONS).map(([k, v]) => `${Number(k)} to ${q(v)}`).join(', ')})`);
 out(`val CONDITION_TEXT: List<String> = listOf(${statsView.CONDITION_TEXT.map(q).join(', ')})`);
 
+// 球団ロゴの図形・字の幅・決まった数（Web 版 look/logoParts.js・logoBuild.js・logoArt.js）。
+// 描く手順は LookLogo.kt に手で写してある（答え合わせは LookTest）。表だけここで書き出す
+{
+  const parts = await import(at('src/online/look/logoParts.js'));
+  const build = await import(at('src/online/look/logoBuild.js'));
+  const art = await import(at('src/online/look/logoArt.js'));
+  // Kotlin の Double の字（40 → 40.0）
+  const dbl = (v) => (Number.isInteger(v) ? `${v}.0` : String(v));
+  out('/** 球団ロゴの図形（100×100 の箱。2つ目は線だけで重ねる模様）。Web 版 `LOGO_SHAPES` */');
+  out('val LOGO_SHAPES: Map<String, Pair<String, String?>> = mapOf(');
+  for (const [key, shape] of Object.entries(parts.LOGO_SHAPES)) out(`    ${q(key)} to (${q(shape.d)} to ${shape.d2 ? q(shape.d2) : 'null'}),`);
+  out(')');
+  out('/** ロゴの字の送り幅（0x20〜0x7E。1000分のいくつ）。字から測らずこの数で決める（Web 版 `charWidth`） */');
+  out('val LOGO_CHAR_WIDTHS: Map<String, List<Int>> = mapOf(');
+  const codes = Array.from({ length: 0x7f - 0x20 }, (_, i) => String.fromCodePoint(0x20 + i));
+  for (const font of parts.LOGO_LATIN_FONTS) out(`    ${q(font)} to listOf(${codes.map((ch) => Math.round(parts.charWidth(ch, font) * 1000)).join(', ')}),`);
+  out(')');
+  // 表に無い書体（和文）の英数の幅。英数でない字はどの書体でも1字ぶん
+  const other = new Set(codes.map((ch) => Math.round(parts.charWidth(ch, 'jp') * 1000)));
+  if (other.size !== 1 || parts.charWidth('あ', 'graduate') !== 1) throw new Error('ロゴの字の幅の決め方が変わった。gen-tables.mjs と LookLogo.kt を直す');
+  out(`const val LOGO_OTHER_ASCII_WIDTH: Int = ${[...other][0]}`);
+  out(`const val LOGO_TEXT_UNIT: Double = ${dbl(build.LOGO_TEXT_UNIT)}`);
+  out(`const val LOGO_ARC_GAP: Double = ${dbl(build.LOGO_ARC_GAP)}`);
+  out(`val LOGO_BOX: List<Double> = listOf(${art.LOGO_BOX.map(dbl).join(', ')})`);
+  out(`const val LOGO_MINI_SIZE: Int = ${art.LOGO_MINI_SIZE}`);
+  out(`const val LOGO_MAX_LAYERS: Int = ${parts.LOGO_MAX_LAYERS}`);
+  out(`const val LOGO_MINI_MAX_LAYERS: Int = ${parts.LOGO_MINI_MAX_LAYERS}`);
+  out(`const val LOGO_WHITE: String = ${q(parts.LOGO_WHITE)}`);
+  out(`const val LOGO_INK: String = ${q(parts.LOGO_INK)}`);
+  if (parts.WHITE !== 3 || parts.INK !== 4) throw new Error('ロゴの色の番号が変わった。LookLogo.kt を直す');
+}
+
 const text = lines.join('\n') + '\n';
 const file = path.join(root, 'mobile/shared/src/commonMain/kotlin/jp/icenorth/baseball/shared/Tables.kt');
 if (process.argv.includes('--check')) {

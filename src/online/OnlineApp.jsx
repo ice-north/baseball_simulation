@@ -118,9 +118,13 @@ const COMMAND_MESSAGES = {
       : `第${payload?.round}クールの練習を実行しました`,
   lineup: '編成を保存しました',
   profile: (payload) =>
-    payload && 'comment' in payload && !('teamName' in payload)
-      ? 'ひとことを保存しました'
-      : '名前とひとことを保存しました',
+    payload && 'logo' in payload
+      ? payload.logo
+        ? 'ロゴを保存しました'
+        : 'ロゴを自動のものに戻しました'
+      : payload && 'comment' in payload && !('teamName' in payload)
+        ? 'ひとことを保存しました'
+        : '名前とひとことを保存しました',
   convert: '守備位置を変えました（打順と投手起用は組み直しました）',
   pack: '初期メンバーのセットを選びました',
   tradeOffer: 'トレードを提案しました',

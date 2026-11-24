@@ -34,6 +34,8 @@ import { AwaySummaryBanner, FirstWeekBanner, InboxCard, MobileExhibitionReplies 
 import { useFirstWeek } from './useFirstWeek.js';
 import TeamDiagnosis from './TeamDiagnosis.jsx';
 import { TeamMark } from './look/Art.jsx';
+import { useLook } from './look/LookContext.jsx';
+import { LogoEditor } from './look/LogoEditor.jsx';
 import { NavGlyph, NavIcon } from './look/NavIcon.jsx';
 export default function MobileView(props) {
   const { view, local, loading, reloadView, logout, showTimes, tab, setTab, away, dismissAway } =
@@ -42,6 +44,9 @@ export default function MobileView(props) {
   const [menuOpen, setMenuOpen] = useState(false);
   // 球団名・名前を変える小窓（PCの左メニューの「名前を変える」と同じ部品）
   const [renaming, setRenaming] = useState(false);
+  // 球団ロゴを作る小窓（新しい見た目（試作）を入にしているときだけ入口を出す）
+  const [logoEditing, setLogoEditing] = useState(false);
+  const lookOn = useLook().on;
   // ⚠ 全画面の編成に保存していない編集が残っていれば開いたまま始める。
   //    スマホを回すとPC用の画面と入れ替わって作り直され、以前は編集が消えていた。
   //    ⚠ 打順だけの編集なら開かない（「打順」の2タップの表が引き取る。`TapLineup.jsx`）
@@ -314,14 +319,16 @@ export default function MobileView(props) {
           showTimes={showTimes}
           logout={logout}
           rename={() => setRenaming(true)}
+          logo={lookOn ? () => setLogoEditing(true) : null}
         />
       )}
       {renaming && <RenameDialog {...props} close={() => setRenaming(false)} />}
+      {logoEditing && <LogoEditor {...props} close={() => setLogoEditing(false)} />}
     </>
   );
 }
 
-function MobileMenu({ close, loading, local, reloadView, showTimes, logout, rename }) {
+function MobileMenu({ close, loading, local, reloadView, showTimes, logout, rename, logo }) {
   const dialog = useRef(null);
   useEffect(() => {
     const node = dialog.current;
@@ -364,6 +371,7 @@ function MobileMenu({ close, loading, local, reloadView, showTimes, logout, rena
         {/* ⚠ **スマホにも名前を変える入口を置く**（再監査 B5）。以前はPCの左メニューにしか無く、
             初期メンバーの選択で名前の欄を開かずに決定すると、スマホだけの人は名前を変えられなかった */}
         <button onClick={() => act(rename)}>名前を変える</button>
+        {logo && <button onClick={() => act(logo)}>ロゴを作る</button>}
         {/* 新しい見た目（試作）の入／切（この端末だけ。`look/LookContext.jsx`） */}
         <LookToggle onDone={() => act()} />
         <a href="/">一人用</a>
