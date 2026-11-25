@@ -130,7 +130,9 @@ const ManagementScreen = ({
     const isForced = seasonData.currentDate?.month === 11 && seasonData.currentDate?.day >= 29;
     return <UniversityScoutScreen
       seasonData={seasonData}
-      onBack={!isForced ? () => setManagementView('dateprogress') : null}
+      // ⚠ 「戻る」は渡さない（左メニューで行き来できる。UI点検 X2）。11/29 の強制のときは
+      //    左メニューも塞がり（GameUIComponents の isNavBlocked）、`onComplete` で抜ける
+      onBack={null}
       onComplete={isForced ? (result) => {
         const recommended = result?.recommended || [];
         const selection = result?.selection || [];
@@ -181,8 +183,8 @@ const ManagementScreen = ({
     seasonData={seasonData}
     gameMode={gameMode}
   />;
+  // 左メニューから開く画面には「戻る」を渡さない（UI点検 X2。選手検索・チームランキング・資料室・スカウト）
   if (managementView === 'player_search') return <PlayerSearchScreen
-    onBack={() => setManagementView('dateprogress')}
     gameMode={gameMode}
     userTeamName={userTeamName}
   />;
@@ -197,6 +199,7 @@ const ManagementScreen = ({
     seasonData={seasonData}
     setSeasonData={setSeasonData}
     onSetupManagedGame={setupManagedGame}
+    onOpenRoster={() => setManagementView('roster')}
     onForceEvent={(eventType) => {
       if (gameMode === 'sandbox' && (eventType === 'contract' || eventType === 'tryout' || eventType === 'draft' || eventType === 'corporate_departure' || eventType === 'corporate_scout' || eventType === 'club_recruit' || eventType === 'budget_settlement' || eventType === 'university_scout')) {
         const update = soloSeasonEndFreeze(seasonData);
@@ -395,14 +398,12 @@ const ManagementScreen = ({
     userTeamName={userTeamName}
     gameMode={gameMode}
     seasonData={seasonData}
-    onBack={() => setManagementView('dateprogress')}
   />;
   if (managementView === 'halloffame') return <HallOfFameScreen
     hallOfFamePlayers={hallOfFamePlayers}
     allTeams={TEAMS_DATA}
     teamHistory={teamHistory}
     seasonData={seasonData}
-    onClose={() => setManagementView('dateprogress')}
   />;
   if (managementView === 'save') return <SaveLoadScreen
     onSave={saveGame}

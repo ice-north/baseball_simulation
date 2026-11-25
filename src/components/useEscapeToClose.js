@@ -26,4 +26,7 @@ export const useEscapeToClose = (onClose, active = true) => {
   }, [active]);
 };
 
+// いま Esc で閉じる窓が開いているか（キー操作の `useKeyAction` が、窓の裏の画面を動かさないために見る）
+export const hasOpenModal = () => stack.length > 0;
+
 export default useEscapeToClose;

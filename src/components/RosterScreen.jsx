@@ -15,7 +15,7 @@ const POS_LABEL = {
   pitcher: '投手', catcher: '捕手', first: '一塁', second: '二塁',
   third: '三塁', short: '遊撃', left: '左翼', center: '中堅', right: '右翼'
 };
-const ACTIVE_LIMIT = 25;
+export const ACTIVE_LIMIT = 25;
 
 // 選手のスコア（ロスター自動選択用）
 const playerScore = (p) => {
@@ -262,7 +262,7 @@ const RosterScreen = ({ seasonData, gameMode }) => {
           共有の `ScreenHeader`（`text-ink` 6.53 / `text-ink-sub` 4.51）を使う。
           ⚠ 登録数のバッジも `bg-*-950/30` の半透明で、明るい地の上では薄まる。不透明に */}
       <ScreenHeader
-        title="ロスター管理"
+        title="編成"
         sub={`大学野球 公式試合ベンチ登録枠：最大 ${ACTIVE_LIMIT} 名`}
         right={activeTab === 'roster' ? (
           <>

@@ -1,12 +1,20 @@
-import React from 'react';
-import { TEAMS_DATA } from '../../teams-data.js';
+import React, { useState } from 'react';
+import { TEAMS_DATA, getTeamAbbreviation } from '../../teams-data.js';
+import { CONDITION_LEVELS, CONDITION_LABELS } from '../../game/condition.js';
+import { compareDates } from '../../season/seasonManager.js';
+import { getNextGame } from '../../season/scheduleGenerator.js';
+import { useEscapeToClose } from '../useEscapeToClose.js';
 import { WORLD_DATA } from '../../corporate/worldData.js';
 import { FORM_NAME } from '../../utils/constants.js';
 import { checkNPBDraftEligibility } from '../../season/yearProgressionSystem.js';
 import { highSchoolPool, universityPool } from '../../state/schoolPools.js';
 
 // ============================================================
-// スポーツ新聞「ドラフト戦線」（`DateProgressScreen` から抽出）
+// スポーツ新聞（`DateProgressScreen` から抽出）。面は2つ:
+//   1面「自チーム」＝直近の試合・順位・次の相手・調子のよい選手（`buildTeamPageData`）
+//   「ドラフト戦線」＝全国の注目選手（`buildNewspaperData`）
+// ⚠ オンラインの新聞（src/online/paper/・SportsPaper.jsx）はアプリの写しなので、ここからは
+//    使わない・変えない。一人用の面は一人用のデータ（TEAMS_DATA・seasonData）だけで作る（UI点検 S6）
 //
 // 紙面の作法・色の根拠は CLAUDE.md「スポーツ新聞は明るいグレーの紙にする」を参照。
 // データ作りと紙面は1つの縦割りなので同じファイルに置く
@@ -229,12 +237,152 @@ export function buildNewspaperData(seasonData, userTeamName, fameDateRef) {
   };
 }
 
+
+// ── 1面「自チーム」の材料 ─────────────────────────────────────────────
+// 読むだけ（選手にも日程にも書き込まない）。呼び出し側が `useMemo` で包む。
+// `getStartingPitcher(teamName)`: 日程画面の予告先発と同じ引き方（無ければ予告を出さない）
+const scoreOf = (g) => {
+  const r = g.result || g;
+  return { home: r.homeScore, away: r.awayScore };
+};
+const battingLine = (b) => {
+  if (!b || !(b.atBats > 0)) return null;
+  const avg = (b.hits || 0) / b.atBats;
+  return `打率${avg.toFixed(3).replace(/^0/, '')} ${b.homeruns || 0}本 ${b.rbis || 0}打点`;
+};
+const pitchingLine = (pp) => {
+  if (!pp || !(pp.inningsPitched > 0)) return null;
+  // `inningsPitched` はアウトの数で持っている（日程画面のチーム状況と同じ計算）
+  const era = ((pp.earnedRuns || 0) * 27) / pp.inningsPitched;
+  return `${pp.wins || 0}勝${pp.losses || 0}敗${pp.saves ? `${pp.saves}S` : ''} 防御率${era.toFixed(2)}`;
+};
+
+export function buildTeamPageData(seasonData, userTeamName, getStartingPitcher) {
+  const team = TEAMS_DATA[userTeamName];
+  const cur = seasonData.currentDate;
+  const schedule = seasonData.schedule || [];
+  const mine = (g) => g.home === userTeamName || g.away === userTeamName;
+
+  // 直近の試合（日程に結果が入ったもの。中止は除く）
+  const played = schedule
+    .filter(g => mine(g) && g.result && !g.result.cancelled && g.result.homeScore != null)
+    .sort((a, b) => compareDates(a.date, b.date));
+  const toGame = (g) => {
+    const sc = scoreOf(g);
+    const isHome = g.home === userTeamName;
+    const us = isHome ? sc.home : sc.away;
+    const them = isHome ? sc.away : sc.home;
+    const d = g.result?.decisions || {};
+    return {
+      date: g.date, opponent: isHome ? g.away : g.home, isHome, us, them,
+      verdict: us > them ? 'win' : us < them ? 'loss' : 'draw',
+      winningPitcher: d.winningPitcher?.name || null,
+      losingPitcher: d.losingPitcher?.name || null,
+      savePitcher: d.savePitcher?.name || null,
+    };
+  };
+  const recent = played.slice(-5).map(toGame).reverse();
+  const last = recent[0] || null;
+  let streak = 0;
+  if (last && last.verdict !== 'draw') {
+    for (const g of recent) { if (g.verdict === last.verdict) streak++; else break; }
+  }
+
+  // 順位（2リーグ制は自分のリーグの中で数える）
+  let standing = null;
+  const settings = seasonData.settings || {};
+  let table = seasonData.standings || [];
+  if (settings.leagueFormat === 'two' && (settings.teamNames || []).length > 0) {
+    const half = Math.floor((settings.teamsCount || settings.teamNames.length) / 2);
+    const l1 = settings.teamNames.slice(0, half);
+    const group = l1.includes(userTeamName) ? l1 : settings.teamNames.slice(half);
+    table = table.filter(s => group.includes(s.team));
+  }
+  const idx = table.findIndex(s => s.team === userTeamName);
+  if (idx >= 0) {
+    const us = table[idx];
+    const gbTo = (o) => (((o.wins || 0) - (us.wins || 0)) - ((o.losses || 0) - (us.losses || 0))) / 2;
+    standing = {
+      rank: idx + 1, total: table.length,
+      wins: us.wins || 0, losses: us.losses || 0, draws: us.draws || 0,
+      // 首位なら2位との差（＋）、それ以外は首位との差
+      gap: idx === 0 ? (table[1] ? -gbTo(table[1]) : null) : gbTo(table[0]),
+      leader: idx === 0 ? null : table[0].team,
+    };
+  }
+
+  // 次の相手
+  let next = null;
+  const ng = cur ? getNextGame(schedule, cur, userTeamName) : null;
+  if (ng) {
+    const opp = ng.home === userTeamName ? ng.away : ng.home;
+    const oppIdx = table.findIndex(s => s.team === opp);
+    const oppRow = oppIdx >= 0 ? table[oppIdx] : (seasonData.standings || []).find(s => s.team === opp);
+    const vs = played.filter(g => g.home === opp || g.away === opp).map(toGame);
+    const oppStarter = getStartingPitcher ? getStartingPitcher(opp) : null;
+    const ourStarter = getStartingPitcher ? getStartingPitcher(userTeamName) : null;
+    next = {
+      date: ng.date, opponent: opp, isHome: ng.home === userTeamName,
+      oppRank: oppIdx >= 0 ? oppIdx + 1 : null,
+      oppRecord: oppRow ? `${oppRow.wins || 0}勝${oppRow.losses || 0}敗${oppRow.draws ? `${oppRow.draws}分` : ''}` : null,
+      vsWins: vs.filter(g => g.verdict === 'win').length,
+      vsLosses: vs.filter(g => g.verdict === 'loss').length,
+      ourStarter: ourStarter ? { name: ourStarter.name, line: pitchingLine(ourStarter.seasonStats?.pitching) } : null,
+      oppStarter: oppStarter ? { name: oppStarter.name, line: pitchingLine(oppStarter.seasonStats?.pitching) } : null,
+    };
+  }
+
+  // 調子のよい選手（コンディションが好調以上。同じ調子なら今季の出場の多い順）
+  const POS_SHORT = { pitcher: '投', catcher: '捕', first: '一', second: '二', third: '三', short: '遊', left: '左', center: '中', right: '右' };
+  const players = (team?.players || []).filter(p => p.isActive !== false);
+  const playLoad = (p) => p.position === 'pitcher'
+    ? (p.seasonStats?.pitching?.inningsPitched || 0)
+    : (p.seasonStats?.batting?.atBats || 0);
+  const lineOf = (p) => p.position === 'pitcher'
+    ? pitchingLine(p.seasonStats?.pitching)
+    : battingLine(p.seasonStats?.batting);
+  const hot = players
+    .filter(p => (p.condition ?? CONDITION_LEVELS.NORMAL) >= CONDITION_LEVELS.GOOD)
+    .sort((a, b) => (b.condition - a.condition) || (playLoad(b) - playLoad(a)))
+    .slice(0, 6)
+    .map(p => ({
+      name: p.name, position: POS_SHORT[p.position] || p.position,
+      condition: CONDITION_LABELS[p.condition], best: p.condition >= CONDITION_LEVELS.BEST,
+      line: lineOf(p),
+    }));
+
+  // チームの今季の頭（打率は打席の多い打者の中で。少ない打数の10割を1位にしない）
+  const batters = players.filter(p => p.position !== 'pitcher' && (p.seasonStats?.batting?.atBats || 0) > 0);
+  const maxAB = Math.max(0, ...batters.map(p => p.seasonStats.batting.atBats));
+  const regulars = batters.filter(p => p.seasonStats.batting.atBats >= maxAB * 0.5);
+  const top = (list, val) => list.length ? list.reduce((a, b) => (val(b) > val(a) ? b : a)) : null;
+  const avgOf = (p) => (p.seasonStats.batting.hits || 0) / p.seasonStats.batting.atBats;
+  const leaders = [];
+  const avgTop = top(regulars, avgOf);
+  if (avgTop) leaders.push({ label: '打率', name: avgTop.name, value: avgOf(avgTop).toFixed(3).replace(/^0/, '') });
+  const hrTop = top(batters, p => p.seasonStats.batting.homeruns || 0);
+  if (hrTop && (hrTop.seasonStats.batting.homeruns || 0) > 0) leaders.push({ label: '本塁打', name: hrTop.name, value: `${hrTop.seasonStats.batting.homeruns}本` });
+  const rbiTop = top(batters, p => p.seasonStats.batting.rbis || 0);
+  if (rbiTop && (rbiTop.seasonStats.batting.rbis || 0) > 0) leaders.push({ label: '打点', name: rbiTop.name, value: `${rbiTop.seasonStats.batting.rbis}` });
+  const pitchers = players.filter(p => p.position === 'pitcher' && (p.seasonStats?.pitching?.inningsPitched || 0) > 0);
+  const winTop = top(pitchers, p => p.seasonStats.pitching.wins || 0);
+  if (winTop && (winTop.seasonStats.pitching.wins || 0) > 0) leaders.push({ label: '勝利', name: winTop.name, value: `${winTop.seasonStats.pitching.wins}勝` });
+  const svTop = top(pitchers, p => p.seasonStats.pitching.saves || 0);
+  if (svTop && (svTop.seasonStats.pitching.saves || 0) > 0) leaders.push({ label: 'セーブ', name: svTop.name, value: `${svTop.seasonStats.pitching.saves}` });
+
+  return { teamName: userTeamName, last, recent, streak, standing, next, hot, leaders };
+}
+
 /**
  * 紙面本体。`data` は `buildNewspaperData` の戻り値。
  */
-export default function NewspaperModal({ data, seasonData, onClose }) {
+export default function NewspaperModal({ data, teamData, seasonData, onClose }) {
     const d = data;
     const curDate = seasonData.currentDate;
+    // 面: 'team'＝1面（自チーム）／'draft'＝ドラフト戦線。自チームの材料が無ければドラフト戦線だけ
+    const [page, setPage] = useState(teamData ? 'team' : 'draft');
+    // ほかの窓（選手詳細・試合前）と同じく Esc で閉じる（UI点検 S5）
+    useEscapeToClose(onClose);
 
     const gpBadge = (gp) => gp >= 1.5 ? '成長◎◎' : gp >= 1.3 ? '成長◎' : gp >= 1.1 ? '成長○' : null;
 
@@ -377,6 +525,122 @@ export default function NewspaperModal({ data, seasonData, onClose }) {
       </div>
     );
 
+
+    // ── 1面「自チーム」 ──
+    const dateLabel = (dt) => (dt ? `${dt.month}/${dt.day}` : '');
+    const VERDICT = { win: { mark: '○', word: '勝利', color: '#7f1d1d' }, loss: { mark: '●', word: '敗戦', color: '#0c4a6e' }, draw: { mark: '△', word: '引き分け', color: INK } };
+    const Box = ({ title, children }) => (
+      <div className="flex flex-col" style={{ background: CARD, border: `2px solid ${INK}` }}>
+        <div className="text-sm font-black px-2 py-1 text-white" style={{ ...serif, background: INK }}>{title}</div>
+        <div className="p-2.5 flex flex-col gap-1.5">{children}</div>
+      </div>
+    );
+    const Empty = ({ children }) => <div className="text-xs font-medium" style={{ color: FAINT }}>{children}</div>;
+    const TeamPage = ({ t }) => {
+      const last = t.last;
+      const headline = !last ? 'まだ今季の試合はありません'
+        : last.verdict === 'draw'
+        ? `${getTeamAbbreviation(last.opponent)}と${last.us}-${last.them}で引き分け`
+        : `${getTeamAbbreviation(last.opponent)}に${last.us}-${last.them}で${last.verdict === 'win' ? '勝利' : '敗れる'}`;
+      const streakText = t.streak >= 2 ? `${t.streak}${t.last.verdict === 'win' ? '連勝' : '連敗'}` : null;
+      const st = t.standing;
+      const gapText = !st ? null
+        : st.rank === 1 ? (st.gap != null ? `首位。2位と${st.gap}ゲーム差` : '首位')
+        : `首位${getTeamAbbreviation(st.leader)}と${st.gap}ゲーム差`;
+      const n = t.next;
+      return (
+        <div className="overflow-y-auto flex-1 min-h-0 p-4" style={{ background: PAPER }}>
+          {/* 主見出し（直近の試合）。白抜きの帯はドラフト戦線の主見出しと同じ作法 */}
+          <div className="mb-3" style={{ border: `2px solid ${INK}`, background: CARD }}>
+            <div className="flex items-center gap-2 px-3 py-2 text-white" style={{ background: last ? VERDICT[last.verdict].color : INK }}>
+              {last && <span className="text-xs font-black px-1.5 py-0.5 shrink-0" style={{ background: 'rgba(255,255,255,0.22)' }}>{dateLabel(last.date)}</span>}
+              <span className="text-2xl font-black leading-tight" style={serif}>{headline}</span>
+              {streakText && <span className="ml-auto text-sm font-black px-2 py-0.5 shrink-0" style={{ background: 'rgba(255,255,255,0.22)' }}>{streakText}</span>}
+            </div>
+            {last && (last.winningPitcher || last.losingPitcher) && (
+              <div className="px-3 py-1.5 text-sm font-bold flex gap-4 flex-wrap" style={{ color: INK }}>
+                {last.winningPitcher && <span>勝 {last.winningPitcher}</span>}
+                {last.losingPitcher && <span>敗 {last.losingPitcher}</span>}
+                {last.savePitcher && <span>S {last.savePitcher}</span>}
+              </div>
+            )}
+          </div>
+
+          <div className="grid grid-cols-3 gap-3">
+            <Box title="順位">
+              {st ? (
+                <>
+                  <div className="flex items-baseline gap-2">
+                    <span className="text-4xl font-black tnum leading-none" style={{ ...serif, color: INK }}>{st.rank}</span>
+                    <span className="text-sm font-bold" style={{ color: MUTED }}>位 ／ {st.total}球団</span>
+                  </div>
+                  <div className="text-sm font-bold tnum" style={{ color: INK }}>{st.wins}勝{st.losses}敗{st.draws ? `${st.draws}分` : ''}</div>
+                  {gapText && <div className="text-xs font-bold" style={{ color: MUTED }}>{gapText}</div>}
+                </>
+              ) : <Empty>順位表がありません</Empty>}
+              <div className="mt-1 pt-1.5" style={{ borderTop: `1px solid ${RULE}` }}>
+                <div className="text-xs font-black mb-1" style={{ color: MUTED }}>直近の試合</div>
+                {t.recent.length === 0 ? <Empty>まだ試合がありません</Empty> : t.recent.map((g, i) => (
+                  <div key={i} className="flex items-center gap-1.5 text-xs py-0.5 tnum" style={{ color: INK }}>
+                    <span className="w-9 shrink-0" style={{ color: FAINT }}>{dateLabel(g.date)}</span>
+                    <span className="font-black w-3" style={{ color: VERDICT[g.verdict].color }}>{VERDICT[g.verdict].mark}</span>
+                    <span className="truncate flex-1">{g.isHome ? '' : '@'}{getTeamAbbreviation(g.opponent)}</span>
+                    <span className="font-bold">{g.us}-{g.them}</span>
+                  </div>
+                ))}
+              </div>
+            </Box>
+
+            <Box title="次の相手">
+              {n ? (
+                <>
+                  <div className="text-xs font-bold" style={{ color: MUTED }}>{dateLabel(n.date)} {n.isHome ? 'ホーム' : 'ビジター'}</div>
+                  <div className="text-2xl font-black leading-tight" style={{ ...serif, color: INK }}>{n.opponent}</div>
+                  <div className="text-xs font-bold tnum" style={{ color: MUTED }}>
+                    {n.oppRank ? `${n.oppRank}位` : ''}{n.oppRecord ? ` ${n.oppRecord}` : ''}
+                    {(n.vsWins + n.vsLosses) > 0 && ` ／ 今季の対戦 ${n.vsWins}勝${n.vsLosses}敗`}
+                  </div>
+                  <div className="mt-1 pt-1.5 text-xs flex flex-col gap-1" style={{ borderTop: `1px solid ${RULE}`, color: INK }}>
+                    <div className="font-black" style={{ color: MUTED }}>予告先発</div>
+                    <div><b>自</b> {n.ourStarter ? `${n.ourStarter.name}` : '未定'}{n.ourStarter?.line && <span style={{ color: FAINT }}> {n.ourStarter.line}</span>}</div>
+                    <div><b>相</b> {n.oppStarter ? `${n.oppStarter.name}` : '未定'}{n.oppStarter?.line && <span style={{ color: FAINT }}> {n.oppStarter.line}</span>}</div>
+                  </div>
+                </>
+              ) : <Empty>予定されている試合はありません</Empty>}
+            </Box>
+
+            <Box title="調子のよい選手">
+              {t.hot.length === 0 ? <Empty>好調の選手はいません</Empty> : t.hot.map((h, i) => (
+                <div key={i} className="py-1" style={{ borderBottom: `1px solid ${RULE}` }}>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-xs font-black shrink-0 text-center text-white leading-none py-0.5" style={{ background: INK, width: '1.15rem' }}>{h.position}</span>
+                    <span className="text-sm font-bold truncate" style={{ ...serif, color: INK }}>{h.name}</span>
+                    <span className="ml-auto text-xs font-black shrink-0" style={{ color: h.best ? '#7f1d1d' : '#7c2d12' }}>{h.condition}</span>
+                  </div>
+                  {h.line && <div className="text-xs tnum" style={{ color: MUTED, paddingLeft: '1.4rem' }}>{h.line}</div>}
+                </div>
+              ))}
+              {t.leaders.length > 0 && (
+                <div className="mt-1 pt-1.5" style={{ borderTop: `1px solid ${RULE}` }}>
+                  <div className="text-xs font-black mb-1" style={{ color: MUTED }}>チームの今季の頭</div>
+                  {t.leaders.map((l, i) => (
+                    <div key={i} className="flex items-center gap-1.5 text-xs py-0.5" style={{ color: INK }}>
+                      <span className="w-12 shrink-0" style={{ color: FAINT }}>{l.label}</span>
+                      <span className="truncate flex-1 font-bold">{l.name}</span>
+                      <span className="font-bold tnum">{l.value}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </Box>
+          </div>
+          <div className="mt-4 pt-2 text-xs font-medium text-center" style={{ borderTop: `1px solid ${RULE}`, color: MUTED }}>
+            ※全国の注目選手は「ドラフト戦線」の面にあります。
+          </div>
+        </div>
+      );
+    };
+
     const hasContent = d.hsTop || d.uniTop || d.corpTop || d.indTop;
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center p-3" onClick={() => onClose()}>
@@ -385,24 +649,39 @@ export default function NewspaperModal({ data, seasonData, onClose }) {
         <div className="relative w-full max-w-7xl shadow-2xl flex flex-col overflow-hidden" onClick={e => e.stopPropagation()} style={{ background: PAPER, maxHeight: '95vh', border: `3px solid ${INK}` }}>
           {/* 題字（マストヘッド） */}
           <div className="pt-2 pb-0 px-4 shrink-0" style={{ background: PAPER, borderBottom: `4px double ${INK}` }}>
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between gap-3">
               <span className="text-xs font-bold tnum" style={{ color: MUTED }}>{curDate.year}年{curDate.month}月{curDate.day}日</span>
-              <span className="text-xs tracking-[0.35em] uppercase font-bold" style={{ color: FAINT }}>Draft Watch</span>
-              <button onClick={() => onClose()} className="text-xl leading-none px-1 font-bold hover:opacity-60" style={{ color: INK }}>✕</button>
+              {/* 面の切り替え（紙面の柱見出しの形。選んでいる面は反転） */}
+              {teamData && (
+                <div className="flex items-center gap-1" role="tablist" aria-label="紙面">
+                  {[['team', '1面 自チーム'], ['draft', 'ドラフト戦線']].map(([id, label]) => (
+                    <button key={id} type="button" role="tab" aria-selected={page === id} onClick={() => setPage(id)}
+                      className="text-xs font-black px-2.5 py-1"
+                      style={page === id
+                        ? { ...serif, background: INK, color: '#ffffff', border: `1px solid ${INK}` }
+                        : { ...serif, background: CARD, color: INK, border: `1px solid ${INK}` }}>
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              )}
+              <button onClick={() => onClose()} aria-label="閉じる" title="閉じる（Esc）" className="text-xl leading-none px-1 font-bold hover:opacity-60" style={{ color: INK }}>✕</button>
             </div>
             {/* 題字＋脇の色帯（新聞の題字は左に色の柱を持つ） */}
             <div className="flex items-center justify-center gap-3 mt-0.5">
               <span className="w-1.5 h-9 shrink-0" style={{ background: MAST }} />
-              <h2 className="text-4xl font-black tracking-[0.15em]" style={{ ...serif, color: INK }}>ドラフト戦線</h2>
+              <h2 className="text-4xl font-black tracking-[0.15em]" style={{ ...serif, color: INK }}>
+                {page === 'team' ? teamData.teamName : 'ドラフト戦線'}
+              </h2>
               <span className="w-1.5 h-9 shrink-0" style={{ background: MAST }} />
             </div>
             {/* リード文は反転の帯（紙面の柱） */}
             <div className="mt-1.5 -mx-4 px-4 py-1 text-xs font-bold text-white text-center tracking-wide" style={{ background: INK }}>
-              全国 高校・大学・社会人・独立リーグ　注目選手 速報
+              {page === 'team' ? '直近の試合・順位・次の相手・調子のよい選手' : '全国 高校・大学・社会人・独立リーグ　注目選手 速報'}
             </div>
           </div>
 
-          {hasContent ? (
+          {page === 'team' ? <TeamPage t={teamData} /> : hasContent ? (
             <div className="overflow-y-auto flex-1 min-h-0 p-4" style={{ background: PAPER }}>
               {/* 速報ティッカー */}
               {d.tournamentNews.length > 0 && (

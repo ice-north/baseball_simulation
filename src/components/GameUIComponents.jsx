@@ -3,6 +3,7 @@ import { FORM_SHORT, getPitchTypeName, POSITION_NAMES, sortBenchByPosition, form
 import { formatInnings, getAbilityTextColor } from '../utils/physics.js';
 import { CONDITION_LEVELS, CONDITION_COLORS, CONDITION_ICONS } from '../game/condition.js';
 import { calculateDefensiveFitness } from '../simulation-logic.js';
+import { canModifyRegulations } from '../season/regulationSettings.js';
 
 // ============================================================
 // 画面の外枠と見出し（全画面で共通）
@@ -440,7 +441,8 @@ const isNavBlocked = (managementView, seasonData) => {
 //    押すと黙って1日進んでいた（`onActiveClick`）。見た目はほかの項目と同じなので押した人は
 //    画面を開き直したつもりで、間の試合も取り消せない。日を進めるのはカレンダーの見出しの
 //    「1日進める」だけにする
-const SidebarButton = ({ view, icon, label, screenMode, managementView, seasonData, setScreenMode, setManagementView }) => {
+// `dim`: 押せるが、いまは見るだけの項目（レギュレーションのシーズン中）。薄く出し、理由は `title` と開いた画面の帯で見せる
+const SidebarButton = ({ view, icon, label, screenMode, managementView, seasonData, setScreenMode, setManagementView, dim = false, title }) => {
   const isActive = screenMode === 'management' && managementView === view;
   const isBlocked = screenMode === 'management' && isNavBlocked(managementView, seasonData) && !isActive;
   return (
@@ -454,8 +456,11 @@ const SidebarButton = ({ view, icon, label, screenMode, managementView, seasonDa
           ? 'text-gray-400 border-l-[3px] border-transparent cursor-not-allowed'
           : isActive
           ? 'seg-on border-l-[3px] border-l-[var(--accent)] shadow-sm'
+          : dim
+          ? 'text-gray-400 opacity-60 hover:opacity-100 hover:bg-gray-700/60 border-l-[3px] border-transparent'
           : 'text-gray-300 hover:bg-gray-700/60 hover:text-white border-l-[3px] border-transparent'
       }`}
+      title={title}
     >
       <span className="text-base w-5 text-center shrink-0">{icon}</span>
       <span>{label}</span>
@@ -479,6 +484,8 @@ export const Sidebar = ({
   const [open, setOpen] = React.useState(false);
   // 項目を選んだら畳む（狭い画面で開いたまま本文を覆わないように）
   const setManagementView = (v) => { setOpen(false); setView(v); };
+  const nav = { screenMode, managementView, seasonData, setScreenMode, setManagementView };
+  const regulationsEditable = canModifyRegulations(seasonData?.phase || 'off_season');
   return (
   <>
   <button type="button" onClick={() => setOpen(true)} aria-label="メニューを開く"
@@ -500,27 +507,35 @@ export const Sidebar = ({
       </div>
     </div>
 
+    {/* ⚠ まとまりは「進行」＝日程進行だけ、「チーム」＝自分の球団を動かす画面、「データ」＝見るだけの成績・記録。
+        以前は「進行」の下にロスター管理・成績・ランキングが入っていた（UI点検 S13）。
+        呼び名はアプリにそろえる（編成・チーム。X3）。検査（tools/sim-harness/lib/singleplayer.mjs）もこの名前で探す */}
     <nav className="flex-1 min-h-0 overflow-y-auto px-2 py-3 space-y-0.5">
       <div className="text-xs uppercase tracking-widest text-gray-400 font-bold px-3 pt-1 pb-2">進行</div>
-      <SidebarButton view="dateprogress" icon="📅" label="日程進行" screenMode={screenMode} managementView={managementView} seasonData={seasonData} setScreenMode={setScreenMode} setManagementView={setManagementView} />
-      <SidebarButton view="roster" icon="📋" label="ロスター管理" screenMode={screenMode} managementView={managementView} seasonData={seasonData} setScreenMode={setScreenMode} setManagementView={setManagementView} />
-      <SidebarButton view="stats" icon="📊" label="選手成績" screenMode={screenMode} managementView={managementView} seasonData={seasonData} setScreenMode={setScreenMode} setManagementView={setManagementView} />
-      <SidebarButton view="ranking" icon="📰" label="能力ランキング" screenMode={screenMode} managementView={managementView} seasonData={seasonData} setScreenMode={setScreenMode} setManagementView={setManagementView} />
-      <SidebarButton view="team_ranking" icon="🏅" label="チームランキング" screenMode={screenMode} managementView={managementView} seasonData={seasonData} setScreenMode={setScreenMode} setManagementView={setManagementView} />
+      <SidebarButton view="dateprogress" icon="📅" label="日程進行" {...nav} />
 
       <div className="border-t border-gray-700/40 my-2"></div>
       <div className="text-xs uppercase tracking-widest text-gray-400 font-bold px-3 pt-1 pb-2">チーム</div>
-      <SidebarButton view="teaminfo" icon="👥" label="チーム情報" screenMode={screenMode} managementView={managementView} seasonData={seasonData} setScreenMode={setScreenMode} setManagementView={setManagementView} />
-      {gameMode === 'corporate' && !seasonData?.settings?.clubMode && <SidebarButton view="corporate_management" icon="🏢" label="チーム運営" screenMode={screenMode} managementView={managementView} seasonData={seasonData} setScreenMode={setScreenMode} setManagementView={setManagementView} />}
-      {gameMode === 'university' && <SidebarButton view="university_scout" icon="🔍" label="スカウト" screenMode={screenMode} managementView={managementView} seasonData={seasonData} setScreenMode={setScreenMode} setManagementView={setManagementView} />}
-      {gameMode !== 'corporate' && gameMode !== 'university' && <SidebarButton view="trade" icon="🔄" label="トレード" screenMode={screenMode} managementView={managementView} seasonData={seasonData} setScreenMode={setScreenMode} setManagementView={setManagementView} />}
-      <SidebarButton view="halloffame" icon="🏆" label="資料室" screenMode={screenMode} managementView={managementView} seasonData={seasonData} setScreenMode={setScreenMode} setManagementView={setManagementView} />
-      <SidebarButton view="player_search" icon="🔎" label="選手検索" screenMode={screenMode} managementView={managementView} seasonData={seasonData} setScreenMode={setScreenMode} setManagementView={setManagementView} />
+      <SidebarButton view="roster" icon="📋" label="編成" {...nav} />
+      <SidebarButton view="teaminfo" icon="👥" label="チーム" {...nav} />
+      {gameMode === 'corporate' && !seasonData?.settings?.clubMode && <SidebarButton view="corporate_management" icon="🏢" label="チーム運営" {...nav} />}
+      {gameMode === 'university' && <SidebarButton view="university_scout" icon="🔍" label="スカウト" {...nav} />}
+      {gameMode !== 'corporate' && gameMode !== 'university' && <SidebarButton view="trade" icon="🔄" label="トレード" {...nav} />}
+
+      <div className="border-t border-gray-700/40 my-2"></div>
+      <div className="text-xs uppercase tracking-widest text-gray-400 font-bold px-3 pt-1 pb-2">データ</div>
+      <SidebarButton view="stats" icon="📊" label="選手成績" {...nav} />
+      <SidebarButton view="ranking" icon="📰" label="能力ランキング" {...nav} />
+      <SidebarButton view="team_ranking" icon="🏅" label="チームランキング" {...nav} />
+      <SidebarButton view="halloffame" icon="🏆" label="資料室" {...nav} />
+      <SidebarButton view="player_search" icon="🔎" label="選手検索" {...nav} />
 
       <div className="border-t border-gray-700/40 my-2"></div>
       <div className="text-xs uppercase tracking-widest text-gray-400 font-bold px-3 pt-1 pb-2">システム</div>
-      <SidebarButton view="save" icon="💾" label="セーブ＆ロード" screenMode={screenMode} managementView={managementView} seasonData={seasonData} setScreenMode={setScreenMode} setManagementView={setManagementView} />
-      <SidebarButton view="regulations" icon="⚙️" label="レギュレーション" screenMode={screenMode} managementView={managementView} seasonData={seasonData} setScreenMode={setScreenMode} setManagementView={setManagementView} />
+      <SidebarButton view="save" icon="💾" label="セーブ＆ロード" {...nav} />
+      {/* シーズン中は変えられない（見るだけ）。押せば開いた画面の帯に理由が出る */}
+      <SidebarButton view="regulations" icon="⚙️" label="レギュレーション" {...nav}
+        dim={!regulationsEditable} title={regulationsEditable ? undefined : 'オフシーズンだけ変えられます（いまは見るだけ）'} />
     </nav>
     <button type="button" onClick={() => setOpen(false)} className="md:hidden m-2 btn-secondary px-3 py-2 rounded-lg text-sm">✕ 閉じる</button>
   </div>
@@ -859,7 +874,10 @@ export const TeamMemberPanel = ({
               // 試合中：現在フィールドにいる選手
               return p.isStarter && !p.hasSubbedOut && p.battingOrder > 0;
             })
-            .sort((a, b) => a.battingOrder - b.battingOrder)
+            // 交代済みの選手（打順0）は打順の下にまとめる。以前は 0 が先頭に来て、
+            // 試合終了後に交代済みの選手が打順の上に積まれ、打順が下へ押し出されていた（UI点検 S3）
+            .sort((a, b) => ((a.hasSubbedOut || !(a.battingOrder > 0)) - (b.hasSubbedOut || !(b.battingOrder > 0)))
+              || (a.battingOrder - b.battingOrder))
             .map(player => {
             const isCurrentBatter = gameStarted && isBatting && player.battingOrder === team.currentBatterOrder;
             const isPitcher = player.position === 'pitcher';

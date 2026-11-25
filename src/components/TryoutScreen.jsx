@@ -1052,7 +1052,7 @@ const TryoutScreen = ({ seasonData, setSeasonData, allTeams, isInitialTryout = f
             <div className="flex items-center gap-3">
               <div>
                 <div className="text-red-300 font-bold mb-1">ロスター人数が24人を超えています</div>
-                <div className="text-red-400 text-sm">ロスター管理画面で{userRoster.length - 24}人を解雇してください</div>
+                <div className="text-red-400 text-sm">編成の画面で{userRoster.length - 24}人を解雇してください</div>
               </div>
             </div>
           </div>

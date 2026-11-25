@@ -183,7 +183,7 @@ const PlayerSearchScreen = ({ onBack, gameMode, userTeamName }) => {
   return (
     <ScreenShell className="text-white">
         <ScreenHeader title="選手検索"
-          right={<button onClick={onBack} className="btn-secondary px-3 py-1.5 rounded text-sm">戻る</button>} />
+          right={onBack && <button onClick={onBack} className="btn-secondary px-3 py-1.5 rounded text-sm">戻る</button>} />
 
         {/* Source toggles */}
         <div className="flex flex-wrap gap-2 mb-3">
