@@ -237,7 +237,9 @@ fun TeamDefensePane(model: AppViewModel, data: TeamData) {
                                     Text(grade.label, fontWeight = FontWeight.Bold, color = Color(grade.color))
                                     Text(" ${jsRound(range * 100)}", style = MaterialTheme.typography.labelSmall)
                                 }
-                                Text("${fitnessAt(p, pos)}", modifier = Modifier.width(36.dp), textAlign = TextAlign.End)
+                                // ⚠ 本職（適性100）は空欄。本職でない人だけ数字を出す（以前は全員100で、列が同じ数字だけだった。UI総点検 A7）
+                                val fitness = fitnessAt(p, pos)
+                                Text(if (fitness >= 100 || !isFieldPosition(pos)) "" else "$fitness", modifier = Modifier.width(36.dp), textAlign = TextAlign.End, color = if (fitness < 60) MaterialTheme.colorScheme.error else Color.Unspecified)
                                 val chances = p.at("seasonStats", "batting", "fieldingChances").num()?.toInt() ?: 0
                                 val errors = p.at("seasonStats", "batting", "errors").num()?.toInt() ?: 0
                                 Text("$errors", modifier = Modifier.width(30.dp), textAlign = TextAlign.End)
@@ -253,7 +255,7 @@ fun TeamDefensePane(model: AppViewModel, data: TeamData) {
                         }
                     }
                 }
-                Muted("守備範囲は守備・走力・肩を位置ごとの重みで足し、適性で割り引いたものです（スタメン設定の守備図と同じ）。ランクは S〜F、適性は本職が100です。")
+                Muted("守備範囲は守備・走力・肩を位置ごとの重みで足し、適性で割り引いたものです（スタメン設定の守備図と同じ）。ランクは S〜F。適性は本職でない位置を守る人だけ出します（本職は100）。")
             }
         }
     }

@@ -1264,7 +1264,9 @@ private fun SearchStep(model: AppViewModel, view: LeagueView, draft: TradeDraft,
         val slot = tradeSlot(slotKey) ?: return@Column
         val filters = TRADE_FILTERS.filter { it.pitcher == null || it.pitcher == slot.pitcher }
         ChipTabs(listOf("all" to "すべて") + filters.map { it.key to it.label }, draft.filter ?: "all", { set(draft.copy(filter = it.takeIf { k -> k != "all" })) })
-        val mineScore = remember(view.roster, usage) { ownSlotScores(view.roster, usage)[slotKey] }
+        // ⚠ 覚えるのは持ち場ごとの表で、引くのは毎回（以前は鍵に持ち場が無く、持ち場を替えても「いまの◯◯」が前の持ち場の選手のままだった）
+        val ownScores = remember(view.roster, usage) { ownSlotScores(view.roster, usage) }
+        val mineScore = ownScores[slotKey]
         val filter = filters.firstOrNull { it.key == draft.filter }
         val candidates = remember(slotKey, filter, league.teams, view.roster, usage) { tradeCandidates(slotKey, view.roster, usage, others, filter) }
         Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
