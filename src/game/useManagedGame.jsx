@@ -28,6 +28,7 @@ import { executeResetGame, executeStartSimMode } from './gameControls.js';
 import { executeSetupManagedGame, executeHandleManagedGameEnd } from './gameSetup.js';
 import { createManagedTacticsMemory, runManagedTactics, noteAtBatEnd, noteHalfInningEnd, staminaOf, setStamina } from './managedTactics.js';
 import { useEscapeToClose } from '../components/useEscapeToClose.js';
+import { setAutoManagerPref } from './managedGamePrefs.js';
 
 export function useManagedGame(app) {
   const {
@@ -49,17 +50,11 @@ export function useManagedGame(app) {
   const [inning, setInning] = useState(1);
   const [score, setScore] = useState({ home: 0, away: 0 });
   const [gameOver, setGameOver] = useState(false);  // 試合終了フラグ
-  // 試合終了の欄。終わったら画面に入るまで送る。
-  // ⚠ 欄は試合画面の下に足されるので、1280×720 では「結果確定・翌日へ」が画面の下に隠れていた
+  // 試合終了の欄。
+  // ⚠ 以前は終わったら欄まで送っていた（「結果確定・翌日へ」が欄のいちばん下にあり、1280×720 では
+  //    画面の下に隠れていたため）。確定ボタンは進行の列（1球の場所）へ移した（UI点検 S3）ので送らない。
+  //    送ると、押す場所（進行の列）が画面の上へ出ていく
   const gameEndPanelRef = useRef(null);
-  useEffect(() => {
-    if (!gameOver) return undefined;
-    // 自動フィットの倍率が変わったあと（次の描画のあと）に送る
-    const id = requestAnimationFrame(() => requestAnimationFrame(() => {
-      gameEndPanelRef.current?.scrollIntoView({ block: 'nearest' });
-    }));
-    return () => cancelAnimationFrame(id);
-  }, [gameOver]);
   const [gameStarted, setGameStarted] = useState(false);  // 試合開始フラグ
   const [selectedBatterAway, setSelectedBatterAway] = useState(null);  // 打順変更用（アウェイ）
   const [selectedBatterHome, setSelectedBatterHome] = useState(null);  // 打順変更用（ホーム）
@@ -1840,11 +1835,41 @@ if (newOuts === 3) {
     setManagedGameInfo, managedGameInfoRef, setScreenMode
   };
   // [SECTION: GAME_SETUP] → gameSetup.js に抽出済み（ラッパーのみ）
+  // 試合を始める（以前は試合前のスタメン画面の「試合開始」だけが呼んでいた）
+  const startManagedGame = () => {
+    setGameStarted(true);
+    setSelectedBatterAway(null);
+    setSelectedBatterHome(null);
+    setSelectedPositionAway(null);
+    setSelectedPositionHome(null);
+    // 各選手のgameStatsを初期化
+    const freshStats = (prev) => ({
+      ...prev,
+      players: prev.players.map(p => ({
+        ...p,
+        gameStats: { atBats: 0, hits: 0, homeruns: 0, rbis: 0, strikeouts: 0, atBatResults: [],
+          fieldingChances: 0, fieldErrors: 0, assists: 0 }
+      }))
+    });
+    setAwayTeam(freshStats);
+    setHomeTeam(freshStats);
+  };
+  // `gameInfo.autoManager`: 試合前の窓で選んだ「おまかせ采配」の入／切。
+  // `gameInfo.startNow`: 試合前の窓でスタメンを決めてきたので、2つ目のスタメン画面を出さずに始める
+  //   （UI点検 S9。以前はここで「野球シミュレーター」の見出しの画面がもう一度スタメンを並べ、
+  //   試合前の窓へ戻る手段も無かった）
   const setupManagedGame = (gameInfo) => {
     // CPU の采配の帳簿・自責点・配球の記憶は1試合ごとに作り直す
     resetPerGameRefs();
-    executeSetupManagedGame(gameSetupCtx, gameInfo);
+    const { autoManager, startNow, ...info } = gameInfo || {};
+    if (typeof autoManager === 'boolean') setAutoManagerMode(autoManager);
+    executeSetupManagedGame(gameSetupCtx, info);
+    // ⚠ 準備（両チームの state を作り直す）のあとに積むこと。`startManagedGame` の更新は関数の形なので、
+    //    同じ描画の中で準備の値の上に重なる
+    if (startNow) startManagedGame();
   };
+  // 試合中に切り替えた入／切も、次の試合前の窓の初期値にする
+  useEffect(() => { setAutoManagerPref(autoManagerMode); }, [autoManagerMode]);
 
   // 試合中の両チームの投手とリードを記録する（試合開始で帳簿を作り直す）。
   // ⚠ 以前の采配モードは「先発が5回以上なら先発の勝ち」「最少アウトの投手＝最後の投手」
@@ -1940,6 +1965,7 @@ if (newOuts === 3) {
     setSimMode,
     setSubModalSelected,
     setupManagedGame,
+    startManagedGame,
     showBenchAway,
     showBenchHome,
     showSubModal,

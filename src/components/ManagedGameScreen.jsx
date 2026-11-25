@@ -19,6 +19,7 @@ import PitchZonePlot, { HEAT_HOT, HEAT_COLD } from '../components/PitchZonePlot.
 import TutorialHint from '../components/TutorialHint.jsx';
 import { formatDate } from '../season/seasonManager.js';
 import { TeamMemberPanel } from '../components/GameUIComponents.jsx';
+import { useKeyAction, KEY_HINT_CLASS } from '../components/useKeyAction.js';
 
 const getPositionColor = (pos) => POSITION_COLORS[pos] || 'bg-gray-700';
 const getPositionColorHighlighted = (pos, isCurrentBatter) => {
@@ -103,6 +104,7 @@ export default function ManagedGameScreen(props) {
     showBenchAway,
     showBenchHome,
     showSubModal,
+    startManagedGame,
     startSimMode,
     subModalSelected,
     teamErrors,
@@ -113,6 +115,41 @@ export default function ManagedGameScreen(props) {
     triggerSteal,
     userTeamName,
   } = props;
+  // キー操作（UI点検 S4）: Space / Enter＝「1球」、守っている間の数字キー＝配球の狙い
+  // （1 おまかせ・2 勝負・3 際どく・4 誘い。画面の並びと同じ）。選手交代の窓が開いている間は効かない
+  const AIM_KEYS = ['auto', 'zone', 'edge', 'chase'];
+  const userDefending = gameStarted && (isTopInning ? homeTeam.name : awayTeam.name) === userTeamName;
+  useKeyAction((e) => {
+    if (e.key === ' ' || e.key === 'Enter') {
+      if (isAutoSimulating) return false;
+      throwPitch();
+      return true;
+    }
+    const n = Number(e.key);
+    if (userDefending && Number.isInteger(n) && n >= 1 && n <= AIM_KEYS.length) {
+      setPitchAim(AIM_KEYS[n - 1]);
+      return true;
+    }
+    return false;
+  }, gameStarted && !gameOver && !showSubModal);
+  // 試合が終わったあとの次の一手。進行の列（1球などの場所）に出す
+  const endGameButton = managedGameInfo ? (
+    <button onClick={handleManagedGameEnd} className="btn-warn px-6 py-1.5 rounded font-bold">
+      結果確定・翌日へ
+    </button>
+  ) : (
+    <button
+      onClick={() => {
+        resetGame();
+        setGameStarted(false);
+        setSelectedBatterAway(null);
+        setSelectedBatterHome(null);
+      }}
+      className="btn-primary px-6 py-1.5 rounded"
+    >
+      新しい試合
+    </button>
+  );
   return (
       /* data-fit-height: 縦も1画面に収める対象。自動フィットが高さを見る印
          （縦に読み進める管理画面には付けないこと）
@@ -219,30 +256,7 @@ export default function ManagedGameScreen(props) {
           </div>
 
           <button
-            onClick={() => {
-              setGameStarted(true);
-              setSelectedBatterAway(null);
-              setSelectedBatterHome(null);
-              setSelectedPositionAway(null);
-              setSelectedPositionHome(null);
-              // 各選手のgameStatsを初期化
-              setAwayTeam(prev => ({
-                ...prev,
-                players: prev.players.map(p => ({
-                  ...p,
-                  gameStats: { atBats: 0, hits: 0, homeruns: 0, rbis: 0, strikeouts: 0, atBatResults: [],
-                    fieldingChances: 0, fieldErrors: 0, assists: 0 }
-                }))
-              }));
-              setHomeTeam(prev => ({
-                ...prev,
-                players: prev.players.map(p => ({
-                  ...p,
-                  gameStats: { atBats: 0, hits: 0, homeruns: 0, rbis: 0, strikeouts: 0, atBatResults: [],
-                    fieldingChances: 0, fieldErrors: 0, assists: 0 }
-                }))
-              }));
-            }}
+            onClick={startManagedGame}
             className="btn-primary py-4 px-12 rounded-lg text-xl transition shadow-lg"
           >
             ⚾ 試合開始
@@ -786,14 +800,14 @@ export default function ManagedGameScreen(props) {
               <div className={row}>
                 <span className={tag('text-amber-300')}>狙い</span>
                 <button onClick={() => setPitchAim('auto')} disabled={gameOver}
-                  title="狙いも捕手のリードに任せる"
-                  className={pick(pitchAim === 'auto', 'bg-amber-700')}>おまかせ</button>
-                {['zone', 'edge', 'chase'].map(v => (
+                  title="狙いも捕手のリードに任せる（キー 1）"
+                  className={pick(pitchAim === 'auto', 'bg-amber-700')}>おまかせ<kbd aria-hidden="true" className={KEY_HINT_CLASS}>1</kbd></button>
+                {['zone', 'edge', 'chase'].map((v, i) => (
                   <button key={v} onClick={() => setPitchAim(v)} disabled={gameOver}
-                    title={v === 'zone' ? 'ゾーンで勝負。ストライクは取れるが打たれやすい'
+                    title={(v === 'zone' ? 'ゾーンで勝負。ストライクは取れるが打たれやすい'
                       : v === 'edge' ? '際どいコース。打ち損じを誘うが四球のリスク'
-                      : '誘い球（ボール球）。振らせれば凡打、見逃されれば四球に近づく'}
-                    className={pick(pitchAim === v, 'bg-amber-700')}>{AIM_LABEL[v]}</button>
+                      : '誘い球（ボール球）。振らせれば凡打、見逃されれば四球に近づく') + `（キー ${i + 2}）`}
+                    className={pick(pitchAim === v, 'bg-amber-700')}>{AIM_LABEL[v]}<kbd aria-hidden="true" className={KEY_HINT_CLASS}>{i + 2}</kbd></button>
                 ))}
                 <span className="text-xs text-gray-400">｜</span>
                 <button onClick={() => triggerIntentionalWalk(throwPitch)} disabled={busy}
@@ -811,11 +825,18 @@ export default function ManagedGameScreen(props) {
             </div>
           );
         })()}
-        {/* 試合進行。采配（上）と進行（下）を分ける */}
+        {/* 試合進行。采配（上）と進行（下）を分ける。
+            ⚠ 試合が終わったら、この場所をそのまま「結果確定・翌日へ」に替える（UI点検 S3）。
+            以前は1球などが灰色になるだけで、確定ボタンは結果の欄のいちばん下（900pxの画面では外）にあった */}
+        {gameOver ? (
+          <div className="flex justify-center items-center gap-2 flex-wrap border-t border-gray-700/60 pt-1">
+            {endGameButton}
+          </div>
+        ) : (
         <div className="flex justify-center items-center gap-2 flex-wrap border-t border-gray-700/60 pt-1">
           <button onClick={throwPitch} disabled={isAutoSimulating || gameOver}
             className="btn-primary px-5 py-1.5 rounded disabled:opacity-50">
-            ⚾ 1球
+            ⚾ 1球<kbd aria-hidden="true" className={KEY_HINT_CLASS}>Space</kbd>
           </button>
           <button onClick={() => startSimMode('out')} disabled={isAutoSimulating || gameOver}
             className="btn-secondary px-3 py-1.5 rounded text-sm disabled:opacity-50">
@@ -850,6 +871,7 @@ export default function ManagedGameScreen(props) {
             </button>
           )}
         </div>
+        )}
       </div>
       )}
 
@@ -1105,7 +1127,6 @@ export default function ManagedGameScreen(props) {
           }
         });
 
-        const scrollText = scrollParts.join('　　');
 
         return (
         <div ref={gameEndPanelRef} className="bg-surface-1 rounded-lg p-4 text-white">
@@ -1122,22 +1143,11 @@ export default function ManagedGameScreen(props) {
             </div>
           </div>
 
-          {/* スクロールテロップ */}
-          <div className="overflow-hidden bg-surface-2 rounded-lg mb-3 py-2">
-            <div className="whitespace-nowrap text-lg font-bold text-yellow-300" style={{
-              display: 'inline-block',
-              animation: 'marquee 12s linear infinite',
-              willChange: 'transform',
-              backfaceVisibility: 'hidden',
-            }}>
-              <span>{scrollText}　　　　</span><span>{scrollText}　　　　</span>
-            </div>
-            <style>{`
-              @keyframes marquee {
-                0% { transform: translate3d(0, 0, 0); }
-                100% { transform: translate3d(-50%, 0, 0); }
-              }
-            `}</style>
+          {/* 試合の見出し（勝利・勝敗投手・完封・本塁打・猛打賞など）。
+              ⚠ 以前は横に流れるテロップで、枠の左で字が切れて読めなかった（UI点検 S3）。
+              止めて、折り返して全部見せる */}
+          <div className="bg-surface-2 rounded-lg mb-3 px-3 py-2 flex flex-wrap justify-center gap-x-4 gap-y-1 text-base font-bold text-yellow-300">
+            {scrollParts.map((t, i) => <span key={i}>{t}</span>)}
           </div>
 
           {/* 投手・本塁打情報 */}
@@ -1215,28 +1225,6 @@ export default function ManagedGameScreen(props) {
             ))}
           </div>
 
-          <div className="text-center mt-4 flex justify-center gap-3">
-            {managedGameInfo ? (
-              <button
-                onClick={handleManagedGameEnd}
-                className="btn-warn py-3 px-8 rounded-lg transition text-lg"
-              >
-                結果確定・翌日へ
-              </button>
-            ) : (
-              <button
-                onClick={() => {
-                  resetGame();
-                  setGameStarted(false);
-                  setSelectedBatterAway(null);
-                  setSelectedBatterHome(null);
-                }}
-                className="btn-primary py-2 px-6 rounded-lg transition"
-              >
-                新しい試合
-              </button>
-            )}
-          </div>
         </div>
         );
       })()}

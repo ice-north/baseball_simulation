@@ -37,6 +37,8 @@ import {
   unassignedPitchers,
   roleBlocked,
   pitchingNotes,
+  vacantStarterIds,
+  fillVacantStarters,
 } from './soloPitchingEdit.js';
 
 // ============================================================
@@ -50,6 +52,8 @@ import {
 // 【操作】行を押して選び、ほかの行を押すと持ち場（登板順・役割）を入れ替える。
 //   見出しを押す・見出しへ落とすと、ローテに入れる／外す／役割なしにする。ドラッグでも同じ。
 //   役割の札を押すと役割を選び直せる。
+// ⚠ 例外は「空いた枠を自動で埋める」（S1。2026-11-25 いしだ）。名簿に居ない・抹消中の投手が
+//    先発に残ったときの警告の帯の横にだけ出し、空いた枠だけを埋める（`fillVacantStarters`）。
 // ⚠ 以前の一人用の画面にあった次のものは**置かない**（オンラインで同じ指摘を受けて外した。
 //    2026-11-04 いしだ）: 自動設定・全員おまかせのボタン（どう変わるか分からない）・
 //    役割ごとの大きな空き枠・先発と救援で書き方の違うカード・ロール解説の折り畳み
@@ -253,7 +257,8 @@ export default function SoloPitchingBoard({ team, onChange, onOpen, resetKey }) 
   const nextStarterId = nextStarterIdOf(team);
   const groups = reliefGroups(state, roster);
   const relievers = groups.flatMap((g) => g.players);
-  const vacant = groups.filter((g) => !g.players.length && g.role !== 'auto_r').map((g) => g.role);
+  const vacantRoles = groups.filter((g) => !g.players.length && g.role !== 'auto_r').map((g) => g.role);
+  const vacant = vacantStarterIds(state, roster);
   const unassigned = unassignedPitchers(state, roster);
   const candidates = staffCandidates(state, roster);
   const selectedStarter = selection !== null && state.starters.includes(selection);
@@ -309,9 +314,19 @@ export default function SoloPitchingBoard({ team, onChange, onOpen, resetKey }) 
   return (
     <div className="online online-desktop online-embed">
       <section className="online-card online-lineup-board" data-testid="solo-pitching-board">
+        {/* ⚠ 警告は明るい帯（紺の地に濃い赤の字では読めなかった。S1） */}
+        {(problems.length > 0 || notes.length > 0) && (
+          <div className={`solo-pitch-warning${problems.length ? '' : ' is-note'}`} role={problems.length ? 'alert' : 'status'} data-testid="solo-pitching-warning">
+            <span>{problems.length ? problems[0] : `注意：${notes.join('・')}`}</span>
+            {vacant.length > 0 && (
+              <button type="button" className="online-primary" onClick={() => commit(fillVacantStarters(state, roster))}>
+                空いた枠を自動で埋める
+              </button>
+            )}
+          </div>
+        )}
         <p className="online-lineup-help" aria-live="polite">
-          {problems.length ? <span className="online-error-text">{problems[0]}</span> : help}
-          {!problems.length && notes.length > 0 && <span className="online-error-text"> 注意：{notes.join('・')}</span>}
+          {help}
         </p>
         <div className="online-lineup-scroll">
           <table className="online-lineup-table online-pitch-table">
@@ -354,7 +369,7 @@ export default function SoloPitchingBoard({ team, onChange, onOpen, resetKey }) 
                     ) : (
                       <td colSpan={COLUMN_COUNT - 2} className="online-lineup-missing">
                         {byId.has(id) ? `${nameOf(id)}は今は起用できません。` : '名簿に居ない投手です。'}
-                        この行を選んで救援の投手を押すと入れ替わります（「救援」の見出しへ落とすと外れます）
+                        上の「空いた枠を自動で埋める」か、この行を選んで救援の投手を押すと入れ替わります
                       </td>
                     )}
                   </tr>
@@ -367,7 +382,7 @@ export default function SoloPitchingBoard({ team, onChange, onOpen, resetKey }) 
                   救援 {relievers.length}人
                   <small>
                     使われる場面の順（役割の順）に並べています。
-                    {vacant.length > 0 && <> 空いている役割：{vacant.map(soloRoleLabel).join('・')}</>}
+                    {vacantRoles.length > 0 && <> 空いている役割：{vacantRoles.map(soloRoleLabel).join('・')}</>}
                   </small>
                 </th>
               </tr>

@@ -99,7 +99,7 @@ const TeamInfoScreen = ({ gameMode }) => {
           他に出る場所が無いので、見出しの右へ移して残す。数字と重複しているものだけ捨てる。
           ⚠ `teamRadarAxes` は消さないこと。試合前モーダル（相手チームの戦力）が使っている */}
       <ScreenHeader
-        title="チーム情報"
+        title="チーム"
         right={team?.corporateData ? (() => {
           const cd = team.corporateData;
           const rankColor = { S: 'text-yellow-400', A: 'text-blue-400', B: 'text-green-400', C: 'text-gray-300', D: 'text-gray-400' }[cd.rank] || 'text-gray-300';

@@ -176,24 +176,15 @@ try {
           1,
           '投手役割はスマホから変更しない',
         );
-        assert.ok((await panel.locator('article').count()) <= 4);
+        // ⚠ 投手は**全員を出す**（X1 2026-11-25。以前は4人ごとのページ送り）。
+        //    一覧の枠の中を縦に送り、小窓全体は伸びない（上の noScroll）
+        assert.equal(await panel.locator('.online-pager').count(), 0, '投手の役割にページ送りが残っている');
+        assert.ok((await panel.locator('article').count()) > 4, '投手が全員出ていない');
         await panel.locator('article button').first().click();
         await page
           .getByRole('button', { name: '選手成績を閉じる', exact: true })
           .click();
         assert.ok(await panel.isVisible(), '投手詳細を閉じたら采配へ戻る');
-        while (
-          await panel
-            .getByRole('button', { name: '次のページ', exact: true })
-            .isEnabled()
-        )
-          await panel
-            .getByRole('button', { name: '次のページ', exact: true })
-            .click();
-        await noScroll(
-          panel.locator('.online-mobile-panel-content'),
-          '最後の役割ページも画面に収まる',
-        );
       }
     }
     await panel.getByLabel('見る設定').selectOption('basic');
@@ -287,10 +278,21 @@ try {
       .getByLabel('閲覧する球団')
       .selectOption(league.members[1].teamName);
     await page.getByText(/今季・閲覧/).waitFor();
-    await noScroll(
-      page.locator('.online-roster-rows'),
-      '他球団一覧も画面に収まる',
-    );
+    // ⚠ 選手成績は**全員を出し、一覧の枠の中を縦に送る**（M1 2026-11-25。以前は画面の高さで
+    //    人数を決めたページ送り）。枠そのものは画面に収まり、ページ送りは無い
+    {
+      const rowsBox = await page.locator('.online-roster-rows').boundingBox();
+      const viewport = page.viewportSize();
+      assert.ok(
+        rowsBox.y + rowsBox.height <= viewport.height + 1,
+        `他球団一覧の枠も画面に収まる（下端 ${Math.round(rowsBox.y + rowsBox.height)} / 画面 ${viewport.height}）`,
+      );
+      assert.equal(await page.locator('.online-pager').count(), 0, '選手成績にページ送りが残っている');
+      assert.ok(
+        await page.locator('.online-roster-rows').evaluate((n) => getComputedStyle(n).overflowY === 'auto'),
+        '他球団一覧の枠の中を縦に送れない',
+      );
+    }
     await page.locator('.online-roster-rows article button').first().click();
     const detail = page.getByRole('dialog');
     await detail.waitFor();

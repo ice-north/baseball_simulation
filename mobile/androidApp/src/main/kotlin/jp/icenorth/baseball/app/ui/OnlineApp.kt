@@ -48,6 +48,7 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -66,7 +67,8 @@ enum class Tab(val label: String, val icon: ImageVector) {
     Games("試合", Icons.Filled.DateRange),
     Players("チーム", Icons.Filled.Person),
     Plan("編成", Icons.Filled.List),
-    Procedures("手続き", Icons.Filled.Edit),
+    // ⚠ 名前は「手続き・交渉」（中にトレード・練習試合・予告先発がある。「手続き」だけでは想像しにくかった。UI総点検 A6）
+    Procedures("手続き・交渉", Icons.Filled.Edit),
 }
 
 @Composable
@@ -176,7 +178,8 @@ fun OnlineApp(model: AppViewModel) {
                                     Icon(item.icon, contentDescription = null)
                                 }
                             },
-                            label = { Text(item.label) },
+                            // 長い名前（「手続き・交渉」）は1行に収まるよう少し小さく（狭い端末で2行に折れないように）
+                            label = { Text(item.label, maxLines = 1, softWrap = false, fontSize = if (item.label.length > 4) 11.sp else androidx.compose.ui.unit.TextUnit.Unspecified) },
                         )
                     }
                 }
@@ -188,7 +191,9 @@ fun OnlineApp(model: AppViewModel) {
             val onTrades = tab == Tab.Procedures && model.procTrade && model.tradeDraft == null
             val tradeKeys = tradeNoticeKeys(raw)
             LaunchedEffect(onTrades, tradeKeys) { if (onTrades) model.markTradesSeen(tradeKeys) }
-            val notice = if (onTrades || view == null) null else tradeNoticeText(view, raw, model.seenTrades)
+            // ⚠ 届いた提案の帯はホームだけに出す（以前はどのタブでも上の約8%を使い続けた。
+            //    ほかのタブでは下の「手続き・交渉」の数字で分かる。UI総点検 A2）
+            val notice = if (onTrades || view == null || tab != Tab.Home) null else tradeNoticeText(view, raw, model.seenTrades)
             // ⚠ 自分が決める手続きは、その画面を開いていない間ずっと上に帯で出す（閉じられない。済んだら消える）。
             //    初期メンバー選択・人員整理・キャンプは「手続き」のタブの中なので、うっかり飛ばしやすかった
             val onProcedure = tab == Tab.Procedures && model.procFace == "Current"
@@ -237,16 +242,7 @@ fun OnlineApp(model: AppViewModel) {
                                 onOpenTrade = { tab = Tab.Procedures; model.procTrade = true },
                             )
                         }
-                        // ⚠ 編成では TIPS の印を面の切り替えの右に置く（行が3行になり、左下に重ねると打順と「適」が隠れた）
-                        Tab.Plan -> PlanScreen(model) {
-                            SituationTipsBadge(
-                                situations,
-                                seen = model.seenSituationTips,
-                                onRead = model::markSituationTipsSeen,
-                                onOpenAll = { showTips = true },
-                                modifier = Modifier.padding(start = 2.dp, end = 8.dp).size(30.dp),
-                            )
-                        }
+                        Tab.Plan -> PlanScreen(model)
                         Tab.Procedures -> Refreshable(model) {
                             ProceduresScreen(model, onHome = { tab = Tab.Home }, onOpenStaff = { model.planFaceRequest = "Staff"; tab = Tab.Plan })
                         }
@@ -256,15 +252,16 @@ fun OnlineApp(model: AppViewModel) {
                 model.openingPlayer?.let { name ->
                     LoadingPill("${name}を読み込んでいます…", Modifier.align(Alignment.BottomCenter).padding(16.dp))
                 }
-                // ⚠ 枠は取らず左下の角に重ねる。ホームだけ（当てはまらなければ出ない）。
-                //    編成では選手の行に重なる（左下は打順の数字と「適」、右下は並べ替えのつまみ）ので、面の切り替えの右に出す
-                if (tab == Tab.Home) {
+                // ⚠ TIPS の印は、下のタブのすぐ上の右の決まった場所に重ねる（ホームと編成。当てはまる未読が無ければ出ない）。
+                //    以前はホームは左下・編成は面の切り替えの右で、編成では「指導者」のチップに、ホームでは紙面の字に重なった（UI総点検 A5）。
+                //    紙面と編成の一覧は下に印のぶんの余白を空けてあり、送れば最後の行も印の上に出る
+                if (tab == Tab.Home || tab == Tab.Plan) {
                     SituationTipsBadge(
                         situations,
                         seen = model.seenSituationTips,
                         onRead = model::markSituationTipsSeen,
                         onOpenAll = { showTips = true },
-                        modifier = Modifier.align(Alignment.BottomStart).padding(12.dp),
+                        modifier = Modifier.align(Alignment.BottomEnd).padding(12.dp),
                     )
                 }
             }

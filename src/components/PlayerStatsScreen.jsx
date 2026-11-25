@@ -5,6 +5,36 @@ import { formatInnings } from '../utils/physics.js';
 import { checkNPBDraftEligibility } from '../season/yearProgressionSystem.js';
 import { qualifiedPA, qualifiedOuts as qualifiedOutsFor, plateAppearances } from '../season/seasonManager.js';
 import { withDepartedPlayers } from '../season/departedStats.js';
+import { SegmentBar, Segments } from './SoloSegments.jsx';
+
+// 表に出す人数。初めは20人、「続きを表示」で50人ずつ足す（S2。以前は上位20人で止まり、
+// 21位より下を見る手段が無かった）。「全員を表示」は重くならない人数（下の値）までだけ出す
+const FIRST_ROWS = 20;
+const MORE_ROWS = 50;
+const SHOW_ALL_MAX = 500;
+// ⚠ 見出しは表を下へ送っても上に残す（S7）。窓（ページ）のスクロールに付けるので、
+//    表の入れ物は横に送らない幅（xl 以上）では overflow を付けない（付けると sticky が効かない）
+const TABLE_BOX = 'overflow-x-auto xl:overflow-visible';
+const HEAD_CELL = 'sticky top-0 z-10 bg-surface-2';
+
+/** 上位◯人の下に出す「続きを表示」（S2）。カード（bg-surface-2）の上に載る */
+const MoreRows = ({ total, shown, setShown }) => {
+  if (shown >= total) return null;
+  const rest = total - shown;
+  return (
+    <div className="flex items-center justify-center gap-2 pt-3" data-testid="stats-more">
+      <span className="text-xs text-gray-300 tabular-nums">あと{rest}人</span>
+      <button type="button" onClick={() => setShown(shown + MORE_ROWS)} className="btn-secondary text-xs px-3 py-1 rounded">
+        続きを表示（{Math.min(MORE_ROWS, rest)}人）
+      </button>
+      {total <= SHOW_ALL_MAX && rest > MORE_ROWS && (
+        <button type="button" onClick={() => setShown(total)} className="btn-secondary text-xs px-3 py-1 rounded">
+          全員を表示
+        </button>
+      )}
+    </div>
+  );
+};
 
 const PlayerStatsScreen = ({ seasonData, allTeams, userTeamName }) => {
   const [statsTab, setStatsTab] = useState('season');
@@ -18,6 +48,14 @@ const PlayerStatsScreen = ({ seasonData, allTeams, userTeamName }) => {
   const [battingSortDir, setBattingSortDir] = useState('desc');
   const [pitchingSortKey, setPitchingSortKey] = useState('era');
   const [pitchingSortDir, setPitchingSortDir] = useState('asc');
+  // 表に出す人数（範囲・区分・並べ替えを変えたら初めの20人に戻す）
+  const [rowLimit, setRowLimit] = useState(FIRST_ROWS);
+  const listKey = [statsTab, statsType, scope, qualifiedOnly, battingSortKey, battingSortDir, pitchingSortKey, pitchingSortDir].join('|');
+  const [limitKey, setLimitKey] = useState(listKey);
+  if (limitKey !== listKey) {
+    setLimitKey(listKey);
+    setRowLimit(FIRST_ROWS);
+  }
 
   const SCOPES = [['team', '自チーム'], ['league', '自リーグ'], ['all', '全体']];
   const scopeLabel = SCOPES.find(([k]) => k === scope)?.[1] || '全体';
@@ -130,7 +168,7 @@ const PlayerStatsScreen = ({ seasonData, allTeams, userTeamName }) => {
       else { valA = a.stats[battingSortKey] || 0; valB = b.stats[battingSortKey] || 0; }
       return battingSortDir === 'asc' ? valA - valB : valB - valA;
     });
-  const battingStats = battingRanked.slice(0, 20);
+  const battingStats = battingRanked.slice(0, rowLimit);
 
   const pitchingRanked = allPlayers
     .filter(p => {
@@ -157,11 +195,11 @@ const PlayerStatsScreen = ({ seasonData, allTeams, userTeamName }) => {
       else { valA = a.stats[pitchingSortKey] || 0; valB = b.stats[pitchingSortKey] || 0; }
       return pitchingSortDir === 'asc' ? valA - valB : valB - valA;
     });
-  const pitchingStats = pitchingRanked.slice(0, 20);
+  const pitchingStats = pitchingRanked.slice(0, rowLimit);
 
   const SortableHeader = ({ label, sortKey, currentKey, currentDir, onClick, align = 'right' }) => (
     <th
-      className={`py-1.5 px-1.5 text-${align} cursor-pointer hover:bg-gray-600/50 transition text-xs ${currentKey === sortKey ? 'text-yellow-400' : 'text-gray-400'}`}
+      className={`${HEAD_CELL} py-1.5 px-1.5 text-${align} cursor-pointer hover:bg-gray-700 transition text-xs ${currentKey === sortKey ? 'text-yellow-400' : 'text-gray-300'}`}
       onClick={() => onClick(sortKey)}
     >
       {label} {currentKey === sortKey && (currentDir === 'asc' ? '▲' : '▼')}
@@ -220,51 +258,24 @@ const PlayerStatsScreen = ({ seasonData, allTeams, userTeamName }) => {
 
   return (
     <ScreenShell>
+      {/* ⚠ 切り替えはチーム情報と同じオンラインの丸い切り替え（X2。`SoloSegments.jsx`） */}
       <ScreenHeader title="選手成績" right={
-        <div className="flex gap-1">
-          <button
-            onClick={() => setStatsTab('growth')}
-            className={`px-3 py-1 rounded-md text-xs font-bold transition ${
-              statsTab === 'growth' ? 'seg-on' : 'seg'
-            }`}
-          >
-            成長
-          </button>
-          <div className="w-px bg-gray-600 mx-1"></div>
-          <button
-            onClick={() => setStatsTab('season')}
-            className={`px-3 py-1 rounded-md text-xs font-bold transition ${
-              statsTab === 'season' ? 'seg-on' : 'seg'
-            }`}
-          >
-            シーズン
-          </button>
-          <button
-            onClick={() => setStatsTab('career')}
-            className={`px-3 py-1 rounded-md text-xs font-bold transition ${
-              statsTab === 'career' ? 'seg-on' : 'seg'
-            }`}
-          >
-            通算
-          </button>
-          <div className="w-px bg-gray-600 mx-1"></div>
-          <button
-            onClick={() => setStatsType('batting')}
-            className={`px-3 py-1 rounded-md text-xs font-bold transition ${
-              statsType === 'batting' ? 'seg-on' : 'seg'
-            }`}
-          >
-            野手
-          </button>
-          <button
-            onClick={() => setStatsType('pitching')}
-            className={`px-3 py-1 rounded-md text-xs font-bold transition ${
-              statsType === 'pitching' ? 'seg-on' : 'seg'
-            }`}
-          >
-            投手
-          </button>
-        </div>
+        <SegmentBar>
+          <Segments
+            label="成績の期間"
+            value={statsTab}
+            onChange={setStatsTab}
+            items={[{ id: 'season', label: 'シーズン' }, { id: 'career', label: '通算' }, { id: 'growth', label: '成長' }]}
+          />
+          {statsTab !== 'growth' && (
+            <Segments
+              label="野手と投手"
+              value={statsType}
+              onChange={setStatsType}
+              items={[{ id: 'batting', label: '野手' }, { id: 'pitching', label: '投手' }]}
+            />
+          )}
+        </SegmentBar>
       } />
 
       {/* 絞り込み。⚠ **この画面の既定が「全世界の上位20人」だった**ことが
@@ -275,26 +286,25 @@ const PlayerStatsScreen = ({ seasonData, allTeams, userTeamName }) => {
           {/* ⚠ この行は地色（明るい紙）の上に直に載る。補足の文字は text-ink-sub
               （text-gray-400/500 は紙の上で 1.0:1 前後になり、見えなかった） */}
           <span className="text-xs text-ink-sub mr-0.5">範囲</span>
-          {SCOPES.map(([key, label]) => (
-            <button
-              key={key}
-              onClick={() => setScope(key)}
-              className={`px-3 py-1 rounded-md text-xs font-bold transition ${scope === key ? 'seg-on' : 'seg'}`}
-            >
-              {label}
-            </button>
-          ))}
-          <div className="w-px h-5 bg-gray-600/50 mx-1.5" aria-hidden="true" />
-          <button
-            onClick={() => setQualifiedOnly(v => !v)}
-            disabled={!canFilterQualified}
-            title={canFilterQualified
-              ? '規定打席・規定投球回に届いた選手だけを出す'
-              : '規定はシーズンの値なので、通算成績には当てはめません'}
-            className={`px-3 py-1 rounded-md text-xs font-bold transition disabled:opacity-40 disabled:cursor-not-allowed ${applyQualified ? 'seg-on' : 'seg'}`}
-          >
-            規定到達者のみ
-          </button>
+          <SegmentBar>
+            <Segments label="範囲" value={scope} onChange={setScope} items={SCOPES.map(([id, label]) => ({ id, label }))} />
+            <Segments
+              label="規定"
+              value={applyQualified ? 'qualified' : 'any'}
+              onChange={(id) => setQualifiedOnly(id === 'qualified')}
+              items={[
+                {
+                  id: 'qualified',
+                  label: '規定到達者のみ',
+                  disabled: !canFilterQualified,
+                  title: canFilterQualified
+                    ? '規定打席・規定投球回に届いた選手だけを出す'
+                    : '規定はシーズンの値なので、通算成績には当てはめません',
+                },
+                { id: 'any', label: '規定に届かない選手も' },
+              ]}
+            />
+          </SegmentBar>
           {applyQualified ? (
             <span className="text-xs text-ink-sub tabular-nums ml-1">
               規定打席 {qualifiedAB} / 規定投球回 {(qualifiedOuts / 3).toFixed(1)}
@@ -309,10 +319,16 @@ const PlayerStatsScreen = ({ seasonData, allTeams, userTeamName }) => {
         <div className="bg-surface-2 rounded-xl border border-gray-700/50 overflow-hidden">
           <div className="px-4 py-3 border-b border-gray-700/50">
             <h2 className="text-sm font-semibold text-white">自チーム選手 能力成長履歴</h2>
-            <p className="text-xs text-gray-400 mt-0.5">キャンプ完了時にスナップショットを記録。2年目以降から表示されます。</p>
+            <p className="text-xs text-gray-300 mt-0.5">キャンプを終えたときの能力を記録して、前の年と比べます。</p>
           </div>
           {growthPlayers.length === 0 ? (
-            <div className="py-12 text-center text-gray-400 text-sm">選手データがありません</div>
+            <div className="py-12 text-center text-gray-300 text-sm">選手データがありません</div>
+          ) : !growthPlayers.some((p) => (p.growthHistory || []).length >= 2) ? (
+            /* ⚠ 1年目は比べる記録が無いので、全行に「2年目以降」を並べず案内1枚にする（S12） */
+            <div className="py-12 px-4 text-center" data-testid="growth-first-year">
+              <p className="text-sm font-bold text-gray-100">2年目のキャンプが終わると、ここに伸びが出ます。</p>
+              <p className="text-xs text-gray-300 mt-1">キャンプを終えるたびに能力を記録して、前の年と比べた伸びを選手ごとに並べます。</p>
+            </div>
           ) : (
             <div className="overflow-x-auto">
               <table className="tabular-nums w-full text-xs text-left">
@@ -376,21 +392,21 @@ const PlayerStatsScreen = ({ seasonData, allTeams, userTeamName }) => {
         </div>
       )}
 
-      {statsType === 'batting' && (
+      {statsTab !== 'growth' && statsType === 'batting' && (
         <div className="bg-surface-2 rounded-lg p-3">
           <h2 className="text-sm font-bold mb-2 text-white">
             {statsTab === 'season' ? 'シーズン' : '通算'}野手成績
             <span className="text-gray-400 font-normal ml-2 text-xs tabular-nums">
-              {scopeLabel} / 該当{battingRanked.length}人中 上位{battingStats.length}
+              {scopeLabel} / 該当{battingRanked.length}人中 {battingStats.length < battingRanked.length ? `上位${battingStats.length}人` : '全員'}
             </span>
           </h2>
-          <div className="overflow-x-auto">
+          <div className={TABLE_BOX}>
             <table className="tabular-nums w-full text-white text-xs">
               <thead>
                 <tr className="border-b border-gray-700">
-                  <th className="py-1.5 px-1.5 text-left text-xs text-gray-400">#</th>
-                  <th className="py-1.5 px-1.5 text-left text-xs text-gray-400">選手</th>
-                  <th className="py-1.5 px-1.5 text-left text-xs text-gray-400">チーム</th>
+                  <th className={`${HEAD_CELL} py-1.5 px-1.5 text-left text-xs text-gray-300`}>#</th>
+                  <th className={`${HEAD_CELL} py-1.5 px-1.5 text-left text-xs text-gray-300`}>選手</th>
+                  <th className={`${HEAD_CELL} py-1.5 px-1.5 text-left text-xs text-gray-300`}>チーム</th>
                   <SortableHeader label="試" sortKey="games" currentKey={battingSortKey} currentDir={battingSortDir} onClick={handleBattingSort} />
                   {/* ⚠ 「打席」に打数を出していた。規定打席は打席（打数＋四球＋死球）で数えるので、
                       打席と打数を別の列にして、規定に届いたかを表から読めるようにする */}
@@ -449,24 +465,25 @@ const PlayerStatsScreen = ({ seasonData, allTeams, userTeamName }) => {
               </tbody>
             </table>
           </div>
+          <MoreRows total={battingRanked.length} shown={rowLimit} setShown={setRowLimit} />
         </div>
       )}
 
-      {statsType === 'pitching' && (
+      {statsTab !== 'growth' && statsType === 'pitching' && (
         <div className="bg-surface-2 rounded-lg p-3">
           <h2 className="text-sm font-bold mb-2 text-white">
             {statsTab === 'season' ? 'シーズン' : '通算'}投手成績
             <span className="text-gray-400 font-normal ml-2 text-xs tabular-nums">
-              {scopeLabel} / 該当{pitchingRanked.length}人中 上位{pitchingStats.length}
+              {scopeLabel} / 該当{pitchingRanked.length}人中 {pitchingStats.length < pitchingRanked.length ? `上位${pitchingStats.length}人` : '全員'}
             </span>
           </h2>
-          <div className="overflow-x-auto">
+          <div className={TABLE_BOX}>
             <table className="tabular-nums w-full text-white text-xs">
               <thead>
                 <tr className="border-b border-gray-700">
-                  <th className="py-1.5 px-1.5 text-left text-xs text-gray-400">#</th>
-                  <th className="py-1.5 px-1.5 text-left text-xs text-gray-400">選手</th>
-                  <th className="py-1.5 px-1.5 text-left text-xs text-gray-400">チーム</th>
+                  <th className={`${HEAD_CELL} py-1.5 px-1.5 text-left text-xs text-gray-300`}>#</th>
+                  <th className={`${HEAD_CELL} py-1.5 px-1.5 text-left text-xs text-gray-300`}>選手</th>
+                  <th className={`${HEAD_CELL} py-1.5 px-1.5 text-left text-xs text-gray-300`}>チーム</th>
                   <SortableHeader label="試" sortKey="games" currentKey={pitchingSortKey} currentDir={pitchingSortDir} onClick={handlePitchingSort} />
                   <SortableHeader label="勝" sortKey="wins" currentKey={pitchingSortKey} currentDir={pitchingSortDir} onClick={handlePitchingSort} />
                   <SortableHeader label="敗" sortKey="losses" currentKey={pitchingSortKey} currentDir={pitchingSortDir} onClick={handlePitchingSort} />
@@ -523,6 +540,7 @@ const PlayerStatsScreen = ({ seasonData, allTeams, userTeamName }) => {
               </tbody>
             </table>
           </div>
+          <MoreRows total={pitchingRanked.length} shown={rowLimit} setShown={setRowLimit} />
         </div>
       )}
     </ScreenShell>

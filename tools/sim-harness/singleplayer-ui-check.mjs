@@ -188,16 +188,22 @@ try {
   assert.equal(await scrollY(), 0, '選手成績が前の画面（日程画面）のスクロール位置のまま開いた');
   await ui.click('選手検索');
   await toBottom('選手検索');
-  await ui.click('ロスター管理');
-  assert.equal(await scrollY(), 0, 'ロスター管理が前の画面（選手検索）のスクロール位置のまま開いた');
+  // 左メニューの「編成」（以前の名前は「ロスター管理」。アプリにそろえた）。
+  // 「編成」は画面の中のボタンにも含まれうるので、左メニューの中で探す
+  const openRoster = async () => {
+    await page.locator('nav').getByRole('button', { name: /編成/ }).first().click();
+    await page.waitForTimeout(250);
+  };
+  await openRoster();
+  assert.equal(await scrollY(), 0, '編成が前の画面（選手検索）のスクロール位置のまま開いた');
 
-  step('選手成績・ロスター管理・資料室の画面');
+  step('選手成績・編成・資料室の画面');
   await ui.click('選手成績');
   await groundContrast('選手成績');
-  await ui.click('ロスター管理');
+  await openRoster();
   await ui.click('ベンチ登録'); // 大学は試合のオーダーと並ぶ外側のタブ。以前は枠が半透明で紙が透けていた
-  await groundContrast('ロスター管理のベンチ登録');
-  await noAiWords('ロスター管理のベンチ登録');
+  await groundContrast('編成のベンチ登録');
+  await noAiWords('編成のベンチ登録');
   await ui.click('試合のオーダー');
   await ui.click('スタメン設定');
   // 1280×720 でスタメン設定の表が横に送らずに収まること（オンラインPC版と同じ1枚の表。
@@ -224,8 +230,8 @@ try {
   const weak = await ui.cardTextContrast('守備力サマリー');
   assert.deepEqual(weak, [], `守備分析のサマリーで読めない文字がある\n${weak.join('\n')}`);
   await ui.click('投手起用');
-  await groundContrast('ロスター管理の投手起用');
-  await noAiWords('ロスター管理の投手起用');
+  await groundContrast('編成の投手起用');
+  await noAiWords('編成の投手起用');
   await page.locator('nav').getByRole('button', { name: /資料室/ }).click();
   await ui.click('注目選手');
   await groundContrast('資料室の注目選手');

@@ -25,7 +25,7 @@ import { ReporterMemo, EventScene } from './look/Story.jsx';
 import TradeScreen from './TradeScreen.jsx';
 import CampPlanner, { CompletedCamp } from './CampPlanner.jsx';
 import TryoutResult from './TryoutResult.jsx';
-import SeasonFlow, { stageLines } from './SeasonFlow.jsx';
+import SeasonFlow, { NextProcedure, stageLines } from './SeasonFlow.jsx';
 import YearSummary from './YearSummary.jsx';
 import ProDraftResult from './ProDraftResult.jsx';
 import { nextAdvanceText, STATUS } from './api.js';
@@ -106,7 +106,9 @@ const NAV = [
   },
   {
     id: 'roster',
-    label: 'ロスター管理',
+    // ⚠ アプリの呼び名に合わせて「編成」（X3 2026-11-25）。以前は「ロスター管理」で、一人用の
+    //    「ロスター管理」（ベンチ登録と試合のオーダー）と同じ名前で中身が違った
+    label: '編成',
     items: [
       ['lineup', 'スタメン設定'],
       ['rotation', '投手起用'],
@@ -129,7 +131,7 @@ const NAV = [
   },
 ];
 /**
- * ロスター管理の編成ページ（PC専用の画面）と、それぞれが保存で受け持つ項目。
+ * 編成（左メニューのまとまり）のページ（PC専用の画面）と、それぞれが保存で受け持つ項目。
  * ⚠ 以前は一人用の編成画面を移植して使っていた。スタメン設定（`LineupBoard.jsx`）と
  *    投手起用（`PitchingBoard.jsx`）は、比べて決めるための1枚の表に作り直した。
  *    守備分析はスタメン設定の表に入れた（守備位置の入れ替え・位置ごとの候補と適性）。
@@ -448,7 +450,7 @@ export function RenameDialog({ view, busy, run, command, close }) {
 }
 
 export default function DesktopView(props) {
-  const { view, tab, setTab, busy, run, command, reload, showTimes } = props;
+  const { view, tab, setTab, busy, run, command, reload, showTimes, accountTools } = props;
   const [renaming, setRenaming] = useState(false);
   // 球団ロゴを作る小窓（`look/LogoEditor.jsx`）
   const [logoEditing, setLogoEditing] = useState(false);
@@ -643,6 +645,9 @@ export default function DesktopView(props) {
             </button>
           </div>
         )}
+        {/* 見た目の切り替え・一人用・ログアウト（と検証用のボタン）。⚠ 以前は全ページの上の帯
+            （約85px）にあった。帯をやめて左メニューの下へ移した（P5 2026-11-25。`OnlineApp`） */}
+        {accountTools && <div className="online-nav-account">{accountTools}</div>}
       </nav>
       {renaming && <RenameDialog {...props} close={() => setRenaming(false)} />}
       {logoEditing && <LogoEditor {...props} close={() => setLogoEditing(false)} />}
@@ -821,6 +826,8 @@ export default function DesktopView(props) {
                   : '現在、決定待ちの手続きはありません。土曜のストーブリーグと日曜のキャンプで出ます。'}
               </p>
             </section>
+            {/* 次に決める手続きを大きく（P2。キャンプ結果はシーズン中は畳む） */}
+            <NextProcedure view={view} />
             {/* ⚠ キャンプの結果は**その年のキャンプのものだけ**（年が替わったら出さない）。
                 年が替わった直後は「その年のまとめ」だけにする（いしだ 2026-11-18） */}
             <CompletedCamp key={view.lastCamp?.year} view={view} />

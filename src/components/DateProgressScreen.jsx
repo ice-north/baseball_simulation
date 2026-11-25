@@ -26,11 +26,13 @@ import { processUniversityScoutDay, initUniversityScoutList } from '../universit
 import { generateUniversityChampionship, generateMeijiJinguTournament, simulateUniversityTournamentOnDate, getUserUniversityTournamentMatchOnDate, getUniversityTournamentDatesForCalendar } from '../university/universityTournament.js';
 import { UNIVERSITY_REGIONS } from '../university/universityTeamsData.js';
 import PreGameModal from './dateProgress/PreGameModal.jsx';
-import NewspaperModal, { buildNewspaperData } from './dateProgress/Newspaper.jsx';
+import NewspaperModal, { buildNewspaperData, buildTeamPageData } from './dateProgress/Newspaper.jsx';
 import { decisionsFromResult } from '../game/pitcherDecisions.js';
 import { KoshienNoticeModal, PhaseTransitionModal } from './dateProgress/Modals.jsx';
 import { renderBracketWithLines as renderBracketWithLinesImpl } from './dateProgress/bracketRenderer.jsx';
 import { isDevToolsEnabled } from '../game/devTools.js';
+import { ACTIVE_LIMIT } from './RosterScreen.jsx';
+import { useKeyAction, KEY_HINT_CLASS } from './useKeyAction.js';
 
 // 折りたたみ領域。閉じている間は children を描画しない（初回展開まで遅延）。
 // 27大学リーグ順位表やトーナメント等の重いDOMを、日程進行のたびに再構築するのを防ぐ。
@@ -79,7 +81,10 @@ const PHASE_EVENT_INFO = {
   offseason: { label: 'オフシーズン', desc: 'シーズンが終了しました。表彰・引退・進路決定を行います。' },
 };
 
-const DateProgressContent = ({ seasonData, setSeasonData, onForceEvent, onSetupManagedGame }) => {
+// 右列の「ほかの球界」の見出しに並べる名前
+const OTHER_WORLD_LABEL = { ind: '独立リーグ', uni: '大学リーグ', corp: '社会人の大会' };
+
+const DateProgressContent = ({ seasonData, setSeasonData, onForceEvent, onSetupManagedGame, onOpenRoster }) => {
   const [selectedMonth, setSelectedMonth] = useState(seasonData?.currentDate?.month || 4);
   const [isSimulating, setIsSimulating] = useState(false);
   const [showGameChoiceModal, setShowGameChoiceModal] = useState(false);  // 試合選択モーダル
@@ -128,6 +133,8 @@ const DateProgressContent = ({ seasonData, setSeasonData, onForceEvent, onSetupM
   const [expandedCorpTournaments, setExpandedCorpTournaments] = useState({});
   const [uniRtRegionTab, setUniRtRegionTab] = useState(null);
   const [showNewspaper, setShowNewspaper] = useState(false);
+  // 右列の「ほかの球界」（自分のモードに関係しない大会・リーグ）。既定は畳む
+  const [showOtherWorlds, setShowOtherWorlds] = useState(false);
   const [pendingPhaseEvent, setPendingPhaseEvent] = useState(null);
   const newspaperFameDateRef = React.useRef(null);
 
@@ -490,7 +497,7 @@ const DateProgressContent = ({ seasonData, setSeasonData, onForceEvent, onSetupM
       return false;
     }
     if ((currentPhase === SEASON_PHASES.REGULAR_SEASON || currentPhase === SEASON_PHASES.PLAYOFFS) && !autoFillLineup()) {
-      alert('スタメンを自動補完できませんでした。ロスター管理で打順を設定してください。');
+      alert('スタメンを自動補完できませんでした。編成で打順を設定してください。');
       return false;
     }
 
@@ -780,7 +787,8 @@ const DateProgressContent = ({ seasonData, setSeasonData, onForceEvent, onSetupM
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [devLeft, devTick, isSimulating, isGeneratingTournament, seasonData?.currentDate, showGameChoiceModal, koshienNotice, pendingPhaseEvent, showTournamentMatchModal]);
 
-  const handleGameChoice = (choice) => {
+  // `opts.autoManager`: 試合前の窓で選んだ「おまかせ采配」の入／切
+  const handleGameChoice = (choice, opts = {}) => {
     if (isSimulating) return;
     setShowGameChoiceModal(false);
     if (choice === 'skip') {
@@ -799,14 +807,17 @@ const DateProgressContent = ({ seasonData, setSeasonData, onForceEvent, onSetupM
           gameId: userGame.id,
           home: userGame.home,
           away: userGame.away,
-          otherGames: otherGames.map(g => ({ gameId: g.id, home: g.home, away: g.away }))
+          otherGames: otherGames.map(g => ({ gameId: g.id, home: g.home, away: g.away })),
+          // 試合前の窓でスタメンを決めたので、すぐ試合を始める（2つ目のスタメン画面を出さない）
+          autoManager: opts.autoManager,
+          startNow: true,
         });
       }
     }
   };
 
   // トーナメント: ユーザーの試合を開始（都市対抗 / 日本選手権 / 地域トーナメント 共用）
-  const startTournamentMatch = (opponentName, opponentDef, matchInfo) => {
+  const startTournamentMatch = (opponentName, opponentDef, matchInfo, opts = {}) => {
     if (!onSetupManagedGame) return;
     const oppName = opponentDef?.displayName || opponentDef?.name || opponentName;
     const isNS = matchInfo.bracketType === 'nihon_senshuken' || matchInfo.bracketType === 'nihon_senshuken_qualifier' || matchInfo.bracketType === 'nihon_senshuken_qualifier_losers';
@@ -845,6 +856,8 @@ const DateProgressContent = ({ seasonData, setSeasonData, onForceEvent, onSetupM
       away: oppName,
       otherGames: [],
       isTournament: true,
+      autoManager: opts.autoManager,
+      startNow: true,
     });
   };
 
@@ -1710,12 +1723,73 @@ const DateProgressContent = ({ seasonData, setSeasonData, onForceEvent, onSetupM
     return items.slice(0, NEWS_LIMIT);
   }, [teamReport, scoutReportNotifications, cachedTopics]);
 
+  // 「気になる所」（UI点検 S10。オンラインのスマホ版の編成にある知らせと同じ役目）。
+  // 次の試合の前に手を打てること（疲れた先発・スタメンの疲労・ベンチ登録の空き）だけを出す。読むだけ
+  const attentionNotes = useMemo(() => {
+    const notes = [];
+    const team = TEAMS_DATA[userTeamName];
+    if (!team?.players) return notes;
+    const byId = new Map(team.players.map(p => [p.id, p]));
+    // 次の先発（日程画面の予告先発と同じ引き方）
+    const starter = nextUserGame ? getStartingPitcher(userTeamName) : null;
+    if (starter && (starter.fatigue || 0) >= 45) {
+      notes.push({ level: starter.fatigue >= 60 ? 'danger' : 'warning',
+        text: `次の先発の${starter.name}は疲労${Math.round(starter.fatigue)}。投手起用で替えられます` });
+    }
+    // ほかの先発（ローテーション）で疲れの高い人
+    const starterIds = team.pitchingRotation?.starters || [];
+    const tiredStarters = starterIds.map(id => byId.get(id))
+      .filter(p => p && p !== starter && (p.fatigue || 0) >= 60);
+    if (tiredStarters.length > 0) {
+      notes.push({ level: 'warning',
+        text: `先発の${tiredStarters.map(p => `${p.name}（${Math.round(p.fatigue)}）`).join('、')}の疲労が高い` });
+    }
+    // スタメン（打順）の野手
+    const lineup = (team.lineupSettings?.battingOrder || [])
+      .filter(e => e && e.playerId != null && e.position !== 'pitcher')
+      .map(e => byId.get(e.playerId)).filter(Boolean);
+    const tiredBatters = lineup.filter(p => (p.fatigue || 0) >= 60);
+    if (tiredBatters.length > 0) {
+      notes.push({ level: 'warning',
+        text: `スタメンの${tiredBatters.map(p => `${p.name}（${Math.round(p.fatigue)}）`).join('、')}の疲労が高い` });
+    }
+    // ベンチ登録（大学だけ。登録枠は編成のベンチ登録と同じ）
+    if (isUniversity) {
+      const registered = team.players.filter(p => p.isActive).length;
+      const offBench = lineup.filter(p => !p.isActive);
+      if (offBench.length > 0) {
+        notes.push({ level: 'danger', text: `スタメンの${offBench.map(p => p.name).join('、')}がベンチ登録に入っていません` });
+      }
+      if (registered < ACTIVE_LIMIT && team.players.length > registered) {
+        notes.push({ level: 'info', text: `ベンチ登録に空きがあります（${registered}/${ACTIVE_LIMIT}名）` });
+      }
+    }
+    return notes;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userTeamName, nextUserGame, seasonData.results?.length, seasonData.currentDate?.day, isUniversity]);
+
+  // キー操作: Space / Enter で「1日進める」（ボタンを押すのと同じ。UI点検 S4）。
+  // この画面の窓（試合前・大会の試合・フェーズ移行・甲子園の結果・スポーツ新聞）が開いている間と、
+  // 進めている途中（次の試合まで・開発用の早送り）は効かない
+  const keyBlocked = isSimulating || autoAdvanceLeft > 0 || devLeft > 0 || isGeneratingTournament
+    || showGameChoiceModal || !!showTournamentMatchModal || !!pendingPhaseEvent || !!koshienNotice || showNewspaper;
+  useKeyAction((e) => {
+    if (e.key !== ' ' && e.key !== 'Enter') return false;
+    handleProgressDate(1);
+    return true;
+  }, !keyBlocked);
+
   // スポーツ新聞モーダル用のデータ生成
   // 紙面のデータ作りと描画は dateProgress/Newspaper.jsx へ抽出した（合計409行）
   const newspaperData = useMemo(
     () => (showNewspaper ? buildNewspaperData(seasonData, userTeamName, newspaperFameDateRef) : null),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [showNewspaper, seasonData.results?.length, seasonData.currentDate?.day]);
+  // 1面（自チーム）の材料。読むだけなので開いている間だけ作る
+  const newspaperTeamData = useMemo(
+    () => (showNewspaper ? buildTeamPageData(seasonData, userTeamName, getStartingPitcher) : null),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [showNewspaper, seasonData.schedule, seasonData.standings, seasonData.currentDate?.day]);
 
   const getEventColor = (label) => {
     if (label === 'シーズン終了') return 'text-red-400';
@@ -1750,7 +1824,7 @@ const DateProgressContent = ({ seasonData, setSeasonData, onForceEvent, onSetupM
   return (
     <ScreenShell>
       <TutorialHint id="dateprogress-intro" title="シーズンの進め方">
-        ここが基本画面です。カレンダー右上の<b className="text-cyan-200">「1日進める」</b>で1日進み、試合が自動で消化されて順位表・成績が更新されます。<b className="text-cyan-200">「次の試合まで」</b>を押すと、自分の試合の直前まで1日ずつまとめて進みます。自分の試合は采配してプレイすることもできます。サイドバーからロスター管理・注目選手などへ移動できます。
+        ここが基本画面です。カレンダー右上の<b className="text-cyan-200">「1日進める」</b>で1日進み、試合が自動で消化されて順位表・成績が更新されます。<b className="text-cyan-200">「次の試合まで」</b>を押すと、自分の試合の直前まで1日ずつまとめて進みます。自分の試合は采配してプレイすることもできます。サイドバーから編成・チーム・成績などへ移動できます。
       </TutorialHint>
 
       {/* ⚠ **画面の先頭にあった進行バーは撤去した**（日付＋本日の予定＋次の自チーム戦＋
@@ -1841,11 +1915,12 @@ const DateProgressContent = ({ seasonData, setSeasonData, onForceEvent, onSetupM
                 <button
                   onClick={() => handleProgressDate(1)}
                   disabled={isSimulating || autoAdvanceLeft > 0}
-                  title="1日進める"
+                  title="1日進める（Space か Enter キーでも進みます）"
                   className="btn-primary h-10 px-4 rounded-xl text-sm whitespace-nowrap transition-all active:scale-95"
                 >
                   {/* 残りは「試合日まで」で数える（`autoAdvanceLeft` は試合日に呼ぶ1回分を含む） */}
                   {autoAdvanceLeft > 1 ? `進行中… 残り${autoAdvanceLeft - 1}日` : autoAdvanceLeft === 1 ? '進行中…' : '1日進める'}
+                  {autoAdvanceLeft === 0 && <kbd aria-hidden="true" className={KEY_HINT_CLASS}>Space</kbd>}
                 </button>
               </div>
             </div>
@@ -2981,8 +3056,34 @@ const DateProgressContent = ({ seasonData, setSeasonData, onForceEvent, onSetupM
             </div>
           )}
 
-          {/* 平行世界リーグ順位表 */}
-          {WORLD_DATA.initialized && (() => {
+          {/* 気になる所（次の試合の前に手を打てること）。無ければ出さない */}
+          {attentionNotes.length > 0 && (
+            <div className="bg-gradient-to-b from-gray-800 to-gray-900 rounded-2xl p-3 shadow-xl border border-amber-700/30 mt-3" data-testid="attention-notes">
+              <h2 className="text-sm font-bold text-white mb-2 flex items-center gap-1.5">
+                <span className="text-amber-400">📌</span> 気になる所
+                {onOpenRoster && (
+                  <button type="button" onClick={onOpenRoster} className="btn-secondary ml-auto text-xs px-2 py-0.5 rounded-lg">編成へ</button>
+                )}
+              </h2>
+              <ul className="space-y-1">
+                {attentionNotes.map((n, i) => (
+                  <li key={i} className={`flex items-start gap-1.5 rounded-lg px-2.5 py-1.5 text-xs border ${
+                    n.level === 'danger' ? 'bg-red-950/40 border-red-800/40 text-red-200'
+                      : n.level === 'warning' ? 'bg-amber-950/40 border-amber-800/40 text-amber-200'
+                      : 'bg-gray-800/60 border-gray-700/40 text-gray-200'
+                  }`}>
+                    <span className="shrink-0">{n.level === 'danger' ? '⚠️' : n.level === 'warning' ? '💤' : 'ℹ️'}</span>
+                    <span>{n.text}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {/* 独立リーグ・大学リーグ・社会人の大会。自分のモードのものだけ開き、ほかは「ほかの球界」に畳む */}
+          {(() => {
+          // 平行世界リーグ順位表
+          const indSection = WORLD_DATA.initialized && (() => {
             const parallelLeagues = getAllParallelLeagues();
             if (parallelLeagues.length === 0 && !seasonData.grandChampionship?.done) return null;
             return (
@@ -3119,10 +3220,10 @@ const DateProgressContent = ({ seasonData, setSeasonData, onForceEvent, onSetupM
                 </div></Collapse>
               </div>
             );
-          })()}
+          })();
 
-          {/* 大学リーグ順位表 */}
-          {WORLD_DATA.initialized && (() => {
+          // 大学リーグ順位表
+          const uniLeagueSection = WORLD_DATA.initialized && (() => {
             // 大学モード: ユーザーリーグの順位をWORLD_DATAに同期（simulateUniversityLeagueDateはユーザーリーグをスキップするため）
             // springStandings != null = recordGameResultが秋季初試合でリセット済み → 実際に秋季が始まっている
             if (isUniversity && seasonData.standings?.length > 0) {
@@ -3226,10 +3327,10 @@ const DateProgressContent = ({ seasonData, setSeasonData, onForceEvent, onSetupM
                 </div></Collapse>
               </div>
             );
-          })()}
+          })();
 
-          {/* 社会人トーナメント（全非社会人モード: 折りたたみ式・トーナメント表付き） */}
-          {!isCorporate && WORLD_DATA.initialized && (() => {
+          // 社会人トーナメント（全非社会人モード: 折りたたみ式・トーナメント表付き）
+          const corpSection = !isCorporate && WORLD_DATA.initialized && (() => {
             const corpToshi = WORLD_DATA.corporateToshitaikou;
             const corpNS = WORLD_DATA.corporateNihonSenshuken;
             const corpCS = WORLD_DATA.corporateClubSenshuken;
@@ -3385,6 +3486,38 @@ const DateProgressContent = ({ seasonData, setSeasonData, onForceEvent, onSetupM
                 </div></Collapse>
               </div>
             );
+          })();
+
+          // ⚠ 自分のモードに関係しない球界（大学なら独立リーグ・社会人の大会）は「ほかの球界」に畳む。
+          //    以前は大学で遊んでいても右列に「独立リーグ状況」「社会人トーナメント（開催中...）」が
+          //    開いたまま並んでいた（UI点検 S10）。中身と開け閉めの state はそのまま使う
+          const sections = [
+            { key: 'ind', node: indSection, mine: modeCapabilities.independent },
+            { key: 'uni', node: uniLeagueSection, mine: isUniversity },
+            { key: 'corp', node: corpSection, mine: false },
+          ];
+          const mineNodes = sections.filter(x => x.mine && x.node);
+          const otherNodes = sections.filter(x => !x.mine && x.node);
+          return (
+            <>
+              {mineNodes.map(x => <React.Fragment key={x.key}>{x.node}</React.Fragment>)}
+              {otherNodes.length > 0 && (
+                <div className="bg-gradient-to-b from-gray-800 to-gray-900 rounded-2xl p-3 shadow-xl border border-gray-700/30 mt-3" data-testid="other-worlds">
+                  <h2 className="text-sm font-bold text-gray-200 flex items-center gap-1.5 cursor-pointer select-none"
+                    onClick={() => setShowOtherWorlds(v => !v)}>
+                    <span>🗺️</span> ほかの球界
+                    <span className="text-xs text-gray-400 font-normal">（{otherNodes.map(x => OTHER_WORLD_LABEL[x.key]).join('・')}）</span>
+                    <span className="text-xs text-gray-400 ml-auto">{showOtherWorlds ? '▲' : '▼'}</span>
+                  </h2>
+                  <Collapse open={showOtherWorlds}>
+                    <div className="-mt-1">
+                      {otherNodes.map(x => <React.Fragment key={x.key}>{x.node}</React.Fragment>)}
+                    </div>
+                  </Collapse>
+                </div>
+              )}
+            </>
+          );
           })()}
         </div>
       </div>
@@ -3454,7 +3587,7 @@ const DateProgressContent = ({ seasonData, setSeasonData, onForceEvent, onSetupM
 
         const titleColor = (isUcType || isMjType) ? 'text-blue-400' : isRtType ? 'text-green-400' : isCsType ? 'text-purple-400' : isNsType ? 'text-red-400' : 'text-yellow-400';
 
-        const handleTournamentChoice = (choice) => {
+        const handleTournamentChoice = (choice, opts = {}) => {
           setShowTournamentMatchModal(null);
           if (choice === 'manage') {
             startTournamentMatch(oppName, oppDef, {
@@ -3462,7 +3595,7 @@ const DateProgressContent = ({ seasonData, setSeasonData, onForceEvent, onSetupM
               roundIdx: tm.roundIdx,
               matchIdx: tm.matchIdx,
               bracketType: tm.bracketType,
-            });
+            }, opts);
           } else {
             if (isUcType || isMjType) {
               const dataKey = isUcType ? 'universityChampionship' : 'meijiJingu';
@@ -3558,7 +3691,7 @@ const DateProgressContent = ({ seasonData, setSeasonData, onForceEvent, onSetupM
 
       {/* スポーツ新聞モーダル */}
       {showNewspaper && newspaperData && (
-        <NewspaperModal data={newspaperData} seasonData={seasonData} onClose={() => setShowNewspaper(false)} />
+        <NewspaperModal data={newspaperData} teamData={newspaperTeamData} seasonData={seasonData} onClose={() => setShowNewspaper(false)} />
       )}
 
       {/* スキップした試合の結果（8秒で消える） */}

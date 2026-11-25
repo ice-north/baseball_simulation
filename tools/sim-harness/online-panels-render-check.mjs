@@ -169,6 +169,12 @@ try {
     assert.equal((full.match(/<tr>/g) || []).length, 3, `成果の表が1人1行になっていない: ${full}`);
     assert.match(full, /ミート/, '項目の列（ミート）が無い');
     assert.match(full, /制球/, '項目の列（制球）が無い');
+    // ⚠ シーズン中の「現在の手続き」では**畳んでおく**（P2 2026-11-25）。まとめの1行と
+    //    「選手ごとの伸びを開く」だけで、20列の表は出さない（開くと選手ごとに伸びた項目だけ1行）
+    const season = render(h(CompletedCamp, { view: { year: 2, teamName: 't', roster, lastCamp: camp, stage: { key: 'season' } } }));
+    assert.match(season, /人が伸びました/, 'シーズン中のキャンプ結果にまとめが無い');
+    assert.match(season, /選手ごとの伸びを開く/, 'シーズン中のキャンプ結果に開くボタンが無い');
+    assert.doesNotMatch(season, /<table/, 'シーズン中のキャンプ結果が畳まれていない');
     const nextYear = render(h(CompletedCamp, { view: { year: 3, teamName: 't', roster, lastCamp: camp }, onHome: true }));
     assert.equal(nextYear, '', '年が替わってもホームに前の年のキャンプ結果が出る');
   }
@@ -964,6 +970,9 @@ try {
     assert.match(html, /方針・采配/, '見出しが変わっていない');
     assert.match(html, /基本方針/, '基本方針が出ていない');
     assert.match(html, /自動采配/, '自動采配が出ていない');
+    // ⚠ 自動采配は「バント」「代打・守備固め」「継投」の3つに分けて左右に配る（P3 2026-11-25）
+    for (const title of ['バント', '代打・守備固め', '継投'])
+      assert.match(html, new RegExp(`aria-label="自動采配: ${title}"`), `自動采配の「${title}」のまとまりが無い`);
     // ⚠ 区分の切り替え（タブ）を置かない。項目は2つだけなので要らない。
     //    ボタンを並べた選択肢（`Choice`）は `online-segments` を使うので、
     //    **どの並びも選択肢の中にある**ことで見る
@@ -973,11 +982,11 @@ try {
     assert.equal(segments, choices, '区分の切り替えが残っている');
     // ⚠ スタメン設定と被る**操作**を出さない。文面での案内は残してよい
     //    （「打順は『スタメン設定』で」と書いてある）ので、見出しと部品で見る
-    const headings = [...html.matchAll(/<h2[^>]*>(.*?)<\/h2>/g)].map((m) => m[1]);
+    const headings = [...html.matchAll(/<h2[^>]*>(.*?)<\/h2>/g)].map((m) => m[1].replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim());
     assert.deepEqual(
       headings,
-      // 作戦別成績は見るだけ（操作は無い。B2）
-      ['基本方針', '自動采配', '作戦別成績'],
+      // 作戦別成績は見るだけ（操作は無い。B2）。自動采配は3つに分けた（P3。左の列に継投、右にバント・代打・守備固め）
+      ['基本方針', '自動采配 継投', '自動采配 バント', '自動采配 代打・守備固め', '作戦別成績'],
       `小見出しがちがう: ${headings.join('・')}`,
     );
     // 打順の行・先発のチェック欄そのものを出さない（PCは移植画面で設定する）

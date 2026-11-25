@@ -1,7 +1,6 @@
 import StrategyStats from './StrategyStats.jsx';
 import React, { useState } from 'react';
 import MobilePanel from './MobilePanel.jsx';
-import { PageNav } from './PageNav.jsx';
 import { PlayerStatsButton, ConditionMark } from './PlayerPerformance.jsx';
 import { StaffActual as Actual, TacticsDelegateNote } from './StaffPage.jsx';
 import {
@@ -37,8 +36,7 @@ export default function MobileTactics({
   error,
   close,
 }) {
-  const [group, setGroup] = useState('basic'),
-    [page, setPage] = useState(0);
+  const [group, setGroup] = useState('basic');
   const pitchers = view.roster
     .filter((p) => p.position === 'pitcher' && p.isActive !== false)
     .sort((a, b) => {
@@ -78,10 +76,7 @@ export default function MobileTactics({
       <select
         aria-label="見る設定"
         value={group}
-        onChange={(e) => {
-          setGroup(e.target.value);
-          setPage(0);
-        }}
+        onChange={(e) => setGroup(e.target.value)}
       >
         {Object.entries(GROUPS).map(([key, label]) => (
           <option key={key} value={key}>
@@ -170,7 +165,7 @@ export default function MobileTactics({
             役割・ローテーションは「打順」の「投手起用を開く」で変えられます
           </p>
           <div className="online-mobile-role-list">
-            {pitchers.slice(page * 4, page * 4 + 4).map((p) => {
+            {pitchers.map((p) => {
               const order = plan.starters.indexOf(p.id),
                 role = roleFor(plan.pitcherRoles?.[p.id], order >= 0);
               return (
@@ -188,12 +183,6 @@ export default function MobileTactics({
               );
             })}
           </div>
-          <PageNav
-            page={page}
-            size={4}
-            count={pitchers.length}
-            setPage={setPage}
-          />
         </>
       ) : (
         <p className="online-mobile-tactic-note">
