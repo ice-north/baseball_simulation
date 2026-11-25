@@ -188,7 +188,9 @@ fun OnlineApp(model: AppViewModel) {
             val onTrades = tab == Tab.Procedures && model.procTrade && model.tradeDraft == null
             val tradeKeys = tradeNoticeKeys(raw)
             LaunchedEffect(onTrades, tradeKeys) { if (onTrades) model.markTradesSeen(tradeKeys) }
-            val notice = if (onTrades || view == null) null else tradeNoticeText(view, raw, model.seenTrades)
+            // ⚠ 届いた提案の帯はホームだけに出す（以前はどのタブでも上の約8%を使い続けた。
+            //    ほかのタブでは下の「手続き・交渉」の数字で分かる。UI総点検 A2）
+            val notice = if (onTrades || view == null || tab != Tab.Home) null else tradeNoticeText(view, raw, model.seenTrades)
             // ⚠ 自分が決める手続きは、その画面を開いていない間ずっと上に帯で出す（閉じられない。済んだら消える）。
             //    初期メンバー選択・人員整理・キャンプは「手続き」のタブの中なので、うっかり飛ばしやすかった
             val onProcedure = tab == Tab.Procedures && model.procFace == "Current"

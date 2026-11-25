@@ -121,14 +121,15 @@ class AppUiTest {
     /** 送った指示（本文） */
     private val commands: MutableList<String> = Collections.synchronizedList(mutableListOf())
 
-    @Test fun tradeAndProcedureNoticesBothRemainVisibleWithoutOverlap() {
+    @Test fun tradeNoticeIsOnlyOnHomeAndProcedureNoticeOnOtherTabs() {
         open(""""pendingPack":{"chosen":null,"packs":[]},"trades":[{"id":"t1","myTurn":true,"mine":false,"fromTeam":"other"}]""")
+        // ⚠ 届いた提案の帯はホームだけ（以前はどのタブでも上に出続けた。ほかのタブでは下のタブの数字で分かる）
+        rule.onNodeWithTag("trade-notice").assertIsDisplayed()
         // ⚠ ホームでは手続きの帯を出さない（紙面の「お知らせ」に同じ文がある）。ほかのタブで確かめる
+        rule.onNodeWithTag("procedure-notice").assertDoesNotExist()
         rule.onNodeWithTag("tab-Games").performClick()
-        val trade = rule.onNodeWithTag("trade-notice").assertIsDisplayed().fetchSemanticsNode().boundsInRoot
-        val procedure = rule.onNodeWithTag("procedure-notice").assertIsDisplayed().fetchSemanticsNode().boundsInRoot
-        assertTrue("トレード通知が手続き通知を隠しています", trade.bottom <= procedure.top)
-        rule.onNodeWithTag("procedure-notice").performClick()
+        rule.onNodeWithTag("trade-notice").assertDoesNotExist()
+        rule.onNodeWithTag("procedure-notice").assertIsDisplayed().performClick()
         rule.onNodeWithText("初期メンバー選択").assertIsDisplayed()
     }
 
