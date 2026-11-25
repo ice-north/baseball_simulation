@@ -4245,6 +4245,23 @@ small.online-gain:not(:where(.online-sp *)) {
   font-weight: 700;
 }
 
+/* 一人用の画面の切り替え（`src/components/SoloSegments.jsx`。X2）。地色（明るい紙）の上にも
+   置くので入れ物の地を不透明にする（半透明だと紙が透けて字が沈む）。#d1d5db / #1f2937 で 10:1 */
+.online.online-embed.solo-segment-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.online-desktop .online-segments.solo-segments {
+  margin: 0;
+  background: #1f2937;
+  border-color: #374151;
+}
+.online-desktop .online-segments.solo-segments button {
+  font-size: 12px;
+}
+
 /* --- 左メニュー ------------------------------------------------------ */
 .online-desktop .online-page-nav {
   overflow-y: auto;
@@ -4786,6 +4803,31 @@ small.online-gain:not(:where(.online-sp *)) {
 .online-lineup-scroll {
   overflow-x: auto;
 }
+/* 一人用の投手起用の警告の帯（`SoloPitchingBoard.jsx`。S1）。紺のカードの上に明るい帯を敷き、
+   濃い字で読ませる（以前は紺の地に濃い赤の字で、ほぼ見えなかった）。
+   字 #7f1d1d / 地 #fde8e3 で 8.6:1。注意（崩れてはいない）は黄の帯 #713f12 / #fef3c7 で 8.5:1 */
+.solo-pitch-warning {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 0 0 8px;
+  padding: 8px 12px;
+  border: 1px solid #e8a798;
+  border-radius: 6px;
+  background: #fde8e3;
+  color: #7f1d1d;
+  font-size: 13px;
+  font-weight: 700;
+}
+.solo-pitch-warning.is-note {
+  border-color: #e6c96b;
+  background: #fef3c7;
+  color: #713f12;
+}
+.solo-pitch-warning > span {
+  flex: 1;
+}
+
 .online-desktop .online-lineup-table {
   font-size: 13px;
   font-variant-numeric: tabular-nums;
