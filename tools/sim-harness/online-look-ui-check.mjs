@@ -86,7 +86,11 @@ await withDeadline(
       const { p, context } = await open({ viewport: { width: 1440, height: 1000 } });
       const nav = p.locator('.online-page-nav');
       await nav.getByRole('button', { name: 'スタメン設定', exact: true }).waitFor();
-      const toggle = p.locator('.online-header').getByRole('button', { name: /新しい見た目（試作）/ });
+      // ⚠ PCは**上の見出しの帯を出さない**。見た目の切り替え・一人用・ログアウトは左メニューの下（P5 2026-11-25）
+      const toggle = p.locator('.online-nav-account').getByRole('button', { name: /新しい見た目（試作）/ });
+      assert.equal(await p.locator('.online-header').count(), 0, 'PCに見出しの帯が残っている');
+      await p.locator('.online-nav-account').getByRole('link', { name: '一人用', exact: true }).waitFor();
+      await p.locator('.online-nav-account').getByRole('button', { name: 'ログアウト', exact: true }).waitFor();
       // 既定は切
       assert.equal(await toggle.getAttribute('aria-pressed'), 'false');
       assert.equal(await p.locator('.online-look-art').count(), 0, '切なのに絵が出ている');

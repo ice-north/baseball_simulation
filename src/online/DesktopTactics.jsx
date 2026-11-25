@@ -31,6 +31,37 @@ import { StaffActual as Actual, TacticsDelegateNote } from './StaffPage.jsx';
 
 const clone = (value) => JSON.parse(JSON.stringify(value));
 
+/**
+ * 自動采配の分け方（P3 2026-11-25）。⚠ `TACTIC_FIELDS` に項目を足したら、どれかに入れる
+ * （入れ忘れると画面から消える。下の `TACTIC_GROUPED` で落ちた項目を最後のまとまりに足す）
+ */
+const TACTIC_GROUP_LIST = [
+  {
+    id: 'bunt',
+    title: 'バント',
+    note: 'AIが状況を見てバントを選ぶ範囲です。',
+    keys: ['sacrificeBunt', 'squeeze', 'safetyBunt'],
+  },
+  {
+    id: 'bench',
+    title: '代打・守備固め',
+    note: '控えの野手を使う範囲と、疲れた野手を休ませる目安です。',
+    keys: ['pinchHit', 'pinchHitFrom', 'defensiveSub', 'defenseFrom', 'restLine'],
+  },
+  {
+    id: 'pitching',
+    title: '継投',
+    note: '球数上限は役割の上限より低い場合に打席の区切りで判断し、疲労限界による交代は維持します。',
+    keys: ['hook', 'starterLimit'],
+  },
+];
+const TACTIC_GROUPED = new Set(TACTIC_GROUP_LIST.flatMap((g) => g.keys));
+const TACTIC_GROUPS = TACTIC_GROUP_LIST.map((g, i, all) =>
+  i === all.length - 1
+    ? { ...g, keys: [...g.keys, ...Object.keys(TACTIC_FIELDS).filter((k) => !TACTIC_GROUPED.has(k))] }
+    : g,
+);
+
 export default function DesktopTactics({ view, busy, run, command }) {
   const [draft, setDraft] = useDraftState('lineup.plan', () =>
     clone(view.lineup || {}),
@@ -90,6 +121,33 @@ export default function DesktopTactics({ view, busy, run, command }) {
     setError('');
   };
 
+  // 自動采配のまとまり1つ（見出し・説明・選択肢）
+  const tacticGroup = ({ id, title, note, keys }) => (
+    <section key={id} className="online-card" aria-label={`自動采配: ${title}`}>
+      <h2>
+        自動采配<small>{title}</small>
+      </h2>
+      {note && <p className="online-muted">{note}</p>}
+      <div className="online-choices">
+        {keys.map((key) => {
+          const [label, options] = TACTIC_FIELDS[key];
+          return (
+            <div key={key} className="online-staff-choice">
+              <Choice
+                label={label}
+                options={options}
+                value={draft.tactics?.[key] ?? TACTIC_DEFAULTS[key]}
+                disabled={busy}
+                onChange={(value) => setTactic(key, value)}
+              />
+              <Actual view={view} field="tactics" name={key} />
+            </div>
+          );
+        })}
+      </div>
+    </section>
+  );
+
   return (
     <Page
       title="方針・采配"
@@ -121,48 +179,38 @@ export default function DesktopTactics({ view, busy, run, command }) {
       }
     >
       <TacticsDelegateNote view={view} />
-      <div className="online-board is-even">
-        <section className="online-card online-board-main">
-          <h2>基本方針</h2>
-          <p className="online-muted">試合全体の攻め方・守り方です。</p>
-          <div className="online-choices">
-            {Object.entries(STRATEGY_FIELDS).map(([key, [label, values]]) => (
-              <div key={key} className="online-staff-choice">
-                <Choice
-                  label={label}
-                  options={values}
-                  value={draft.strategy?.[key] || Object.keys(values)[0]}
-                  disabled={busy}
-                  onChange={(value) => setStrategy(key, value)}
-                />
-                <small className="online-strategy-effect">
-                  {strategyEffectText(key, draft.strategy?.[key] || Object.keys(values)[0])}
-                </small>
-                <Actual view={view} field="strategy" name={key} />
-              </div>
-            ))}
-          </div>
-        </section>
-        <section className="online-card online-board-side">
-          <h2>自動采配</h2>
-          <p className="online-muted">
-            AIが状況を判断する範囲です。球数上限は役割の上限より低い場合に打席の区切りで判断し、疲労限界による交代は維持します。
-          </p>
-          <div className="online-choices">
-            {Object.entries(TACTIC_FIELDS).map(([key, [label, options]]) => (
-              <div key={key} className="online-staff-choice">
-                <Choice
-                  label={label}
-                  options={options}
-                  value={draft.tactics?.[key] ?? TACTIC_DEFAULTS[key]}
-                  disabled={busy}
-                  onChange={(value) => setTactic(key, value)}
-                />
-                <Actual view={view} field="tactics" name={key} />
-              </div>
-            ))}
-          </div>
-        </section>
+      {/* ⚠ **自動采配は「バント」「代打・守備固め」「継投」の3つに分けて**左右に配る
+            （P3 2026-11-25）。以前は左の基本方針が4項目で終わり、右の自動采配だけ
+            縦に約1800px続いていた。左＝基本方針・継投、右＝バント・代打・守備固め */}
+      <div className="online-tactics-columns">
+        <div className="online-tactics-column">
+          <section className="online-card">
+            <h2>基本方針</h2>
+            <p className="online-muted">試合全体の攻め方・守り方です。</p>
+            <div className="online-choices">
+              {Object.entries(STRATEGY_FIELDS).map(([key, [label, values]]) => (
+                <div key={key} className="online-staff-choice">
+                  <Choice
+                    label={label}
+                    options={values}
+                    value={draft.strategy?.[key] || Object.keys(values)[0]}
+                    disabled={busy}
+                    onChange={(value) => setStrategy(key, value)}
+                  />
+                  <small className="online-strategy-effect">
+                    {strategyEffectText(key, draft.strategy?.[key] || Object.keys(values)[0])}
+                  </small>
+                  <Actual view={view} field="strategy" name={key} />
+                </div>
+              ))}
+            </div>
+          </section>
+          {tacticGroup(TACTIC_GROUPS[2])}
+        </div>
+        <div className="online-tactics-column">
+          {tacticGroup(TACTIC_GROUPS[0])}
+          {tacticGroup(TACTIC_GROUPS[1])}
+        </div>
       </div>
       <section className="online-card">
         <h2>作戦別成績</h2>

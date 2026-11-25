@@ -23,7 +23,7 @@ import { teamLabel } from './gameText.js';
 import { noticeCounts, packWaiting, pendingProcedure } from './notices.js';
 import { CompletedCamp } from './CampPlanner.jsx';
 import TryoutResult from './TryoutResult.jsx';
-import SeasonFlow, { stageLines } from './SeasonFlow.jsx';
+import SeasonFlow, { NextProcedure, stageLines } from './SeasonFlow.jsx';
 import YearSummary from './YearSummary.jsx';
 import ProDraftResult from './ProDraftResult.jsx';
 import { ReporterMemo, EventScene } from './look/Story.jsx';
@@ -54,6 +54,8 @@ export default function MobileView(props) {
     useDraftMemoryPeek('lineup.full'),
   );
   const [fullLineup, setFullLineup] = useState(unsavedFull);
+  // ホームの「そのほか（PC・アプリで）」の案内を開いているか（M2）
+  const [showOthers, setShowOthers] = useState(false);
   const tabs = [
     ['today', '今日'],
     ['games', '試合'],
@@ -182,7 +184,17 @@ export default function MobileView(props) {
               <NavIcon id="staff" />
               指導者
             </button>
+            {/* ⚠ 6つ目は「そのほか」（M2 2026-11-25）。入口が5つで最後だけ1列になり、トレードの提案や
+                リーグ史がスマホWeb に無いことの案内も無かった。押すと何が PC・アプリにあるかを出す */}
+            <button aria-expanded={showOthers} onClick={() => setShowOthers(!showOthers)}>
+              そのほか（PC・アプリで）
+            </button>
           </nav>
+          {showOthers && (
+            <p className="online-home-others" role="note">
+              トレードの提案・リーグ史・球団史・記録・予告先発・練習試合の申し込みは、PC で開けます（アプリにあるものはアプリでも）。届いたトレードの提案と練習試合の申し込みには、ここからも返事できます。
+            </p>
+          )}
           <Standings view={view} />
           {/* ⚠ **行った先の見出しの名前で書く**（「リーグの話題」と「リーグ便り」）。以前は
               「リーグ便り・過去のシーズン →」で、開くと先頭は「リーグの話題」、1年目は
@@ -289,6 +301,8 @@ export default function MobileView(props) {
               </p>
             </section>
             <SeasonFlow view={view} compact />
+            {/* 次に決める手続きを大きく（P2。PCと同じ部品。キャンプ結果はシーズン中は畳む） */}
+            <NextProcedure view={view} />
             <CompletedCamp key={view.lastCamp?.year} view={view} />
             <ProDraftResult view={view} />
             <TryoutResult view={view} />

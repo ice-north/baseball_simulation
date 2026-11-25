@@ -30,7 +30,7 @@ import {
 } from './shared.js';
 import { PlayerStatsButton } from './PlayerPerformance.jsx';
 import TeamLineupButton from './TeamLineup.jsx';
-import { PageNav } from './PageNav.jsx';
+import { ShowMore } from './PageNav.jsx';
 import { Page } from './Page.jsx';
 import { gamesBehind, gapText } from './standingsGap.js';
 import TryoutPlanner from './TryoutPlanner.jsx';
@@ -321,9 +321,12 @@ export function Standings({ view, action = null }) {
   );
 }
 
+// 試合の一覧に最初に出す数と「続きを表示」で足す数。⚠ **1ターン分（リーグ全体で6試合）**。
+//    以前は PC 6試合・スマホ2試合ごとのページ送りで、下が空いたまま「1/3」と出ていた（X1・M1）
+const SCORE_STEP = 6;
 export function Results({ view, compact = false }) {
   const [mode, setMode] = useState('results');
-  const [page, setPage] = useState(0);
+  const [shown, setShown] = useState(SCORE_STEP);
   const [scope, setScope] = useState(compact ? 'own' : 'league');
   const all = mode === 'results' ? [...view.results].reverse() : view.upcoming;
   const list =
@@ -332,8 +335,6 @@ export function Results({ view, compact = false }) {
           (game) => game.home === view.teamName || game.away === view.teamName,
         )
       : all;
-  // ⚠ PCは1日ぶん（リーグ全体なら6試合）を1ページにする
-  const size = compact ? 2 : 6;
   const scopes = [
     ['own', '自球団'],
     ['league', 'リーグ全体'],
@@ -348,7 +349,7 @@ export function Results({ view, compact = false }) {
             value={scope}
             onChange={(event) => {
               setScope(event.target.value);
-              setPage(0);
+              setShown(SCORE_STEP);
             }}
           >
             {scopes.map(([id, label]) => (
@@ -366,7 +367,7 @@ export function Results({ view, compact = false }) {
                 aria-pressed={scope === id}
                 onClick={() => {
                   setScope(id);
-                  setPage(0);
+                  setShown(SCORE_STEP);
                 }}
               >
                 {label}
@@ -385,7 +386,7 @@ export function Results({ view, compact = false }) {
             aria-pressed={mode === id}
             onClick={() => {
               setMode(id);
-              setPage(0);
+              setShown(SCORE_STEP);
             }}
           >
             {label}
@@ -394,7 +395,7 @@ export function Results({ view, compact = false }) {
       </div>
       <div className="online-score-list">
       {list.length ? (
-        list.slice(page * size, page * size + size).map((g) => {
+        list.slice(0, shown).map((g) => {
           const outcome = mode === 'results' && ownOutcome(g, view.teamName);
           const decisions = decisionText(g.decisions);
           // ⚠ PCは正式名を**都市と愛称の間で**折る（`teamNameParts`）。字の途中で折ると
@@ -456,7 +457,7 @@ export function Results({ view, compact = false }) {
         </p>
       )}
       </div>
-      <PageNav page={page} count={list.length} size={size} setPage={setPage} />
+      <ShowMore shown={shown} count={list.length} step={SCORE_STEP} setShown={setShown} />
       {view.gameDetailsAvailable && <GameHistory view={view} />}
     </section>
   );
@@ -491,20 +492,21 @@ const tierOf = (id) =>
   PYRAMID_LEAGUES.find((league) => league.id === id)?.tier ?? 0;
 const isPromotion = (move) => tierOf(move.to) < tierOf(move.from);
 
+// リーグ便りに最初に出す人数と「続きを表示」で足す数（X1。ページ送りはやめた）
+const NEWS_STEP = 8;
 export function Notices({ view, compact = false }) {
   const [selected, setSelected] = useState('notice:0');
-  const [page, setPage] = useState(0);
+  const [shown, setShown] = useState(NEWS_STEP);
   const [kind, index] = selected.split(':');
   const notice = view.notices[Number(index)];
   const history = view.history[Number(index)];
   const picks = kind === 'notice' ? noticeItems(notice) : [];
   const label = compact ? teamShort : teamLabel;
-  const size = 8;
   useEffect(() => {
     if (!view.notices.length && !view.history.length) return;
     if ((kind === 'notice' && !notice) || (kind === 'history' && !history)) {
       setSelected(view.notices.length ? 'notice:0' : 'history:0');
-      setPage(0);
+      setShown(NEWS_STEP);
     }
   }, [kind, notice, history, view.notices.length, view.history.length]);
   return (
@@ -520,7 +522,7 @@ export function Notices({ view, compact = false }) {
             value={selected}
             onChange={(e) => {
               setSelected(e.target.value);
-              setPage(0);
+              setShown(NEWS_STEP);
             }}
           >
             {view.notices.map((n, i) => (
@@ -541,7 +543,7 @@ export function Notices({ view, compact = false }) {
               <div
                 className={`online-news-list ${compact ? 'is-compact' : ''}`}
               >
-                {picks.slice(page * size, page * size + size).map((p, j) =>
+                {picks.slice(0, shown).map((p, j) =>
                   notice?.type === 'promotion' ? (
                     <article key={j}>
                       <b>{label(p.teamId)}</b>
@@ -563,12 +565,7 @@ export function Notices({ view, compact = false }) {
                   ),
                 )}
               </div>
-              <PageNav
-                page={page}
-                count={picks.length}
-                size={size}
-                setPage={setPage}
-              />
+              <ShowMore shown={shown} count={picks.length} step={NEWS_STEP} setShown={setShown} />
             </>
           ) : (
             history?.standings.map((s, i) => (
@@ -1038,10 +1035,15 @@ export function PhasePanel({ view, auth, busy, run, command, mobile, setTab }) {
             setPlan(next);
           }}
           onReset={resetToDefaults}
+          // ⚠ PCは年齢構成を受験者の表の横に固定する（P4。スマホは下のまま）
+          aside={!mobile && <AgeOutlook outlook={view.ageOutlook} compact />}
         />
       )}
-      {/* 年齢構成と3年後の見込み（若手を取るか即戦力か・誰を残すかの材料。`AgeOutlook.jsx`） */}
-      {(plan.rankedIds || plan.releaseIds) && <AgeOutlook outlook={view.ageOutlook} compact />}
+      {/* 年齢構成と3年後の見込み（若手を取るか即戦力か・誰を残すかの材料。`AgeOutlook.jsx`）。
+          PCのトライアウトは受験者の表の横（上の `aside`）に出すので、ここでは出さない */}
+      {((plan.rankedIds && mobile) || plan.releaseIds) && (
+        <AgeOutlook outlook={view.ageOutlook} compact />
+      )}
       {plan.releaseIds && (
         <ContractPlanner
           roster={view.roster}

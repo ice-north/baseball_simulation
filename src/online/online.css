@@ -3556,7 +3556,7 @@ small.online-gain:not(:where(.online-sp *)) {
   margin-bottom: 10px;
 }
 
-/* 左メニューのまとまり。見る（情報）・決める（ロスター管理）・動かす（手続き）。
+/* 左メニューのまとまり。見る（情報）・決める（編成）・動かす（手続き）。
    ⚠ 以前は項目が平らに並ぶだけで、どこに何があるか辿れなかった。 */
 .online-desktop .online-nav-group {
   display: flex;
@@ -8089,4 +8089,256 @@ table.paper-table {
 }
 .online-tryout-extra {
   color: #fcd34d;
+}
+/* ---- UI総点検の直し（2026-11-25・オンライン） ---- */
+/* 長い一覧の「続きを表示」（`PageNav.jsx` の `ShowMore`。X1・M1。ページ送りの代わり） */
+.online-show-more {
+  display: flex;
+  justify-content: center;
+  margin-top: 12px;
+}
+.online-show-more button:not(:where(.online-sp *)) {
+  min-width: 180px;
+}
+/* スマホの選手成績は全員を出し、表の中を縦に送る（M1。以前は6人ごとのページ送り） */
+.online-mobile .online-compact-roster .online-roster-rows {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+/* トライアウト（P4）: 受験者の表の横に、いまの名簿と年齢構成を固定する（PC）。
+   ⚠ 受験者の枠は包みの中に入ったので、`.online-tryout > section` の枠をここでも当てる */
+.online-tryout-pool-wrap {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+}
+.online-tryout-pool-wrap > section {
+  min-width: 0;
+  border: 1px solid #536b85;
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+.online-tryout-pool-wrap.has-aside {
+  grid-template-columns: minmax(0, 1fr) 360px;
+  align-items: start;
+}
+.online-tryout-side {
+  position: sticky;
+  top: 96px;
+  display: grid;
+  gap: 12px;
+  max-height: calc(100vh - 112px);
+  overflow-y: auto;
+}
+.online-tryout-side .online-card {
+  margin: 0;
+}
+.online-tryout-now p {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  margin: 0;
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+}
+.online-tryout-now span[data-short] {
+  color: #fbbf24;
+}
+.online-tryout-rules {
+  margin: 8px 0 4px;
+  padding-left: 1.2em;
+  font-size: 13px;
+  line-height: 1.6;
+}
+.online-tryout-more summary {
+  cursor: pointer;
+  font-size: 12px;
+  color: #cbd5e1;
+}
+@media (max-width: 1279px) {
+  .online-tryout-pool-wrap.has-aside {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .online-tryout-side {
+    position: static;
+    max-height: none;
+  }
+}
+/* スマホの投手の役割は全員を出し、枠の中を縦に送る（X1。以前は4人ごとのページ送り） */
+.online-mobile-role-list { overflow-y: auto; overscroll-behavior: contain; }
+/* ホームの個人成績ランキング（P1）。名前の欄は可変、入らないときは「…」で切って球団名と
+   重ねない（以前は名前のボタンが欄からはみ出し、5文字の名前が球団名に重なっていた）。
+   球団名は少し小さくして、名前に幅を回す */
+.online-leaders li {
+  gap: 4px;
+}
+.online-leader-name {
+  display: flex;
+  align-items: center;
+}
+.online .online-leader-name .online-player-name {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.online-leader-team {
+  font-size: 11px;
+  margin-left: 2px;
+}
+/* 決定待ちが無いときの「次に決める手続き」（P2。`SeasonFlow.jsx` の `NextProcedure`） */
+.online-next-procedure > small {
+  display: block;
+  font-size: 12px;
+  color: #cbd5e1;
+}
+.online-next-procedure > p {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  margin: 4px 0;
+}
+.online-next-procedure > p strong {
+  font-size: 26px;
+  color: var(--accent);
+}
+.online-next-procedure > p b {
+  font-size: 20px;
+}
+.online-next-procedure > span {
+  font-size: 13px;
+  color: #d0d9e5;
+}
+/* シーズン中のキャンプ結果を開いたとき（P2）: 選手ごとに伸びた項目だけ1行 */
+.online-camp-lines {
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: 13px;
+}
+.online-camp-lines li {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 2px 8px;
+  padding: 4px 0;
+  border-bottom: 1px solid #ffffff14;
+}
+.online-camp-lines li > span {
+  color: #d0d9e5;
+}
+/* 方針・采配（P3。`DesktopTactics.jsx`）: 左＝基本方針・継投、右＝バント・代打・守備固め。
+   ⚠ 2つの縦の列に積む（grid の行で揃えると、短いカードの下に空きができる） */
+.online-tactics-columns {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+  align-items: start;
+}
+.online-tactics-column {
+  display: grid;
+  gap: 18px;
+  min-width: 0;
+}
+.online-tactics-column > .online-card {
+  margin: 0;
+}
+.online-tactics-column h2 small {
+  margin-left: 8px;
+  font-size: 0.85em;
+  color: var(--accent);
+}
+@media (max-width: 1100px) {
+  .online-tactics-columns {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+/* 左メニューの下の、見た目の切り替え・一人用・ログアウト（P5。以前は上の帯にあった）。
+   ⚠ **字のリンクの形で2行に収める**（枠のあるボタンにすると、1280×800 で左メニューの
+   最後の項目が画面の外に出る。`online-lineup-board-ui-check` が見ている） */
+.online-nav-account {
+  margin-top: auto;
+  padding: 4px 6px 0;
+  border-top: 1px solid #536b85;
+  display: grid;
+  gap: 0;
+}
+/* 検証モードの注記（ローカルだけ）。左メニューの高さを使わないよう、画面の右下に浮かせる */
+.online-desktop .online-dev-badge {
+  position: fixed;
+  right: 8px;
+  bottom: 4px;
+  z-index: 30;
+  margin: 0;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: #00000066;
+  font-size: 11px;
+  color: #cbd5e1;
+  pointer-events: none;
+}
+.online-nav-account .online-testbar {
+  margin: 0 0 4px;
+  flex-wrap: wrap;
+}
+.online-nav-account-links {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0 14px;
+  font-size: 12px;
+  line-height: 1.4;
+}
+.online-desktop .online-page-nav .online-nav-account-links button:not(:where(.online-sp *)) {
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--accent);
+  font-size: 12px;
+  text-align: left;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.online-nav-account-links a {
+  color: var(--accent);
+}
+/* スマホのホームの「そのほか（PC・アプリで）」の案内（M2） */
+.online-home-others {
+  margin: 0 12px 8px;
+  font-size: 12px;
+  color: #cbd5e1;
+}
+/* 入口の数が奇数になったら、最後の1つは横いっぱいに（M2。1列だけ半分で残さない） */
+.online-home-actions > button:last-child:nth-child(odd) {
+  grid-column: 1 / -1;
+}
+/* スマホの試合成績（M1）: 出場した全員を出し、表の枠の中を縦に送る（以前は6人ごとのページ送り）。
+   枠の高さは見出し＋6行ぶんのまま（小窓は縦に収める）。見出しは送っても上に残す */
+.online-mobile .online-game-dialog .online-record-area {
+  max-height: calc(7 * 44px + 8px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.online-mobile .online-game-dialog .online-record-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--surface-2);
+}
+.online .online-camp-lines .online-player-name {
+  min-height: 0;
+}
+/* トライアウト（P4）: 横に年齢構成を置いて表が狭くなったぶん、選手の欄はほかの球団の札を
+   折り返して行を伸ばす（1行に押し込むと札が守備の列に重なった） */
+.online-desktop .online-tryout-pool-wrap.has-aside .online-tryout-table td.online-tryout-person:not(:where(.online-sp *)) {
+  height: auto;
+  min-height: 40px;
+  padding-top: 4px;
+  padding-bottom: 4px;
+  white-space: normal;
+  min-width: 180px;
+  max-width: 300px;
 }

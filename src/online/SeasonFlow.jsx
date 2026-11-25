@@ -1,5 +1,5 @@
 import React from 'react';
-import { SEASON_STEPS } from './shared.js';
+import { SEASON_STEPS, turnOfDate } from './shared.js';
 import { formatDeadline } from './LeaguePanels.jsx';
 
 // ============================================================
@@ -79,6 +79,44 @@ export default function SeasonFlow({ view, compact = false }) {
           <span>{lines.todo}</span>
         </p>
       )}
+    </section>
+  );
+}
+
+// 自分で決める手続き（1年の流れのうち）
+const DECIDE_STEPS = ['contract', 'tryout', 'camp'];
+/**
+ * 決定待ちの手続きが無いときに、**次に決める手続きとその時間を大きく**出す（P2 2026-11-25）。
+ * ⚠ 以前は「現在、決定待ちの手続きはありません」の1行だけで、画面のほとんどがキャンプ結果の
+ *    表だった。次に何をいつ決めるのかが、帯（`SeasonFlow`）の小さな字を読まないと分からなかった。
+ * ⚠ 時刻は帯と同じ曜日の枠（`SEASON_STEPS` の `when`）で書く。日付を画面で推し量らない
+ *    （段階はサーバーが決める。検証モードは時計が違う）
+ */
+export function NextProcedure({ view }) {
+  const stage = view?.stage;
+  const index = SEASON_STEPS.findIndex((s) => s.key === stage?.key);
+  if (index < 0) return null;
+  // いまの段階が開いている（シーズン中など）なら次の段階から、開く前ならその段階から探す
+  const next = [...SEASON_STEPS.slice(stage.open ? index + 1 : index), ...SEASON_STEPS].find((s) =>
+    DECIDE_STEPS.includes(s.key),
+  );
+  if (!next) return null;
+  const turn =
+    stage.key === 'season' ? turnOfDate(view.currentDate, view.seasonTurns) : null;
+  const left = turn && view.seasonTurns ? view.seasonTurns - turn : null;
+  const lines = stageLines(view);
+  return (
+    <section className="online-card online-next-procedure" aria-label="次の手続き">
+      <small>次に決める手続き</small>
+      <p>
+        <strong>{next.label}</strong>
+        <b>{next.when}</b>
+      </p>
+      <span>
+        {stage.key === 'season'
+          ? `${left != null ? `シーズンは残り${left}ターン。` : ''}シーズンとプレーオフが終わると開きます。`
+          : lines?.head}
+      </span>
     </section>
   );
 }

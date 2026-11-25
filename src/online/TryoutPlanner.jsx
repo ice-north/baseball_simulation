@@ -1,7 +1,7 @@
 import React, { useMemo, useRef, useState } from 'react';
 import { POS, posTone, posInk } from './api.js';
 import { AbilityGrade, PlayerStatsButton } from './PlayerPerformance.jsx';
-import { PageNav } from './PageNav.jsx';
+import { ShowMore } from './PageNav.jsx';
 import { teamLabel, teamShort } from './gameText.js';
 import { rosterCounts } from '../utils/constants.js';
 import { AbilityValue } from '../components/AbilityValue.jsx';
@@ -64,7 +64,8 @@ import {
 //    **前年の順位が上の球団**が取る（`resolveTryout`）。
 // ============================================================
 
-/** 1ページに出す人数。PCは表なので多め、スマホはカードなので少なめ */
+/** 最初に出す人数と「続きを表示」で足す人数。PCは表なので多め、スマホはカードなので少なめ。
+ *  ⚠ ページ送りはやめた（X1 2026-11-25）。送るたびに表の頭へ戻って探し直していた */
 const PAGE = 20;
 const MOBILE_PAGE = 12;
 const GROUP_LABELS = {
@@ -470,6 +471,9 @@ export default function TryoutPlanner({
   mobile,
   onChange,
   onReset,
+  // PCで受験者の表の横に固定して出すもの（年齢構成と3年後の見込み。P4 2026-11-25）。
+  // ⚠ スマホは渡さない（呼ぶ側が表の下に出す）
+  aside = null,
 }) {
   const [group, setGroup] = useState('all');
   // ⚠ 既定は「評価値」。重みを変えたら、候補の並びもその重みで見えるようにする
@@ -496,7 +500,8 @@ export default function TryoutPlanner({
     activeFilters
       .map((f) => ABILITY_FILTERS.find((d) => d.key === f.key))
       .filter((d, i, all) => d && all.indexOf(d) === i && d.side !== kind);
-  const [page, setPage] = useState(0);
+  const step = mobile ? MOBILE_PAGE : PAGE;
+  const [limitShown, setShown] = useState(step);
   // ⚠ お知らせは**出したときの希望順と組で持つ**。「標準案に戻す」など外から
   //    希望順が変わったら出さない（「作り直しました」が標準案の上に残っていた）
   const [noticeState, setNoticeState] = useState(null);
@@ -531,6 +536,8 @@ export default function TryoutPlanner({
     count,
     roster,
   );
+  // いまの名簿の内訳（PCの表の横の「いまの名簿」）
+  const now = rosterCounts(roster || []);
   // 獲得したあとの名簿の内訳（目標と比べるのはこちら。下の見出しの注）
   const after = rosterCounts([...(roster || []), ...picked]);
   // ⚠ 最低限（投1・捕1・野8）に届かないぶんはサーバーが人数を超えて補うので、その分も足す。
@@ -545,15 +552,14 @@ export default function TryoutPlanner({
     // eslint-disable-next-line react-hooks/exhaustive-deps -- scoreOf は scores から、activeFilters は filterKey から決まる
     [candidates, group, query, sortKey, scores, filterKey],
   );
-  const size = mobile ? MOBILE_PAGE : PAGE;
-  const shown = pool.slice(page * size, page * size + size);
+  const shown = pool.slice(0, limitShown);
   // PCは投手と野手で表を分ける。⚠ **出ている人だけ**（空の表は出さない）
   const sections = ['pitcher', 'fielder']
     .map((kind) => ({
       kind,
       players: shown.filter((p) => kindOf(p) === kind),
       // ⚠ 成績の列を出すかは**絞り込んだ全員**で決める（表示中の20人で決めると、
-      //    元プロが居るページだけ列が増え、ページを送るたびに表の幅が変わる）
+      //    元プロが続きに居るときだけ列が増え、「続きを表示」で表の幅が変わる）
       withStats: hasStats(pool.filter((p) => kindOf(p) === kind), kind),
     }))
     .filter((s) => s.players.length);
@@ -749,25 +755,42 @@ export default function TryoutPlanner({
           </ol>
       {/* ⚠ **競合の決まり方を書く**。順位を上げるご褒美だと分かるようにする
             （いしだ要望）。書かないと「なぜ取られたのか」が画面から読めない */}
-        <p className="online-muted">
-          1位から順に取りにいきます。<strong>同じ選手を他球団も希望したときは、
-          前年の順位が上の球団が獲得します</strong>（取られたぶんは下から繰り上がります）。
-          名前の横の球団の札は、その選手をリストに入れている球団です（
-          <span className="online-tryout-listed-team is-first">赤</span>
-          はあなたより先に指名する球団、「?」はCPU球団の狙いの見込み）。
-          {/* ⚠ 目標の構成だけは語の途中で割らない（`online-tryout-targets`）。
-              ほかの `strong` にも nowrap を当てると、文が長いので 320px で外へ出る */}
-          名簿の目標は
-          <strong className="online-tryout-targets">
-            投{targets.pitcher}・捕{targets.catcher}・内{targets.infielder}・外
-            {targets.outfielder}
-          </strong>
-          です。<strong>獲得するのは上で決めた人数まで</strong>で、
-          {/* ⚠ 短い強調も割らない。字の幅がわずかに違う環境（CI）で「…取りませ／ん」と
-              1字だけ次の行に落ちた。13字なので 320px でも1行に収まる */}
-          <strong className="online-tryout-targets">交渉した選手しか取りません</strong>（交渉した人が尽きたら、人数に届かなくてもそこで止めます。
-          投手・捕手・野手が最低限に届かないときだけ、足りない位置を補います）。
-        </p>
+        {/* ⚠ **決まりは3行の箇条書き**、残りは「ⓘ くわしく」に畳む（P4 2026-11-25）。
+              以前は長い段落が続き、表と年齢構成が下へ押し出されていた。
+              競合の決まり方（前年の順位が上の球団が取る）は外に出したまま（いしだ要望。
+              書かないと「なぜ取られたのか」が画面から読めない） */}
+        <ul className="online-tryout-rules">
+          <li>
+            1位から順に取りにいきます。<strong>獲得するのは上で決めた人数まで</strong>で、
+            {/* ⚠ 短い強調は語の途中で割らない（`online-tryout-targets`。字の幅がわずかに違う
+                環境（CI）で「…取りませ／ん」と1字だけ次の行に落ちた。13字なので 320px でも1行） */}
+            <strong className="online-tryout-targets">交渉した選手しか取りません</strong>。
+          </li>
+          <li>
+            <strong>同じ選手を他球団も希望したときは、前年の順位が上の球団が獲得します</strong>
+            （取られたぶんは下から繰り上がります）。
+          </li>
+          <li>
+            名簿の目標は
+            <strong className="online-tryout-targets">
+              投{targets.pitcher}・捕{targets.catcher}・内{targets.infielder}・外
+              {targets.outfielder}
+            </strong>
+            です。
+          </li>
+        </ul>
+        <details className="online-tryout-more">
+          <summary>
+            <span aria-hidden="true">ⓘ</span> くわしく
+          </summary>
+          <p className="online-muted">
+            名前の横の球団の札は、その選手をリストに入れている球団です（
+            <span className="online-tryout-listed-team is-first">赤</span>
+            はあなたより先に指名する球団、「?」はCPU球団の狙いの見込み）。
+            交渉した人が尽きたら、人数に届かなくてもそこで止めます。
+            投手・捕手・野手が最低限に届かないときだけ、足りない位置を補います。
+          </p>
+        </details>
         {/* 決めた人数と交渉した人数の関係を1行で（どちらが余るかで意味が変わる） */}
         <p className="online-tryout-total-note">
           {total === 0
@@ -845,13 +868,16 @@ export default function TryoutPlanner({
           </button>
         </div>
       </details>
+      {/* ⚠ PCは**受験者の表の横に、いまの名簿と年齢構成を固定**する（P4 2026-11-25）。
+            判断に使う年齢構成が表の下（約3000px下）にあり、見比べられなかった */}
+      <div className={`online-tryout-pool-wrap${aside ? ' has-aside' : ''}`}>
       <section className="online-tryout-pool">
         <div className="online-tryout-pool-head">
           <h3>
             受験者 {pool.length}人
             <small>
               {pool.length
-                ? `${page * size + 1}〜${Math.min(pool.length, page * size + size)}人目を出しています。名前を押すと選手の詳細が開きます`
+                ? `${Math.min(pool.length, limitShown)}人を出しています。名前を押すと選手の詳細が開きます`
                 : '条件に合う受験者がいません（守備位置・名前・能力の条件をゆるめてください）'}
             </small>
           </h3>
@@ -863,7 +889,7 @@ export default function TryoutPlanner({
                 aria-pressed={group === g.key}
                 onClick={() => {
                   setGroup(g.key);
-                  setPage(0);
+                  setShown(step);
                 }}
               >
                 {g.label}
@@ -877,7 +903,7 @@ export default function TryoutPlanner({
                 value={sortKey}
                 onChange={(e) => {
                   setSortKey(e.target.value);
-                  setPage(0);
+                  setShown(step);
                 }}
               >
                 <option value={WEIGHTED_SORT_KEY}>評価値（重み）</option>
@@ -895,7 +921,7 @@ export default function TryoutPlanner({
                 value={query}
                 onChange={(e) => {
                   setQuery(e.target.value);
-                  setPage(0);
+                  setShown(step);
                 }}
               />
             </label>
@@ -904,7 +930,7 @@ export default function TryoutPlanner({
             filters={abilityFilters}
             onChange={(next) => {
               setAbilityFilters(next);
-              setPage(0);
+              setShown(step);
             }}
           />
         </div>
@@ -972,8 +998,31 @@ export default function TryoutPlanner({
             ))}
           </div>
         )}
-        <PageNav page={page} count={pool.length} size={size} setPage={setPage} />
+        <ShowMore shown={limitShown} count={pool.length} step={step} setShown={setShown} />
       </section>
+      {aside && (
+        <aside className="online-tryout-side" aria-label="いまの名簿と年齢構成">
+          <section className="online-card online-tryout-now">
+            <h2>いまの名簿 {(roster || []).length}人</h2>
+            {/* 分子はいまの名簿、分母は目標（上の「獲得後の名簿」と同じ書き方） */}
+            <p>
+              {[
+                ['pitcher', '投'],
+                ['catcher', '捕'],
+                ['infielder', '内'],
+                ['outfielder', '外'],
+              ].map(([key, label]) => (
+                <span key={key} data-short={now[key] < targets[key] || undefined}>
+                  {label}
+                  {now[key]}/{targets[key]}
+                </span>
+              ))}
+            </p>
+          </section>
+          {aside}
+        </aside>
+      )}
+      </div>
     </div>
   );
 }
