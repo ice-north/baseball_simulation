@@ -12,13 +12,6 @@
 //   2年目の人の勝率の平均 .589（.583/.562・.569/.427・.667/.597・.671/.639）、成立したトレード 計148件
 //   （1リーグ 34〜39件）／トレードしない（種11だけ）.415。
 //   ⚠ それまでのこの道具は出番の上乗せを掛けておらず、サーバーより受ける交換を少なく見ていた
-// 2026-11-25 の測り直し（同じコード。**「しない」も同じ種で測る**。種24・人の球団48）:
-//   2年目の人の勝率 する .554 ／ しない .529（差 +.024、種ごとの差のばらつきから見て誤差の幅ぎりぎり）。
-//   上の「.589 と .415」は、する側が当たりの種4つ（同じ種のしないは .537）、しない側が種1つだけだった。
-//   人の戦力（`squadStrength`）は1シーズンに約+85 上がるのに、勝率は +.02〜.03 しか動かない。
-//   切り分け（種8つ。TRADE_VARIANT）: 時期・1対1だけ・回数の上限・同じ球団と1件・買い戻し禁止の
-//   どれも「しない」との差は ±.04 の中。`tools/sim-harness/trade-why.sh <種> <出力先>` で9通りを並べて回せる。
-// ⚠ **差を見るときは種を16以上**。1種の2年目の勝率は人の2球団の平均でも ±.06 ほど揺れる。
 import './lib/bootstrap.mjs';
 import {
   createLeague, defaultPhasePlan, submitPhase, advanceLeagueDay, loadLeagueWorld, captureLeagueWorld, openTrade,
@@ -28,6 +21,7 @@ import { TEAMS_DATA } from '../../src/teams-data.js';
 import { tradeJudgeForLeague } from '../../server/tradeJudge.mjs';
 import { assertTradeAllowed } from '../../src/online/trades.js';
 import { squadStrength } from '../../src/online/tradeSearch.js';
+import { setStaffModes } from '../../server/coachEngine.mjs';
 
 const MODE = process.argv[2] || 'trade'; // trade | none
 const SEED = Number(process.argv[3] || 20261028);
@@ -47,6 +41,9 @@ const tradeLog = [];
 let now = new Date('2026-10-28T00:00:00Z');
 const league = createLeague({ seed: SEED, members: [{ userId: 'a' }, { userId: 'b' }], now: now.toISOString() });
 const humans = new Set(league.members.map((m) => m.teamName));
+// TRADE_STAFF=delegate: 人の球団のスタメンと投手起用を指導者に任せる（取った選手をその場で使う形に組み直す）
+if (process.env.TRADE_STAFF)
+  for (const m of league.members) setStaffModes(league, m.userId, { lineup: process.env.TRADE_STAFF, pitching: process.env.TRADE_STAFF });
 const names = () => league.season.settings.teamNames;
 const log = (...a) => console.log(...a);
 
@@ -102,6 +99,14 @@ function tradeRound(label, key) {
       const r = openTrade(league, member.userId, { to: best.to, offer: best.offer.map((p) => p.id), want: [best.want.id] }, now.toISOString());
       if (r.status !== 'accepted') { log('not accepted?', r); break; }
       made++;
+      if (process.env.TRADE_DEBUG) {
+        // 取った選手が打順・ローテに入ったか（人の球団の編成は、成り立つ限り残る）
+        const t = TEAMS_DATA[member.teamName];
+        const inOrder = (t.lineupSettings?.battingOrder || []).some((e) => e.playerId === best.want.id && e.position !== 'pitcher');
+        const inRot = (t.pitchingRotation?.starters || []).includes(best.want.id);
+        const role = best.want.position === 'pitcher' ? (inRot ? '先発' : '救援') : (inOrder ? 'スタメン' : '控え');
+        log(`    取った ${best.want.name}: ${role}`);
+      }
       for (const p of [...best.offer, best.want]) touched.add(p.id);
       const pk = `${league.season.year}|${member.teamName}|${best.to}`;
       pairCount.set(pk, (pairCount.get(pk) || 0) + 1);
