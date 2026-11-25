@@ -105,15 +105,20 @@ const VELOCITY_PER_ROUND_MAX = 4;
 //    「低い帯に効きすぎ・高い帯に効かない」が直る（いしだ 2026-11-25）。
 const INTENSIVE_ZERO_SHIFT = 8;
 const INTENSIVE_DAMP_WINDOW = 16;
+// 集中の天井のゼロ点の上限（Q2 監査16）。⚠ フィジカル系（80から3%/下限10%→110で下限）はゼロ点が118になり、
+//    能力は99までなので**走力集中に天井が無かった**（走力50でも95でも1クール約+0.8で同じ）。
+//    守備と同じ95で止める（走力なら79から減り始めて95で0）。
+//    ⚠ 球速（km の物差し）には掛けない（`highStatDamp` の `zeroMax`）
+const INTENSIVE_ZERO_MAX = 95;
 /** 高能力値の減衰。`intensive` なら集中用の形（平らな帯のあとゼロへ）で返す */
-function highStatDamp(currentValue, curve, intensive) {
+function highStatDamp(currentValue, curve, intensive, zeroMax = INTENSIVE_ZERO_MAX) {
   if (!intensive) {
     if (currentValue < curve.from) return 1.0;
     return Math.max(curve.floor, 1.0 - (currentValue - curve.from) * curve.rate);
   }
   // 元の曲線が下限に着く点 → そこから `INTENSIVE_ZERO_SHIFT` うしろがゼロ点
   const baseFloorAt = curve.from + (1 - curve.floor) / curve.rate;
-  const zero = baseFloorAt + INTENSIVE_ZERO_SHIFT;
+  const zero = Math.min(zeroMax, baseFloorAt + INTENSIVE_ZERO_SHIFT);
   const from = zero - INTENSIVE_DAMP_WINDOW;
   if (currentValue < from) return 1.0;
   return Math.max(0, (zero - currentValue) / INTENSIVE_DAMP_WINDOW);
@@ -1648,7 +1653,8 @@ export function executeCampTraining(player, trainingType, newPitchType, staffBon
       //    上の技術系・フィジカル系の判定を**上書きする**ので、順番を変えないこと
       const effort = EFFORT_DAMP[targetStat];
       if (effort) dampCurve = effort;
-      const dampFactor = highStatDamp(currentValue, dampCurve, isIntensive);
+      const dampFactor = highStatDamp(currentValue, dampCurve, isIntensive,
+        targetStat === 'velocity' ? Infinity : INTENSIVE_ZERO_MAX);
       const adjustedBaseGrowth = Math.max(0, stochasticRound(rawGrowth * growthMult * dampFactor));
 
       let totalGrowth = Math.max(0, adjustedBaseGrowth + awakeningGrowth);
