@@ -105,7 +105,7 @@ fun GamesScreen(model: AppViewModel, section: String, onSection: (String) -> Uni
     if (section == "history") {
         Column(Modifier.fillMaxSize().statusBarsPadding().padding(top = 16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text("試合", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 16.dp))
-            ChipTabs(GAMES_SECTIONS, section, onSection)
+            SectionTabs(GAMES_SECTIONS, section, onSection)
             LeagueHistoryPane(model, view, raw)
         }
         return
@@ -113,7 +113,7 @@ fun GamesScreen(model: AppViewModel, section: String, onSection: (String) -> Uni
     Column(Modifier.fillMaxSize().statusBarsPadding().verticalScroll(listScroll).padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Text("試合", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
         // ⚠ 順位表・タイトル争い・リーグ便りはここ（ホームは新聞の紙面にしたので、数字の表はこのタブにまとめる）
-        ChipTabs(GAMES_SECTIONS, section, onSection)
+        SectionTabs(GAMES_SECTIONS, section, onSection)
         when (section) {
             "standings" -> { StandingsBoard(view, onOpenTeam); return@Column }
             "leaders" -> {

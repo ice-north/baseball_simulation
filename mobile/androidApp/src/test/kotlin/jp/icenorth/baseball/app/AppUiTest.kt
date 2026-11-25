@@ -407,6 +407,18 @@ class AppUiTest {
         rule.runOnIdle { assertTrue("fielderRest" in model.seenSituationTips) }
     }
 
+    @Test fun planBarKeepsUndoAndSaveAndTucksTheRestInAMenu() {
+        open(""""roster":[{"id":1,"name":"選手","position":"first"}],"lineup":{"battingOrder":[{"playerId":1,"position":"first","battingOrder":1}],"starters":[]}""")
+        rule.onNodeWithTag("tab-Plan").performClick()
+        // ⚠ 以前は「元に戻す・やり直す・保存済み・変更を取り消す・保存」が1行に小さく並んでいた
+        rule.onNodeWithText("↶ 元に戻す").assertIsDisplayed()
+        rule.onNodeWithText("保存済み").assertIsDisplayed()
+        rule.onNodeWithText("↷ やり直す").assertDoesNotExist()
+        rule.onNodeWithTag("plan-more").performClick()
+        rule.onNodeWithText("↷ やり直す").assertExists()
+        rule.onNodeWithText("変更を取り消す").assertExists()
+    }
+
     @Test fun delegatedProcedureShowsTheCoachPlanWithoutDecisions() {
         val roster = """[{"id":1,"name":"出す人","position":"first"},{"id":2,"name":"残す人","position":"second"}]"""
         open(
@@ -466,6 +478,28 @@ class AppUiTest {
         rule.onNodeWithTag("tab-Procedures").performClick()
         rule.onNodeWithText("解雇する選手（1人）").assertExists()
         rule.onNodeWithText(note).assertExists()
+    }
+
+    @Test fun contractRowOpensWordedActionsBelow() {
+        val roster = """[{"id":1,"name":"出す人","position":"first"},{"id":2,"name":"残す人","position":"second"}]"""
+        open(
+            """"roster":$roster,"lineup":{"battingOrder":[]},"phase":{"id":"ph1","kind":"contract"}""",
+            answer = { action -> if (action == "defaults") """{"phaseId":"ph1","plan":{"releaseIds":[]}}""" else null },
+        )
+        rule.onNodeWithTag("tab-Procedures").performClick()
+        rule.onNodeWithText("解雇する選手（0人）").assertExists()
+        // ⚠ 以前は行の右に「解雇」「投C」「野C」の小さな札が並んでいた。行を押すと、下に操作が言葉で開く
+        rule.onNodeWithTag("contract-actions").assertDoesNotExist()
+        rule.onNodeWithTag("contract-row-1").performScrollTo().performClick()
+        rule.onNodeWithText("投手コーチに打診").assertExists()
+        rule.onNodeWithText("野手コーチに打診").assertExists()
+        rule.onNodeWithText("解雇する").performScrollTo().performClick()
+        rule.onNodeWithText("解雇する選手（1人）").assertExists()
+        rule.onNodeWithText("解雇予定").assertExists()
+        rule.onNodeWithText("解雇を取り消す").assertExists()
+        // もう一度行を押すと閉じる
+        rule.onNodeWithTag("contract-row-1").performScrollTo().performClick()
+        rule.onNodeWithTag("contract-actions").assertDoesNotExist()
     }
 
     @Test fun coachPlanNoteIsGoneAfterDeciding() {

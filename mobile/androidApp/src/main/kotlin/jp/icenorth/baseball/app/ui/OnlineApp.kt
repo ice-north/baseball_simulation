@@ -242,16 +242,7 @@ fun OnlineApp(model: AppViewModel) {
                                 onOpenTrade = { tab = Tab.Procedures; model.procTrade = true },
                             )
                         }
-                        // ⚠ 編成では TIPS の印を面の切り替えの右に置く（行が3行になり、左下に重ねると打順と「適」が隠れた）
-                        Tab.Plan -> PlanScreen(model) {
-                            SituationTipsBadge(
-                                situations,
-                                seen = model.seenSituationTips,
-                                onRead = model::markSituationTipsSeen,
-                                onOpenAll = { showTips = true },
-                                modifier = Modifier.padding(start = 2.dp, end = 8.dp).size(30.dp),
-                            )
-                        }
+                        Tab.Plan -> PlanScreen(model)
                         Tab.Procedures -> Refreshable(model) {
                             ProceduresScreen(model, onHome = { tab = Tab.Home }, onOpenStaff = { model.planFaceRequest = "Staff"; tab = Tab.Plan })
                         }
@@ -261,15 +252,16 @@ fun OnlineApp(model: AppViewModel) {
                 model.openingPlayer?.let { name ->
                     LoadingPill("${name}を読み込んでいます…", Modifier.align(Alignment.BottomCenter).padding(16.dp))
                 }
-                // ⚠ 枠は取らず左下の角に重ねる。ホームだけ（当てはまらなければ出ない）。
-                //    編成では選手の行に重なる（左下は打順の数字と「適」、右下は並べ替えのつまみ）ので、面の切り替えの右に出す
-                if (tab == Tab.Home) {
+                // ⚠ TIPS の印は、下のタブのすぐ上の右の決まった場所に重ねる（ホームと編成。当てはまる未読が無ければ出ない）。
+                //    以前はホームは左下・編成は面の切り替えの右で、編成では「指導者」のチップに、ホームでは紙面の字に重なった（UI総点検 A5）。
+                //    紙面と編成の一覧は下に印のぶんの余白を空けてあり、送れば最後の行も印の上に出る
+                if (tab == Tab.Home || tab == Tab.Plan) {
                     SituationTipsBadge(
                         situations,
                         seen = model.seenSituationTips,
                         onRead = model::markSituationTipsSeen,
                         onOpenAll = { showTips = true },
-                        modifier = Modifier.align(Alignment.BottomStart).padding(12.dp),
+                        modifier = Modifier.align(Alignment.BottomEnd).padding(12.dp),
                     )
                 }
             }

@@ -5,6 +5,10 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.gestures.animateScrollBy
+import androidx.compose.ui.draw.drawWithContent
+import kotlinx.coroutines.launch
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -299,7 +303,10 @@ fun ChoiceRow(options: List<Pair<String, String>>, selected: String?, enabled: B
     }
 }
 
-/** 区分のタブ（成績の区分など）。横に流す */
+/**
+ * 区分のチップ（成績の区分など）。横に流す。画面のいちばん上の切り替えは [SectionTabs]（下線のタブ）にし、
+ * その下の段だけをチップにする（形を分けて、何段も重なったときにどれが上の段か分かるように。UI総点検 A3）
+ */
 @Composable
 fun ChipTabs(
     options: List<Pair<String, String>>,
@@ -310,10 +317,7 @@ fun ChipTabs(
     /** 右の余白（右に別の物を並べるときは詰める） */
     endPadding: androidx.compose.ui.unit.Dp = 12.dp,
 ) {
-    Row(
-        modifier.horizontalScroll(rememberScrollState()).padding(start = 12.dp, end = endPadding),
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
-    ) {
+    ScrollFadeRow(modifier, endPadding, Arrangement.spacedBy(6.dp)) {
         options.forEach { (key, label) ->
             val count = counts[key] ?: 0
             FilterChip(
@@ -324,6 +328,112 @@ fun ChipTabs(
                 modifier = Modifier.testTag("chip-$key"),
                 // 未完了の数（下のタブの数字と同じ数え方）
                 trailingIcon = if (count > 0) ({ Badge { Text("$count") } }) else null,
+            )
+        }
+    }
+}
+
+/**
+ * 画面のいちばん上の切り替え（下線のタブ）。並べ方・鍵（`chip-<鍵>`）・数の出し方は [ChipTabs] と同じで、形だけが違う。
+ * ⚠ 2段目からは [ChipTabs]。同じ形のチップが4段重なり、どれが上の段か分かりにくかった（UI総点検 A3）
+ */
+@Composable
+fun SectionTabs(
+    options: List<Pair<String, String>>,
+    selected: String,
+    onSelect: (String) -> Unit,
+    modifier: Modifier = Modifier,
+    counts: Map<String, Int> = emptyMap(),
+    endPadding: androidx.compose.ui.unit.Dp = 12.dp,
+) {
+    val line = MaterialTheme.colorScheme.outlineVariant
+    val accent = MaterialTheme.colorScheme.primary
+    ScrollFadeRow(
+        modifier.drawBehind {
+            val h = 1.dp.toPx()
+            drawRect(line, Offset(0f, size.height - h), Size(size.width, h))
+        },
+        endPadding,
+        Arrangement.spacedBy(2.dp),
+    ) {
+        options.forEach { (key, label) ->
+            val on = key == selected
+            val count = counts[key] ?: 0
+            Row(
+                Modifier
+                    .testTag("chip-$key")
+                    .selectable(selected = on, role = androidx.compose.ui.semantics.Role.Tab, onClick = { onSelect(key) })
+                    .drawBehind {
+                        if (on) {
+                            val h = 3.dp.toPx()
+                            drawRect(accent, Offset(0f, size.height - h), Size(size.width, h))
+                        }
+                    }
+                    .height(44.dp)
+                    .padding(horizontal = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    label,
+                    fontWeight = if (on) FontWeight.Bold else FontWeight.Medium,
+                    color = if (on) accent else MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    softWrap = false,
+                )
+                if (count > 0) Badge(Modifier.padding(start = 4.dp)) { Text("$count") }
+            }
+        }
+    }
+}
+
+/**
+ * 横に流す段。右に続きがあるときは右の端をぼかし、小さな矢印を出す（押すと先へ送る）。
+ * ⚠ 以前は右が途中で切れているだけで、続きがあることに気づきにくかった（UI総点検 A3）
+ */
+@Composable
+private fun ScrollFadeRow(
+    modifier: Modifier,
+    endPadding: androidx.compose.ui.unit.Dp,
+    arrangement: Arrangement.Horizontal,
+    content: @Composable androidx.compose.foundation.layout.RowScope.() -> Unit,
+) {
+    val scroll = rememberScrollState()
+    val more = scroll.canScrollForward
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    Box(modifier) {
+        Row(
+            Modifier
+                .graphicsLayer(compositingStrategy = androidx.compose.ui.graphics.CompositingStrategy.Offscreen)
+                .drawWithContent {
+                    drawContent()
+                    if (more) {
+                        val w = 36.dp.toPx()
+                        drawRect(
+                            androidx.compose.ui.graphics.Brush.horizontalGradient(
+                                listOf(Color.Transparent, Color.Black),
+                                startX = size.width - w,
+                                endX = size.width,
+                            ),
+                            blendMode = androidx.compose.ui.graphics.BlendMode.DstOut,
+                        )
+                    }
+                }
+                .horizontalScroll(scroll)
+                .padding(start = 12.dp, end = endPadding),
+            horizontalArrangement = arrangement,
+            verticalAlignment = Alignment.CenterVertically,
+            content = content,
+        )
+        if (more) {
+            Text(
+                "›",
+                fontSize = 20.sp,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier
+                    .align(Alignment.CenterEnd)
+                    .clickable { scope.launch { scroll.animateScrollBy(scroll.viewportSize * 0.6f) } }
+                    .padding(horizontal = 4.dp),
             )
         }
     }
@@ -378,6 +488,11 @@ fun StatTable(
      * ⚠ 入のときだけ使う（切のときは今までと同じ表）
      */
     grade: ((StatColumn, Double?, JsonObject) -> Char?)? = null,
+    /** 行（名前の列より右）を押したとき。名前は [onPlayer]（選手の詳細）のまま */
+    onRow: ((JsonObject) -> Unit)? = null,
+    /** この行の下に [expansion] を横いっぱいに開く（契約更改の操作など）。開くのは1行だけ */
+    expanded: (JsonObject) -> Boolean = { false },
+    expansion: (@Composable (JsonObject) -> Unit)? = null,
 ) {
     val divider = MaterialTheme.colorScheme.outlineVariant
     // 新しい見た目（試作。Web の `look/feel.css` 案2〜4と同じ考え）: 見出しの下に球団色の線・1行おきの縞・
@@ -417,10 +532,15 @@ fun StatTable(
     //    名前＋「守備 年齢」の2行が行に入りきらず、はみ出した下の行（年齢）に次の行の色付きの背景が重なって切れて見えた
     val rowHeight = RowHeight * androidx.compose.ui.platform.LocalDensity.current.fontScale.coerceAtLeast(1f)
     val colWidth: (StatColumn) -> Dp = { c -> if (c.label.length >= 4) 64.dp else 52.dp }
+    val rowClick: (JsonObject) -> Modifier = { p -> onRow?.let { f -> Modifier.clickable { f(p) } } ?: Modifier }
+    // 表の一部（rows の行だけ）。開いた行があるときは、その行までと、開いた中身と、その下の行に分けて描く
+    // ⚠ 横に流す位置（hScroll）は分けた表どうしで同じものを使う（片方だけ流れて列がずれないように）
+    @Composable
+    fun Part(rows: List<IndexedValue<JsonObject>>, header: Boolean) {
     Row(Modifier.fillMaxWidth()) {
         Column(Modifier.width(NameWidth)) {
-            HeaderCell("選手", NameWidth, TextAlign.Start, null, lookLine)
-            players.forEachIndexed { i, p ->
+            if (header) HeaderCell("選手", NameWidth, TextAlign.Start, null, lookLine)
+            rows.forEach { (i, p) ->
                 Row(
                     Modifier
                         .lookRow(i, highlight(p))
@@ -455,16 +575,17 @@ fun StatTable(
             }
         }
         Column(Modifier.weight(1f).horizontalScroll(hScroll)) {
-            Row {
+            if (header) Row {
                 columns.forEach { c ->
                     val mark = if (c.id == sortId) (if (ascending) "▲" else "▼") else ""
                     HeaderCell(c.label + mark, colWidth(c), TextAlign.End, { onSort(c) }, lookLine)
                 }
             }
-            players.forEachIndexed { i, p ->
+            rows.forEach { (i, p) ->
                 Row(
                     Modifier
                         .lookRow(i, highlight(p))
+                        .then(rowClick(p))
                         .height(rowHeight)
                         .background(if (highlight(p)) MaterialTheme.colorScheme.primary.copy(alpha = 0.14f) else Color.Transparent),
                     verticalAlignment = Alignment.CenterVertically,
@@ -522,11 +643,12 @@ fun StatTable(
         }
         if (trailing != null) {
             Column(Modifier.width(trailingWidth)) {
-                HeaderCell(trailingHeader, trailingWidth, TextAlign.Start, null, lookLine)
-                players.forEachIndexed { i, p ->
+                if (header) HeaderCell(trailingHeader, trailingWidth, TextAlign.Start, null, lookLine)
+                rows.forEach { (i, p) ->
                     Box(
                         Modifier
                             .lookRow(i, highlight(p))
+                            .then(rowClick(p))
                             .height(rowHeight)
                             .fillMaxWidth()
                             .background(if (highlight(p)) MaterialTheme.colorScheme.primary.copy(alpha = 0.14f) else Color.Transparent),
@@ -535,6 +657,16 @@ fun StatTable(
                 }
             }
         }
+    }
+    }
+    val all = players.withIndex().toList()
+    val open = if (expansion == null) -1 else all.indexOfFirst { expanded(it.value) }
+    if (open < 0) {
+        Part(all, header = true)
+    } else {
+        Part(all.subList(0, open + 1), header = true)
+        expansion!!(all[open].value)
+        if (open + 1 < all.size) Part(all.subList(open + 1, all.size), header = false)
     }
     if (players.isEmpty()) Muted(empty, Modifier.padding(12.dp))
     Box(Modifier.fillMaxWidth().height(1.dp).border(1.dp, divider))

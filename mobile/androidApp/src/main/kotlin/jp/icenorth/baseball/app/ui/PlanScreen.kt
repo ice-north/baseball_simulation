@@ -24,6 +24,10 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -120,7 +124,7 @@ private sealed interface OrderPick {
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun PlanScreen(model: AppViewModel, tipsBadge: @Composable () -> Unit = {}) {
+fun PlanScreen(model: AppViewModel) {
     val view = model.view
     val lineup = view?.lineup
     if (view == null || lineup == null || view.roster.isEmpty()) {
@@ -175,16 +179,10 @@ fun PlanScreen(model: AppViewModel, tipsBadge: @Composable () -> Unit = {}) {
         // ⚠ 指導者の面では編成の保存の帯を出さない（任せ方は面の中の「任せ方を保存」で送る。
         //    帯の「保存」と並ぶと、どちらで任せ方が保存されるのか分からなかった）
         if (tab != PlanTab.Staff) {
-            Row(Modifier.fillMaxWidth().padding(start = 4.dp, end = 8.dp, top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                // ⚠ 4つのボタンと状態の文を1行に収める（ボタンの名前を長くしたら、状態の文が縦に1字ずつ折れた）。
-                //    ボタンの内側の余白を詰め、状態の文は折り返さない
-                val tight = PaddingValues(horizontal = 6.dp)
-                TextButton(onClick = { model.plan = history.undo() }, enabled = history.canUndo, contentPadding = tight) { Text("↶ 元に戻す") }
-                TextButton(onClick = { model.plan = history.redo() }, enabled = history.canRedo, contentPadding = tight) { Text("↷ やり直す") }
-                Text(if (dirty) "未保存" else "保存済み", style = MaterialTheme.typography.labelSmall, color = if (dirty) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, softWrap = false, textAlign = TextAlign.Center, modifier = Modifier.weight(1f))
-                // ⚠ 取り消すと、編集を始めたときではなく**今の保存済み**の編成に戻す（古い base に戻すと保存が断られ続ける）
-                // ⚠ 名前は「変更を取り消す」（手続き・指導者の画面と Web と同じ。以前はここだけ「変更を捨てる」だった）
-                TextButton(onClick = { model.plan = history.push(PlanDraft.from(lineup, view.roster)) }, enabled = dirty || stale, contentPadding = tight) { Text("変更を取り消す") }
+            // ⚠ 帯は「元に戻す」「保存」の2つだけを大きく出し、やり直す・変更を取り消すは ⋮ の中（UI総点検 A5。
+            //    以前は5つの操作と状態の文が1行に小さく並び、押し間違えやすかった）。保存済みかは「保存」の字で分かる
+            Row(Modifier.fillMaxWidth().padding(start = 12.dp, end = 4.dp, top = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                OutlinedButton(onClick = { model.plan = history.undo() }, enabled = history.canUndo, modifier = Modifier.weight(1f)) { Text("↶ 元に戻す", maxLines = 1) }
                 Button(
                     onClick = {
                         val problem = draft.problem(view.roster)
@@ -194,7 +192,28 @@ fun PlanScreen(model: AppViewModel, tipsBadge: @Composable () -> Unit = {}) {
                         }
                     },
                     enabled = dirty,
-                ) { Text("保存") }
+                    modifier = Modifier.weight(1f).testTag("plan-save"),
+                ) { Text(if (dirty) "保存" else "保存済み", maxLines = 1) }
+                var menu by remember { mutableStateOf(false) }
+                Box {
+                    IconButton(onClick = { menu = true }, modifier = Modifier.testTag("plan-more")) {
+                        Icon(Icons.Filled.MoreVert, contentDescription = "編成のそのほかの操作")
+                    }
+                    DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+                        DropdownMenuItem(
+                            text = { Text("↷ やり直す") },
+                            enabled = history.canRedo,
+                            onClick = { menu = false; model.plan = history.redo() },
+                        )
+                        // ⚠ 取り消すと、編集を始めたときではなく**今の保存済み**の編成に戻す（古い base に戻すと保存が断られ続ける）
+                        // ⚠ 名前は「変更を取り消す」（手続き・指導者の画面と Web と同じ。以前はここだけ「変更を捨てる」だった）
+                        DropdownMenuItem(
+                            text = { Text("変更を取り消す") },
+                            enabled = dirty || stale,
+                            onClick = { menu = false; model.plan = history.push(PlanDraft.from(lineup, view.roster)) },
+                        )
+                    }
+                }
             }
             if (stale) {
                 Text(
@@ -205,11 +224,8 @@ fun PlanScreen(model: AppViewModel, tipsBadge: @Composable () -> Unit = {}) {
                 )
             }
         }
-        // 今の状態に当てはまる TIPS の印は面の切り替えの右に（行に重ねない）。切り替えの右の余白は詰めて、印が「指導者」にかからないように
-        Row(Modifier.fillMaxWidth().padding(top = if (tab == PlanTab.Staff) 8.dp else 0.dp), verticalAlignment = Alignment.CenterVertically) {
-            ChipTabs(PlanTab.entries.map { it.name to it.label }, tab.name, { tab = PlanTab.valueOf(it) }, Modifier.weight(1f), endPadding = 4.dp)
-            tipsBadge()
-        }
+        // ⚠ TIPS の印はここに置かない（以前は面の切り替えの右で「指導者」に重なった）。下のタブのすぐ上の右の決まった場所（[OnlineApp]）
+        SectionTabs(PlanTab.entries.map { it.name to it.label }, tab.name, { tab = PlanTab.valueOf(it) }, Modifier.fillMaxWidth().padding(top = if (tab == PlanTab.Staff) 8.dp else 0.dp))
         when (tab) {
             PlanTab.Order -> OrderEditor(view, draft, players, nextId, dragEdit, edit, onDragStart, open, model.lineupDetail, model::changeLineupDetail)
             PlanTab.Pitching -> PitchingEditor(view, draft, players, nextId, dragEdit, edit, onDragStart, open) { sheet = it }
@@ -367,7 +383,7 @@ private fun OrderEditor(
         }
         LazyColumn(
             state = listState,
-            contentPadding = PaddingValues(start = 12.dp, end = 12.dp, bottom = 16.dp),
+            contentPadding = PaddingValues(start = 12.dp, end = 12.dp, bottom = 80.dp), // 右下の TIPS の印に最後の行のつまみが隠れないよう
             verticalArrangement = Arrangement.spacedBy(6.dp),
             modifier = Modifier.fillMaxWidth().weight(1f),
         ) {
@@ -708,7 +724,7 @@ private fun PitchingList(
     val relievers = state.reliefGroups(view.roster)
     LazyColumn(
         state = listState,
-        contentPadding = PaddingValues(start = 12.dp, end = 12.dp, bottom = 16.dp),
+        contentPadding = PaddingValues(start = 12.dp, end = 12.dp, bottom = 80.dp), // 右下の TIPS の印に最後の行のつまみが隠れないよう
         verticalArrangement = Arrangement.spacedBy(6.dp),
         modifier = Modifier.fillMaxSize(),
     ) {
