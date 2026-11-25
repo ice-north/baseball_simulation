@@ -114,23 +114,23 @@ export const STRATEGY_MODS = {
 /** 方針の中身（数字以外の効き方）。数字は `STRATEGY_MODS` から足して `strategyEffectText` が1行にする */
 export const STRATEGY_NOTES = {
   batting: {
-    balanced: '能力はそのまま。',
+    balanced: '能力は変わりません。',
     patient: 'よく見て当てにいく。',
     aggressive: '長打を狙って強く振る。',
   },
   pitching: {
-    balanced: '能力は変わらない。配球は捕手に任せる。',
-    strikeout: '能力は変わらない。誘い球と変化球を増やし、空振りを取りにいく（四球は増える）。',
-    contact: '能力は変わらない。ストライクゾーンで勝負し、ゴロを打たせる球種を選ぶ（四球は減るが打たれやすい）。',
+    balanced: '能力は変わりません。配球は捕手に任せる。',
+    strikeout: '能力は変わりません。誘い球と変化球を増やし、空振りを取りにいく（四球は増える）。',
+    contact: '能力は変わりません。ストライクゾーンで勝負し、ゴロを打たせる球種を選ぶ（四球は減るが打たれやすい）。',
   },
   baseRunning: {
-    normal: '能力は変わらない。',
-    aggressive: '能力は変わらない。盗塁を試みる回数が約1.5倍。',
-    conservative: '能力は変わらない。盗塁を試みる回数が半分以下。',
+    normal: '能力は変わりません。',
+    aggressive: '能力は変わりません。盗塁を試みる回数が約1.5倍。',
+    conservative: '能力は変わりません。盗塁を試みる回数が半分以下。',
     never: '盗塁しない。',
   },
   defense: {
-    normal: '能力はそのまま。',
+    normal: '能力は変わりません。',
     infield_in: '内野は打球に早く追いつくが、外野の間を抜かれやすい。',
     shift: '内野の網を厚くするぶん、外野が手薄になる。',
   },
