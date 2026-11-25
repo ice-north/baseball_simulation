@@ -740,7 +740,7 @@ const LineupSettingContent = ({
                 <HistoryButtons canUndo={canUndo} canRedo={canRedo} undo={undo} redo={redo} />
               </div>
             ) : (
-            <ScreenHeader title="ロスター管理" sub={teamName}
+            <ScreenHeader title="編成" sub={teamName}
               right={(
                 <>
                   <HistoryButtons canUndo={canUndo} canRedo={canRedo} undo={undo} redo={redo} />

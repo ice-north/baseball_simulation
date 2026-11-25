@@ -7,6 +7,7 @@ import { getPitchTypeName } from '../../season/yearProgressionSystem.js';
 import { AbilityRadar, teamRadarAxes } from '../AbilityRadar.jsx';
 import { overallRating } from '../AbilityValue.jsx';
 import { useEscapeToClose } from '../useEscapeToClose.js';
+import { getAutoManagerPref } from '../../game/managedGamePrefs.js';
 
 // 行の列幅は1箇所で決める。⚠ **表を二重に作らないこと**——ここを直せば
 // スタメン・控え・先発投手選択・相手控え投手の4種の行が同時に揃う。
@@ -25,6 +26,9 @@ const PreGameModal = ({ seasonData, userTeamName, formatDate, getStartingPitcher
   const [selectedBench, setSelectedBench] = useState(null);
   const [, setTick] = useState(0);
   const [benchFilter, setBenchFilter] = useState('fielder');
+  // おまかせ采配の入／切。以前は「試合采配」のあとの2つ目のスタメン画面で選んでいた（UI点検 S9）。
+  // 初期値は前の試合で選んだもの（保存はしない）
+  const [autoManager, setAutoManager] = useState(getAutoManagerPref);
   useEscapeToClose(() => setShowGameChoiceModal(false));
 
   const isTournament = !!tournamentInfo;
@@ -351,12 +355,13 @@ const PreGameModal = ({ seasonData, userTeamName, formatDate, getStartingPitcher
                   return (
                     <div key={pitcher.id} onClick={() => !tooTired && handleSelectStarter(pitcher.id)}
                       className={`flex items-center gap-1.5 rounded px-2 py-1 transition-all text-xs ${
-                        isSelected ? 'bg-red-900/60 ring-1 ring-red-400' :
+                        // ⚠ 選んだ先発は、打順・控えの選択と同じ青にする。以前は濃い赤で、誤りの印に見えた（UI点検 S9）
+                        isSelected ? 'bg-blue-900 ring-1 ring-blue-400' :
                         tooTired ? 'bg-gray-800/30 opacity-50 cursor-not-allowed' :
-                        'bg-surface-2 hover:bg-red-900/30 cursor-pointer'
+                        'bg-surface-2 hover:bg-blue-900/50 cursor-pointer'
                       }`}
                     >
-                      <span className={`w-3 h-3 rounded-full border-2 shrink-0 ${isSelected ? 'border-red-400 bg-red-400' : 'border-gray-600'}`} />
+                      <span className={`w-3 h-3 rounded-full border-2 shrink-0 ${isSelected ? 'border-blue-400 bg-blue-400' : 'border-gray-600'}`} />
                       <span className={`text-xs px-1 py-0.5 rounded font-bold ${pitcher.physical?.throws === 'left' ? 'bg-blue-600 text-white' : 'bg-orange-600 text-white'}`}>
                         {pitcher.physical?.throws === 'left' ? '左' : '右'}
                       </span>
@@ -520,8 +525,16 @@ const PreGameModal = ({ seasonData, userTeamName, formatDate, getStartingPitcher
         {/* フッター（固定）＝この画面で「次に押すもの」。常に見えていること */}
         {/* ⚠ 手書きの `bg-gray-700 …` だったので `.btn-secondary` へ寄せた。
             `.btn-primary` はこの階層に1つ（試合采配）だけ。 */}
-        <div className="shrink-0 flex gap-3 justify-center px-4 py-3 border-t border-gray-700">
-          <button onClick={() => handleGameChoice('manage')}
+        <div className="shrink-0 flex gap-3 justify-center items-center px-4 py-3 border-t border-gray-700">
+          {/* おまかせ采配（采配の試合で、代打・継投・守備固めをベンチに任せる）。「試合采配」の隣で選ぶ */}
+          <button type="button" onClick={() => setAutoManager(v => !v)} aria-pressed={autoManager}
+            title={autoManager
+              ? '代打・継投・守備固めを、相手の球団と同じ決まりでベンチが決めます'
+              : '自分の球団の選手交代は手動で行います（相手の球団はベンチが決めます）'}
+            className={`px-3 py-2 rounded-xl text-sm font-semibold transition ${autoManager ? 'seg-on' : 'seg'}`}>
+            🤖 おまかせ采配 {autoManager ? '入' : '切'}
+          </button>
+          <button onClick={() => handleGameChoice('manage', { autoManager })}
             className="group btn-primary py-3 px-8 rounded-xl transition-all text-lg shadow-lg active:scale-95 flex items-center gap-2"
           >
             <span className="text-xl group-hover:scale-110 transition-transform">🎮</span>試合采配
