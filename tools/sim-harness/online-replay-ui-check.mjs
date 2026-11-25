@@ -479,6 +479,38 @@ try {
   await box
     .getByRole('button', { name: '試合成績を閉じる', exact: true })
     .click();
+  // 200試合より前も開ける（監査16。以前は「続きを表示」が200試合で止まり、その前を見る手段が無かった）
+  {
+    const games = league.records.seasons[1].games;
+    const sample = Object.values(games);
+    let id = Math.max(...sample.map((g) => Number(g.gameId))) + 1;
+    while (Object.keys(games).length < 230) {
+      const g = structuredClone(sample[Object.keys(games).length % sample.length]);
+      g.gameId = id;
+      games[id++] = g;
+    }
+    const total = Object.keys(games).length;
+    await history.getByRole('button', { name: 'リーグ全体', exact: true }).click();
+    const more = history.getByRole('button', { name: /^続きを表示/ });
+    const list = history.locator('.online-game-history-list article');
+    for (let t = 0; t < 100 && !(await more.count()); t++) await page.waitForTimeout(100);
+    for (let n = 0; n < 60 && (await more.count()); n++) {
+      const before = await list.count();
+      await more.click();
+      for (let t = 0; t < 100 && (await list.count()) <= before; t++)
+        await page.waitForTimeout(100);
+    }
+    assert.equal(await history.locator('.online-game-history-list article').count(), 200, '最新の200試合まで出る');
+    await history.getByRole('button', { name: /^さらに前の試合/ }).click();
+    await history.getByRole('button', { name: '新しい200試合へ', exact: true }).waitFor();
+    for (let t = 0; t < 100 && (await list.count()) !== total - 200; t++)
+      await page.waitForTimeout(100);
+    assert.equal(
+      await list.count(),
+      total - 200,
+      '200試合より前の試合も開ける',
+    );
+  }
   await history
     .getByRole('button', { name: '試合記録を閉じる', exact: true })
     .click();
