@@ -96,7 +96,7 @@ fun StaffPanel(model: AppViewModel, view: LeagueView) {
         }
     }
     // 下は少しだけ空ける（TIPS の印は面の切り替えの右に出すので、行には重ならない）
-    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(start = 12.dp, end = 12.dp, top = 12.dp, bottom = 16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(start = 12.dp, end = 12.dp, top = 12.dp, bottom = 80.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) { // 右下の TIPS の印に「任せ方を保存」が隠れないよう（監査16）
         TeamPicker(view, team) { team = it }
         if (isOwn) OwnStaff(model, view, own)
         else when {
