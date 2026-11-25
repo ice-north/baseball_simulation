@@ -47,6 +47,8 @@ private const val ROTATION_SIZE = 5
 
 /** 中継ぎを比べるときに数える人数 */
 internal const val BULLPEN_SIZE = 4
+/** 球団の力に中継ぎを数える重み（Web 版 `SQUAD_PEN_WEIGHT` と同じ。中継ぎは勝ちへの効きが小さい） */
+const val SQUAD_PEN_WEIGHT = 0.25
 
 /** 守る力を重く見る位置ほど大きい（捕手・遊撃・二塁・中堅） */
 private val DEFENSE_WEIGHT = mapOf(
@@ -58,7 +60,7 @@ private fun Int?.v(): Double = (this ?: 0).toDouble()
 
 /** 打つ力（ミ パ 眼 走） */
 fun battingPower(p: Player): Double =
-    p.batting?.meet.v() * 0.35 + p.batting?.power.v() * 0.3 + p.batting?.eye.v() * 0.15 + p.physical?.speed.v() * 0.2
+    p.batting?.meet.v() * 0.4 + p.batting?.power.v() * 0.35 + p.batting?.eye.v() * 0.05 + p.physical?.speed.v() * 0.2
 
 /**
  * その持ち場での力（目安）。守れない（適性が線より下・投手の持ち場に野手）なら null。
@@ -72,7 +74,7 @@ fun slotStrength(p: Player, slot: String): Double? {
         val ctl = p.pitching?.control.v()
         val spin = p.pitching?.spinRate.v()
         val sta = normalizedStamina(p.pitching?.stamina?.toDouble())
-        return if (slot == "sp") vel * 0.3 + ctl * 0.3 + spin * 0.15 + sta * 0.25
+        return if (slot == "sp") vel * 0.3 + ctl * 0.4 + spin * 0.15 + sta * 0.15
         else vel * 0.4 + ctl * 0.35 + spin * 0.2 + sta * 0.05
     }
     if (p.isPitcher) return null
@@ -315,7 +317,7 @@ fun squadStrength(roster: List<Player>): Double {
     total += catchers.getOrNull(1) ?: 0.0
     val (rotation, pen) = pitchingStaff(roster)
     total += rotation.sumOf { slotStrength(it, "sp") ?: 0.0 }
-    total += pen.take(BULLPEN_SIZE).sumOf { slotStrength(it, "rp") ?: 0.0 }
+    total += pen.take(BULLPEN_SIZE).sumOf { slotStrength(it, "rp") ?: 0.0 } * SQUAD_PEN_WEIGHT
     return total
 }
 
@@ -344,11 +346,43 @@ fun playingTimeFactor(roster: List<Player>, player: Player): Double =
     1.0 + PLAYING_TIME_BONUS * playingTimeShare(roster, player)
 
 /**
+ * 何人かまとめて受け取るときの、1人ずつの出番の度合い（並びは [players] と同じ。Web 版 `playingTimeShares` と同じ）。
+ * ⚠ 1人ずつ順に名簿へ足して、その人が足した分だけを数える（同じ持ち場に2人出しても上乗せを二重にしない）。
+ *    足す順は持ち場での力の高い順（同じなら id の小さい順）。
+ */
+fun playingTimeShares(roster: List<Player>, players: List<Player>): List<Double> {
+    val order = players.indices.map { i -> Triple(i, players[i], bestSlot(players[i])?.second ?: 0.0) }
+        .sortedWith(compareByDescending<Triple<Int, Player, Double>> { it.third }.thenBy { it.second.id })
+    val out = MutableList(players.size) { 0.0 }
+    var base = roster
+    var before = squadStrength(base)
+    for ((i, p, own) in order) {
+        val next = base + p
+        val after = squadStrength(next)
+        out[i] = if (own > 0.0) ((after - before) / own).coerceIn(0.0, 1.0) else 0.0
+        base = next
+        before = after
+    }
+    return out
+}
+
+/**
+ * CPU球団が受け取る選手（こちらが出す選手）の値段（並びは [give] と同じ。Web 版 `givingTradeValues`・
+ * サーバーの `cpuDecisionFor` と同じ）。[Player.tradeValue] に、その球団で出番があるかの上乗せを掛ける。
+ * [rosterAfter] は**この交換でもらう選手を抜いた**相手の名簿。読めないとき（null）は上乗せしない。
+ */
+fun givingTradeValues(rosterAfter: List<Player>?, give: List<Player>): List<Double?> {
+    if (rosterAfter == null) return give.map { it.tradeValue }
+    val shares = playingTimeShares(rosterAfter, give)
+    return give.mapIndexed { i, p -> p.tradeValue?.let { it * (1.0 + PLAYING_TIME_BONUS * shares[i]) } }
+}
+
+/**
  * CPU球団が受ける「戦力の開き」の上限（[squadStrength] の点。Web 版 `STRENGTH_GAP_LIMIT` と同じ）。
  * 提案した側の伸びがCPUの伸びをこれより上回る交換は、値段が釣り合っても断る。
  * 画面はサーバーが渡す決まり（[CpuTradeRule.gapLimit]）を使う。
  */
-const val STRENGTH_GAP_LIMIT = 8.0
+const val STRENGTH_GAP_LIMIT = 5.0
 
 /**
  * 交換で開く戦力の差＝提案した側の [squadStrength] の伸び − 受ける側の伸び（Web 版 `tradeStrengthGap` と同じ）。

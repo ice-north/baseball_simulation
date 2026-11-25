@@ -25,6 +25,7 @@ import { honorTitlesOf, honorsView, titleHistory } from './seasonAwards.mjs';
 import { npbShort } from './proDraft.mjs';
 import { withProCareer, proCareersOf, rowsWithCareer, newsOfCareers } from './proCareer.mjs';
 import { teamFaceView } from './teamFace.mjs';
+import { teamLabelIn } from '../src/online/membership.js';
 import { CAREER_MILESTONES, SEASON_MILESTONES, crossedCareer, crossedSeason } from '../src/online/milestones.js';
 
 export { CAREER_MILESTONES, SEASON_MILESTONES };
@@ -280,6 +281,8 @@ export function recordRetirements(league, retirements, { year, teamNames, keys, 
       hallOfFame: !!r.hallOfFame,
       reason: r.reason || null,
       // 「川崎ミラージュの打撃コーチ」（`assignSecondCareer` の title は「監督」「打撃コーチ」など）
+      // ⚠ 球団は**内部名のまま**残し、出すときにいまの名前へ引き直す（`retiredView`）。
+      //    見せる名前で残すと、あとで名前を変えたとき前の名前が残る
       secondCareer: r.secondCareer?.title ? `${r.secondCareer.team || r.team}の${r.secondCareer.title}` : null,
       // 最後に付けていた背番号（永久欠番。`teamFace.mjs`）。背番号を付ける前の引退には無い
       ...(numbers.has(`${r.team}:${r.name}`) ? { number: numbers.get(`${r.team}:${r.name}`) } : {}),
@@ -291,6 +294,22 @@ export function recordRetirements(league, retirements, { year, teamNames, keys, 
   const c = chronicleOf(league);
   c.retired = [...list, ...c.retired.filter((x) => x.year !== year)].slice(0, KEEP_RETIRED);
   return list;
+}
+
+/**
+ * 引退の記録を画面に出す形にする。引退後の肩書き（「〇〇の打撃コーチ」）の球団を、いまの名前へ引き直す。
+ * ⚠ 保存は内部名（`recordRetirements`。以前の保存も同じ形）。引き直さないと、名前を付けた球団でも
+ *    内部名（既定の名前）が出ていた（監査 2026-11-24）。保存の形は変えない。
+ */
+export function retiredView(league, r) {
+  const text = r?.secondCareer;
+  if (typeof text !== 'string') return r;
+  const names = [r.team, ...(league.teams || []).map((t) => t.name)].filter(Boolean);
+  const hit = names
+    .filter((n) => text.startsWith(`${n}の`))
+    .sort((a, b) => b.length - a.length)[0];
+  if (!hit) return r;
+  return { ...r, secondCareer: `${teamLabelIn(league, hit)}${text.slice(hit.length)}` };
 }
 
 // ------------------------------------------------------------
@@ -564,7 +583,7 @@ export function teamChronicle(league, teamName, activeKeys = new Set()) {
   return {
     seasons,
     records,
-    retired: (c.retired || []).filter((r) => r.team === teamName).slice(0, 20),
+    retired: (c.retired || []).filter((r) => r.team === teamName).slice(0, 20).map((r) => retiredView(league, r)),
     // プロ入りした選手（球団の誇り。`proDraft.mjs`）
     // プロでのその後（飾り。`proCareer.mjs`。保存せず毎回作り直す）
     proDrafted: withProCareer((c.proDrafted || []).filter((r) => r.team === teamName), league).map(({ key, ...r }) => r),
@@ -657,7 +676,8 @@ export function chronicleView(league) {
     //    翌年の契約更改（11月。まだ同じ年）でも去年の引退が新しい話として紙面に出る
     retired: (c.retired || [])
       .filter((r) => r.year === year - 1 && (league.season.currentDate?.month || 0) < SEASON_START_MONTH)
-      .slice(0, 12),
+      .slice(0, 12)
+      .map((r) => retiredView(league, r)),
     world: (c.world || []).slice(0, 4).map(({ notable, ...w }) => ({ ...w, star: notable?.[0] || null })),
     // リーグからプロ入りした選手（新しい順。球団史・記録の「リーグからプロへ」）
     // ⚠ リーグ全体の一覧はいちばん新しい年の一行（`after`）だけ。全部の年（`career`）は球団史の方に載せる

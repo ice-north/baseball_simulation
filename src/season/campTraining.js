@@ -366,6 +366,39 @@ export const SUB_MENU_ALIASES = {
 };
 export const canonicalSubMenu = (key) => SUB_MENU_ALIASES[key] || key;
 
+// フォーム改造（投手）で選べるフォーム。`executeSubTraining` の抽選と、オンラインの `CAMP_FORMS` と同じ並び
+const SUB_FORMS = ['overhand', 'threeQuarter', 'sidearm', 'submarine'];
+// 打席変更で選べる打席（オンラインの `CAMP_BATS` と同じ）
+const SUB_BATS = ['right', 'left', 'switch'];
+/**
+ * 実際に回すサブ練習。フォーム改造（投手の投球フォーム・野手の打撃フォーム）と打席変更は、
+ * **対象が無いか、もうその形なら基礎体力**。一人用とオンラインで同じ規則にする。
+ * ⚠ 選んだサブ練習と対象はクールをまたいで残る（一人用の画面・オンラインの4クールの指示）。
+ *    `executeSubTraining` は対象＝いまの形なら別の形を抽選するので、ここで止めないと
+ *    1クール目に変わった形が次のクールでまた別の形に変わり、失敗の減点も重なる。
+ * ⚠ 打席変更は失敗すると打席が変わらないので、次のクールでまた挑む（成功したら止まる）
+ * ⚠ もとはサーバー（`server/leagueEngine.mjs`）にあった。サーバーはここから読む
+ */
+export function campSubKey(rawKey, player, target) {
+  // ⚠ まとめた古い名前（守備補強 → サブポジ練習）は今の名前で回す。保存済みの計画に残っている
+  const key = canonicalSubMenu(rawKey);
+  // ⚠ フォーム改造は投手と野手で別物（投球フォーム / 打撃フォーム）
+  if (key === 'form_change' && player?.position !== 'pitcher')
+    return typeof target === 'string' && Object.hasOwn(BATTING_STANCES, target) && target !== battingStanceOf(player)
+      ? key
+      : 'physique';
+  if (key === 'form_change')
+    return SUB_FORMS.includes(target) && target !== (player.pitching?.form || 'threeQuarter')
+      ? key
+      : 'physique';
+  if (key === 'switch_hit')
+    return SUB_BATS.includes(target)
+      && target !== (player?.batting?.bats || player?.physical?.bats || 'right')
+      ? key
+      : 'physique';
+  return key;
+}
+
 export const subMenuFitsPlayer = (rawKey, player) => {
   const key = canonicalSubMenu(rawKey);
   if (!SUB_TRAINING_MENUS[key]) return false;
@@ -517,7 +550,7 @@ const TECH_SUB_DAMP = { from: 50, rate: 0.03, floor: 0.15 };
  * サブ練習を実行（メイン練習の半分程度の効果）
  * @param {Object} player - 選手
  * @param {string} subType - サブ練習タイプ
- * @param {Object} options - オプション { targetPosition, targetForm, targetBats, targetPitch }
+ * @param {Object} options - オプション { targetPosition, targetForm, targetStance, targetBats, targetPitch, keepPosition }
  */
 export function executeSubTraining(player, rawSubType, options = {}, staffBonus = null) {
   const subType = canonicalSubMenu(rawSubType);
@@ -664,7 +697,7 @@ export function executeSubTraining(player, rawSubType, options = {}, staffBonus 
     case 'form_change': {
       if (player.position === 'pitcher' && player.pitching) {
         const currentForm = player.pitching.form || 'threeQuarter';
-        const forms = ['overhand', 'threeQuarter', 'sidearm', 'submarine'];
+        const forms = SUB_FORMS;
         const targetForm = options.targetForm && options.targetForm !== currentForm
           ? options.targetForm
           : forms.filter(f => f !== currentForm)[Math.floor(Math.random() * (forms.length - 1))];
@@ -1048,7 +1081,12 @@ export function executeSubTraining(player, rawSubType, options = {}, staffBonus 
         player.positionFitness[picked] = Math.min(100, old + baseGain);
         const actual = player.positionFitness[picked] - old;
         growthReport.push({ statName: `${POSITION_NAMES_MAP[picked] || picked}適正`, before: old, after: player.positionFitness[picked], growth: actual });
-        syncPositionToFitness(player);
+        // ⚠ **人の球団（一人用の自分の球団）は守備位置を動かさない**（`keepPosition`）。
+        //    守備位置は編成の画面で決めるもので、サブポジ練習の後の適性への合わせで黙って変えない
+        //    （方針「短所を埋める×技術」はサブポジ練習になるので、遊撃手が二塁へ移っていた。
+        //    実測 200人中90人）。オンラインの人の球団と同じ規則（`runCampRound` の `keepPosition`）。
+        //    CPU球団は今までどおり適性に合わせる
+        if (!options.keepPosition) syncPositionToFitness(player);
       }
       break;
     }
@@ -1419,7 +1457,7 @@ export function executeCampTraining(player, trainingType, newPitchType, staffBon
       // という反転が**既存の減衰カーブだけで**成立する（新しい係数を作らない）。
       const rawBase = (Math.floor(Math.random() * 3) + 1) * ageMultiplier * expBonus;
       const rawFocus = (Math.floor(Math.random() * 4) + 1) * ageMultiplier * expBonus;
-      // ⚠ 制球の集中にも、投げ込みと同じ係数（0.2）を掛ける（`TRAINING_MENUS.control` の注と同じ理由）。
+      // ⚠ 制球の集中にも、投げ込みと同じ係数（いまは0.4）を掛ける（`TRAINING_MENUS.control` の注と同じ理由）。
       //    指導者の「長所を伸ばす」は投手の技術を制球と守備の2つでしか比べないので、ほとんどの投手が
       //    毎年「制球集中」になる。野手の集中はミート・パワー・選球眼・守備・盗塁に散るので、制球だけが
       //    積み上がり、10年でリーグの制球が 49→69・四球が半分になった（10年の長期シミュ 2026-11-23）
@@ -1544,7 +1582,12 @@ export function executeCampTraining(player, trainingType, newPitchType, staffBon
       // ⚠ 制球の集中は、最低保証にも投げ込みと同じ係数（`TRAINING_MENUS.control` から読むので
       //    値をここに書き写さない）を掛ける（上の `focusStatMult` と同じ。
       //    掛けないと制球60未満ではほぼ毎回+1が入り、係数を下げた効き目がほとんど無かった。2026-11-24 監査）
-      const floorStatMult = targetStat === 'control' ? TRAINING_MENUS.control.growthMultipliers.control : 1.0;
+      // ⚠ ミート・パワーの下げ（`CAMP_BAT_GROWTH_MULT`）と才能の係数（`TALENT_STAT_MULTIPLIERS`。
+      //    走力0.4・パワー0.5・球速0.8）も最低保証に掛ける（上の伸びと同じ能力ごとの係数。
+      //    `TALENT_STAT_MULTIPLIERS` の注「保証のほうもこの率で引くこと」）。掛けないと、代償の出た
+      //    クールは走力も必ず+1で、才能の係数が集中練習の半分のクールで効いていなかった
+      const floorStatMult = (targetStat === 'control' ? TRAINING_MENUS.control.growthMultipliers.control : 1.0)
+        * batGrowthMult * talentMult;
       if (menu.intensive && penaltyCount > 0 && totalGrowth < INTENSIVE_PENALTY_FLOOR)
         totalGrowth = Math.max(totalGrowth, stochasticRound(INTENSIVE_PENALTY_FLOOR * dampFactor * floorStatMult));
       const armForCap = getNestedValue(updatedPlayer, getStatPath('arm')) || 50;

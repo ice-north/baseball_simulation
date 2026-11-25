@@ -14,6 +14,7 @@ import { AIM_LABEL, GUESS_TYPE_LABEL, GUESS_ZONE_LABEL } from '../game/pitchCall
 import { getBatterType, BATTER_TYPE_LABEL, BATTER_TYPE_NOTE } from '../game/batterType.js';
 import { getZoneProfile, zoneHeatmap, describeZoneProfile } from '../game/batterZone.js';
 import { decidePitchObjective, OBJECTIVE_LABEL, OBJECTIVE_NOTE } from '../game/pitchSituation.js';
+import { pitchArsenalOf } from '../game/pitchEngine.js';
 import PitchZonePlot, { HEAT_HOT, HEAT_COLD } from '../components/PitchZonePlot.jsx';
 import TutorialHint from '../components/TutorialHint.jsx';
 import { formatDate } from '../season/seasonManager.js';
@@ -762,7 +763,10 @@ export default function ManagedGameScreen(props) {
           }
 
           // ===== 守備中 =====
-          const arsenal = getCurrentPitcher()?.pitches || [];
+          // 1球の計算（useManagedGame の control.pitchIndex）が引くのと同じ球種の並び（封印した球種を除き、回転数で補正した値）。
+          // ⚠ 以前は選手に無い `pitches` を読んでいて、球種のボタンが1つも出なかった
+          const mound = getCurrentPitcher();
+          const arsenal = mound?.pitching ? pitchArsenalOf(mound).arsenal : [];
           const obj = decidePitchObjective(bases, outs);
           return (
             <div className="bg-amber-950/30 border border-amber-800/40 rounded px-2 py-1 mb-1 space-y-1">

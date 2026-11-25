@@ -5,7 +5,7 @@
 // 自動シミュ（`autoSimulation.js`）は最初から選手オブジェクトを置いており、
 // `_reachedOnError`（自責点の判定）もそれに追随させている。
 //
-// 采配モード（`App.jsx`）は `makeRunner` の要約を置く（選手の実体は React の state で
+// 采配モード（`useManagedGame.jsx`）は `makeRunner` の要約を置く（選手の実体は React の state で
 // 作り直されるため）。このファイルの関数は **`true`（識別できない旧形式）と走者の
 // どちらが入っていても同じに動く**（値をそのまま動かすだけで、作り直さない）。
 // 詳細は CLAUDE.md「采配モードの走者の識別」

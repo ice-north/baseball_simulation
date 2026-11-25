@@ -808,7 +808,7 @@ export function advanceFavoriteBonus(teamData, currentDate) {
   if (!cd?.favoritePlayerIds) return;
 
   const dayNum = currentDate.year * 10000 + currentDate.month * 100 + currentDate.day;
-  for (const [pid, info] of Object.entries(cd.favoritePlayerIds)) {
+  for (const info of Object.values(cd.favoritePlayerIds)) {
     if (!info.startDate) {
       info.startDate = dayNum;
       info.lastAdvance = dayNum;
@@ -1029,7 +1029,6 @@ function getClubScoutPool(excludeTeam) {
  */
 export function generateRivalInterest(scoutedPlayers) {
   const userTeamName = Object.keys(TEAMS_DATA)[0] || '';
-  const playerIdSet = new Set(scoutedPlayers.map(p => p.id));
 
   // AIチームのポジション需要を分析し、入札を生成
   const bidsPerPlayer = {};

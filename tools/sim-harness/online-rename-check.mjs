@@ -32,6 +32,7 @@ import {
   advanceLeagueDay,
 } from '../../server/leagueEngine.mjs';
 import { touchPresence } from '../../server/social.mjs';
+import { recordRetirements } from '../../server/chronicle.mjs';
 import {
   projectLeague,
   projectTeamInfo,
@@ -102,6 +103,14 @@ league.chronicle.world.unshift({
   oursLostTo: null,
 });
 
+// 引退してスカウトになった選手（「〇〇のスカウト」。肩書きの球団は内部名で保存される。
+// 監督・コーチは年度更新で「指導者」に書き換わるが、スカウトは残る）
+recordRetirements(
+  league,
+  [{ team: INT, name: '引退した人', age: 36, position: 'pitcher', secondCareer: { role: 'scout', title: 'スカウト', team: INT } }],
+  { year: startYear - 5, teamNames: [INT], keys: new Map() },
+);
+
 // --- 2. 名前を変える ---
 applyProfile(league, { userId: 'a', ...NEW });
 assert.equal(teamLabelIn(league, INT), NEW_NAME);
@@ -152,6 +161,10 @@ assert.deepEqual(sentenceHits.slice(0, 10), [], `ビューの文に内部名が�
 // 指導者の出身（保存は旧名の `teamLabel`。ビューはいまの名前で引き直す）
 const card = JSON.stringify(views['league:a'].staff) + JSON.stringify(views[`team:${coach.job.team}`]?.staff || {});
 assert.ok(card.includes(`元投手（${NEW_NAME}で3年）`), '指導者の出身の球団がいまの名前で出ない');
+
+// 引退後の肩書きの球団（保存は内部名。ビューはいまの名前で引き直す）
+const scout = views[`team:${INT}`]?.chronicle?.retired?.find((r) => r.name === '引退した人');
+assert.equal(scout?.secondCareer, `${NEW_NAME}のスカウト`, '引退後の肩書きの球団がいまの名前で出ない');
 
 // --- 5・6（後半）. Web の画面 ---
 const FOLDS = ['face', 'milestones', 'moves', 'owners', 'proDrafted', 'records', 'retired', 'seasons', 'titles', 'topics'];

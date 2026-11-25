@@ -21,6 +21,11 @@ import { projectLeague, projectTeamInfo, projectPlayerInfo, projectTransactions 
 import { VIEW_CONTRACT, hasPath } from '../../mobile/tools/view-contract.mjs';
 
 const year = process.argv.includes('--year');
+// ⚠ `live` も `when` も無い項目は、どの答えで見ても落ちない（確かめていないのと同じ）。書き忘れを先に落とす
+const unchecked = Object.entries(VIEW_CONTRACT).flatMap(([endpoint, items]) =>
+  items.filter((item) => !item.live && !item.when).map((item) => `${endpoint} の ${item.path}`),
+);
+assert.deepEqual(unchecked, [], `view-contract.mjs に live も when も無い項目がある（どちらかを付ける）:\n  ${unchecked.join('\n  ')}`);
 const dir = mkdtempSync(join(tmpdir(), 'view-contract-'));
 const missing = [];
 const seen = new Set();

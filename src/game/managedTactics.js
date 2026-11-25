@@ -8,9 +8,9 @@
 //
 // 自動の試合は試合の中で持ち続ける帳簿（救援の記録・先発のダメージ・登板順など）を
 // gameState に持つ。采配の試合では同じものを `createManagedTacticsMemory()` の箱に持ち、
-// App.jsx が ref で1試合のあいだ持ち続ける。
+// useManagedGame.jsx が ref で1試合のあいだ持ち続ける。
 //
-// 呼ぶ所（App.jsx の throwPitch）:
+// 呼ぶ所（useManagedGame.jsx の throwPitch・handleBunt）:
 //   - 1球ごと: staminaOf で投げる前のスタミナを読み、投げたら setStamina
 //   - 打席が終わったら noteAtBatEnd、半イニングが終わったら noteHalfInningEnd
 //   - 投げる前に runManagedTactics。交代があればその球は投げずに交代だけを反映する
@@ -131,6 +131,15 @@ export const runManagedTactics = ({ memory, homeTeam, awayTeam, inning, isTopInn
       track.relieverOutsPitched = 0;
       track.relieverBattersFaced = 0;
       memory.removedIds.add(prev);
+      // この回の失点の基準を救援自身の失点に置き直す（cpuTactics の bringInReliever と同じ）
+      const entering = teams[side].players.find(p => p.id === id);
+      memory.inningStartRuns[side] = entering?.stats?.pitching?.runsAllowed || 0;
+      // 登板疲労（+50・上限150。CPU の継投の bringInReliever と同じ決まり）。
+      // ⚠ 以前は人の継投だけ足しておらず、人が使った救援は翌日も疲れていない扱いだった
+      const rotation = TEAMS_DATA[teams[side].name]?.pitchingRotation;
+      if (rotation?.reliefFatigue) {
+        rotation.reliefFatigue[id] = Math.min(150, (rotation.reliefFatigue[id] || 0) + 50);
+      }
     }
     memory.pitcherIds[side] = id;
     for (const p of teams[side].players) if (p.hasSubbedOut) memory.removedIds.add(p.id);
@@ -216,6 +225,8 @@ export const runManagedTactics = ({ memory, homeTeam, awayTeam, inning, isTopInn
       if (s.battingOrder !== wasOrder) upd.battingOrder = s.battingOrder;
       if (s.position !== p.position) upd.position = s.position;
       if (!!s._isDH !== !!p._isDH) upd._isDH = !!s._isDH;
+      // 守る前に退いた捕手の代打（restoreRealCatcher の印）。戻さないと捕手の守備経験に数えてしまう
+      if (s._neverFielded && !p._neverFielded) upd._neverFielded = true;
       if (hasSubbedOut !== !!p.hasSubbedOut) upd.hasSubbedOut = hasSubbedOut;
       if (Object.keys(upd).length) updates[side].set(s.id, upd);
       if (isStarter && !p.isStarter) entered.push(s);

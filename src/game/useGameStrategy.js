@@ -12,7 +12,7 @@
 //   - ワンショット指示: forceSteal / forceSwing / intentionalWalk
 //     → ref のみ。次の 1 球で「消費」して自動で false に戻る。
 //
-// 使い方 (App.jsx):
+// 使い方 (useManagedGame.jsx):
 //   const strategy = useGameStrategy();
 //   const { battingApproachRef, forceSwingRef, ... } = strategy;
 //   // UI
@@ -20,7 +20,7 @@
 //   <button onClick={() => strategy.triggerSteal(throwPitch)}>盗塁</button>
 //   // 投球ロジック（throwPitch内）
 //   const snap = strategy.snapshot();
-//   let result = simulatePitch();       // simulateSinglePitch が forceSwingRef.current を直接読む
+//   let result = simulatePitch();       // simulatePitch が forceSwingRef.current を直接読む
 //   strategy.consumeOneShot();          // ここでワンショットフラグを消費
 //   if (snap.intentionalWalk) { result = { type: 'ball', ... }; }
 // ============================================================
@@ -126,7 +126,7 @@ export function useGameStrategy() {
     setBatGuessType, setBatGuessZone,
     // ワンショット指示（ボタンから呼ぶ）
     triggerSteal, triggerHitAndRun, triggerIntentionalWalk,
-    // 投球ロジック用の ref（simulateSinglePitch などが直接参照）
+    // 投球ロジック用の ref（useManagedGame の simulatePitch などが直接参照）
     battingApproachRef, pitchAimRef, pitchTypeIndexRef,
     batGuessTypeRef, batGuessZoneRef,
     forceStealRef, forceSwingRef, intentionalWalkRef,
