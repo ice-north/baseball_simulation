@@ -6,6 +6,7 @@ import { POSITION_NAMES, getOverallColor } from '../utils/constants.js';
 import { universityPool, highSchoolPool } from '../state/schoolPools.js';
 import { checkNPBDraftEligibility } from '../season/yearProgressionSystem.js';
 import PlayerDetailModal from './PlayerDetailModal.jsx';
+import { SegmentBar, Segments } from './SoloSegments.jsx';
 
 // ⚠ **チームランキングのタブはここから撤去した**（サイドバーの `TeamRankingScreen` と
 //    完全に重複していたため）。惜しかった「主な選手」の並びは向こうの行の詳細へ移してある。
@@ -200,10 +201,11 @@ const SCOPES = [['team', '自チーム'], ['league', '自リーグ'], ['all', '�
 const AbilityRankingScreen = ({ seasonData, userTeamName }) => {
   const [mode, setMode] = useState('player');
   const [category, setCategory] = useState('all');
-  // ⚠ ここの既定は「全体」のままにすること。この画面はドラフト候補まで含めた
-  //    世界全体の見渡しが役目で、既定を自チームにすると画面の意味が変わる。
-  //    混ざって困るときのために絞り込みを足す、という順番。
-  const [scope, setScope] = useState('all');
+  // ⚠ 既定は「自リーグ」（S8。2026-11-25 いしだ「全て修正」）。以前は「全体」で、大学で始めても
+  //    開いた直後は社会人の選手が上位を埋めていた。選手成績（`PlayerStatsScreen.jsx`）も同じ理由で
+  //    「自リーグ」始まりに直してある。世界全体（ドラフト候補の見渡し）は「全体」を押せば出る。
+  //    ⚠ 自チームは既定にしない（ランキングの意味が無くなる）
+  const [scope, setScope] = useState('league');
   const [sortKey, setSortKey] = useState('overall');
   const [limit, setLimit] = useState(50);
   // 選手名クリックで詳細（選手検索・チーム情報・推薦スカウトと同じ共有モーダル）
@@ -383,9 +385,13 @@ const AbilityRankingScreen = ({ seasonData, userTeamName }) => {
     // ⚠ 以前は全員空でも列があり、余った幅を取って名前の列が2行に折り返していた
     const hasScouts = playerList.some(p => p.npbScouts?.length > 0 || (showAmScouts && p.amScouts?.length > 0));
     return (
-      <div className="bg-surface-2 rounded-lg overflow-hidden">
+      // ⚠ 見出しは表を下へ送っても上に残す（S7。窓のスクロールに付ける `sticky`）。入れ物に
+      //    overflow を付けると効かないので、横に送らない幅（xl 以上）では付けない
+      // ⚠ 見出しは折り返さない（S8。「ポジ」「総合」「ミート」が2行に折れていた）。
+      //    スカウト注目の列は幅を決めて（18%）、余りを取らせない
+      <div className="bg-surface-2 rounded-lg overflow-x-auto xl:overflow-visible">
         <table className="tabular-nums w-full text-sm">
-          <thead>
+          <thead className="[&_th]:sticky [&_th]:top-0 [&_th]:z-10 [&_th]:bg-surface-2 [&_th]:whitespace-nowrap">
             <tr className="text-gray-300 text-xs border-b border-gray-700">
               {/* ⚠ 1文字の略記（ミ/パ/走/守/眼/変/ス）だったのでフル表記にした。
                   ⚠ **「守」が2つあった**——3列目は守備**位置**、9列目は守備**力**で
@@ -405,7 +411,7 @@ const AbilityRankingScreen = ({ seasonData, userTeamName }) => {
               <th className="px-1 py-2 text-center">制球</th>
               <th className="px-1 py-2 text-center">変化球</th>
               <th className="px-1 py-2 text-center">スタミナ</th>
-              {hasScouts && <th className="px-1 py-2 text-left">スカウト注目</th>}
+              {hasScouts && <th className="px-1 py-2 text-left w-[18%]">スカウト注目</th>}
             </tr>
           </thead>
           <tbody>
@@ -458,66 +464,50 @@ const AbilityRankingScreen = ({ seasonData, userTeamName }) => {
     <ScreenShell className="text-white">
       <ScreenHeader title="能力ランキング" sub="全チーム・全選手の能力ランキング" />
 
-      <div className="flex gap-2 mb-4">
-        {[
-          { key: 'player', label: '選手ランキング' },
-          { key: 'highschool', label: `高校3年生${hsPlayers.length > 0 ? ` (${hsPlayers.length})` : ''}` },
-        ].map(t => (
-          <button key={t.key}
-            onClick={() => { setMode(t.key); setCategory('all'); setSortKey(t.key === 'highschool' ? 'draft' : 'overall'); }}
-            className={`px-4 py-2 rounded-lg text-sm font-bold transition ${
-              mode === t.key ? 'seg-on' : 'seg'
-            }`}
-          >{t.label}</button>
-        ))}
-      </div>
+      {/* ⚠ 切り替えはチーム情報と同じオンラインの丸い切り替え（X2。`SoloSegments.jsx`） */}
+      <SegmentBar className="mb-3">
+        <Segments
+          label="一覧"
+          value={mode}
+          onChange={(key) => { setMode(key); setCategory('all'); setSortKey(key === 'highschool' ? 'draft' : 'overall'); }}
+          items={[
+            { id: 'player', label: '選手ランキング' },
+            { id: 'highschool', label: `高校3年生${hsPlayers.length > 0 ? ` (${hsPlayers.length})` : ''}` },
+          ]}
+        />
+      </SegmentBar>
 
       {(mode === 'player' || mode === 'highschool') && (
         <>
-          <div className="flex flex-wrap gap-1 mb-3">
-            {[{ key: 'all', label: '全選手' }, { key: 'pitcher', label: '投手' }, { key: 'catcher', label: '捕手' }, { key: 'infielder', label: '内野手' }, { key: 'outfielder', label: '外野手' }].map(t => (
-              <button key={t.key}
-                onClick={() => { setCategory(t.key); setSortKey(mode === 'highschool' ? 'draft' : 'overall'); }}
-                className={`px-3 py-1.5 rounded text-sm font-bold transition ${
-                  category === t.key ? 'seg-on' : 'seg'
-                }`}
-              >{t.label}</button>
-            ))}
+          <div className="flex flex-wrap items-center gap-2 mb-2">
+            <SegmentBar>
+              <Segments
+                label="守備位置"
+                value={category}
+                onChange={(key) => { setCategory(key); setSortKey(mode === 'highschool' ? 'draft' : 'overall'); }}
+                items={[{ id: 'all', label: '全選手' }, { id: 'pitcher', label: '投手' }, { id: 'catcher', label: '捕手' }, { id: 'infielder', label: '内野手' }, { id: 'outfielder', label: '外野手' }]}
+              />
+            </SegmentBar>
             {mode === 'player' && (
               <>
-                <div className="w-px h-6 bg-gray-600/50 mx-2 self-center" aria-hidden="true" />
-                <span className="text-xs text-ink-sub self-center mr-1">範囲</span>
-                {SCOPES.map(([key, label]) => (
-                  <button key={key}
-                    onClick={() => setScope(key)}
-                    className={`px-3 py-1.5 rounded text-sm font-bold transition ${
-                      scope === key ? 'seg-on' : 'seg'
-                    }`}
-                  >{label}</button>
-                ))}
+                <span className="text-xs text-ink-sub ml-2">範囲</span>
+                <SegmentBar>
+                  <Segments label="範囲" value={scope} onChange={setScope} items={SCOPES.map(([id, label]) => ({ id, label }))} />
+                </SegmentBar>
               </>
             )}
           </div>
 
-          <div className="flex items-center gap-3 mb-3">
+          <div className="flex flex-wrap items-center gap-2 mb-3">
             {/* ⚠ 以下の数箇所は**地色の上に直に載る**（カードの外）ので暗い文字にすること */}
-            <span className="text-xs text-ink-sub">ソート:</span>
-            <div className="flex flex-wrap gap-1">
-              {currentSortOptions.map(o => (
-                <button key={o.key}
-                  onClick={() => setSortKey(o.key)}
-                  className={`px-2 py-1 rounded text-xs font-bold transition ${
-                    sortKey === o.key ? 'seg-on' : 'seg'
-                  }`}
-                >{o.label}</button>
-              ))}
-            </div>
-            <div className="ml-auto flex gap-1">
-              {[50, 100, 200].map(n => (
-                <button key={n} onClick={() => setLimit(n)}
-                  className={`px-2 py-1 rounded text-xs ${limit === n ? 'seg-on' : 'seg'}`}
-                >Top{n}</button>
-              ))}
+            <span className="text-xs text-ink-sub">並べ替え</span>
+            <SegmentBar>
+              <Segments label="並べ替え" value={sortKey} onChange={setSortKey} items={currentSortOptions.map((o) => ({ id: o.key, label: o.label }))} />
+            </SegmentBar>
+            <div className="ml-auto">
+              <SegmentBar>
+                <Segments label="表示する人数" value={limit} onChange={setLimit} items={[50, 100, 200].map((n) => ({ id: n, label: `上位${n}人` }))} />
+              </SegmentBar>
             </div>
           </div>
 
