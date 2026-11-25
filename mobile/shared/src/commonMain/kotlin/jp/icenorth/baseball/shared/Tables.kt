@@ -28,7 +28,7 @@ val CAMP_SUB_MENUS: List<Menu> = listOf(
     Menu("clead_study", "Cリード学習", "🧠", "キャッチャーリード向上（リード+1~3）", only = "catcher"),
     Menu("breaking", "変化球練習", "🌀", "変化球レベルを強化（1球種を選んで集中練習も可）", only = "pitcher"),
     Menu("newpitch", "新球種習得", "✨", "新球種習得に挑戦（成功率22%・器用さとフォーム適性で上昇。球種は狙いを選べる・選ばなければおまかせ）", only = "pitcher"),
-    Menu("spin_analysis", "スピン解析", "🎥", "高速カメラで回転を分析・スピン+1〜3（器用さ係数）、変化球Lv向上、制球微増（投手のみ）", only = "pitcher"),
+    Menu("spin_analysis", "スピン解析", "🎥", "高速カメラで回転を分析・スピン+1〜3、持ち球すべてのLv+1程度、制球微増（器用さで上下・投手のみ）", only = "pitcher"),
     Menu("subposition", "サブポジ練習", "🔀", "指定ポジションの適正大幅UP（器用さで伸びが変わる）・今の守備位置の適正+4〜8・守備+0〜2", only = null),
     Menu("form_change", "フォーム改造", "🔄", "投手は投球フォーム、野手は打撃フォーム（オープン/スクエア/クローズ）の変更に挑戦（成功20%・器用さで上下: 成功で能力UP / 失敗で低下。フォームは成否によらず変わる）", only = null),
     Menu("switch_hit", "打席変更", "↔️", "打席変更に挑戦（器用さで成功率が上下・失敗でミート低下リスク）", only = null),
@@ -97,11 +97,11 @@ val SEASON_STEPS: List<SeasonStep> = listOf(
 )
 val CAMP_POLICY_GUIDE: Map<String, Pair<String, String>> = mapOf(
     "balanced:skill" to ("選球眼+2 ミート+2 パワー+1 回復+1" to "スタミナ+5 制球+1 回復+1 球速+1"),
-    "balanced:physique" to ("体力+12 体幹+8 盗塁+2 バント+1" to "体力+12 スタミナ+10 体幹+8 球速+2 肩力+2"),
-    "sharpen:skill" to ("選球眼+1 守備+1 ミート+1（いちばん高い能力に集中）" to "守備+2 制球+1"),
-    "sharpen:physique" to ("体幹+8 肩力+2 盗塁+2 パワー+2" to "体幹+8 肩力+3 球速+2 守備+1 スタミナ+1"),
+    "balanced:physique" to ("体力+12 体幹+2 盗塁+2 バント+1" to "体力+12 スタミナ+10 体幹+2 球速+2 肩力+2"),
+    "sharpen:skill" to ("ミート+2 守備+2 選球眼+2（いちばん高い能力に集中）" to "守備+3 制球+2"),
+    "sharpen:physique" to ("体幹+12 パワー+2 肩力+2 盗塁+1" to "体幹+12 肩力+2 球速+2 守備+2 スタミナ+1"),
     "patch:skill" to ("守備+2 盗塁+1 選球眼+1 ミート+1・守備位置の適性（いちばん低い能力を底上げ）" to "守備+3 スタミナ+2"),
-    "patch:physique" to ("体力+12 体幹+8 盗塁+2 バント+1" to "体力+12 スタミナ+10 体幹+8 球速+1 肩力+1"),
+    "patch:physique" to ("体力+12 盗塁+2 体幹+2 バント+1" to "体力+12 スタミナ+10 体幹+2 球速+1 肩力+1"),
 )
 val ONLINE_ROSTER_TARGETS: Map<String, Int> = mapOf("pitcher" to 11, "catcher" to 2, "infielder" to 6, "outfielder" to 7)
 val RETRY_ON_REVISION: Set<String> = setOf("lineup", "submit", "campRound")

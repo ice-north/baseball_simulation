@@ -539,7 +539,7 @@ export const SUB_TRAINING_MENUS = {
   spin_analysis: {
     name: 'スピン解析',
     icon: '🎥',
-    description: '高速カメラで回転を分析・スピン+1〜3（器用さ係数）、変化球Lv向上、制球微増（投手のみ）',
+    description: '高速カメラで回転を分析・スピン+1〜3、持ち球すべてのLv+1程度、制球微増（器用さで上下・投手のみ）',
   },
 };
 
@@ -990,29 +990,38 @@ export function executeSubTraining(player, rawSubType, options = {}, staffBonus 
     }
     case 'spin_analysis': {
       if (!player.pitching) break;
-      // スピン（回転数）+1〜3（器用さ係数）
+      // スピン（回転数）+1〜3（器用さで上下）
+      // ⚠ **器用さが効いていなかった**（2026-11-25 の実測。器用72 が 0.97倍で器用50 を
+      //    下回っていた）。原因は `Math.max(1, Math.min(3, Math.round(生の1〜3 × 倍率)))`。
+      //    上限3と `Math.round` で倍率が潰れ、下限1で低い側も持ち上がっていた。
+      //    他の練習と同じ「掛けてから最後に確率的に丸める」形にする（`stochasticRound`）。
+      //    倍率の幅は元の式（`0.5 + dex/100`）と同じ 0.5＝共通の `dexterityMult(player, 0.5)`。
       const oldSpin = player.pitching.spinRate || 50;
       if (oldSpin < 100) {
-        const dex = player.physical?.dexterity || 50;
-        const dexMult = 0.5 + (dex / 100) * 1.0; // 器用さ0→0.5倍, 50→1.0倍, 100→1.5倍
         const rawSpin = Math.floor(Math.random() * 3) + 1; // 1〜3
-        const spinGrowth = Math.max(1, Math.min(3, Math.round(rawSpin * dexMult)));
-        const newSpin = Math.min(100, oldSpin + spinGrowth);
-        player.pitching.spinRate = newSpin;
-        growthReport.push({ statName: 'スピン', before: oldSpin, after: newSpin, growth: newSpin - oldSpin });
+        const spinGrowth = stochasticRound(rawSpin * dexterityMult(player, 0.5));
+        if (spinGrowth > 0) {
+          const newSpin = Math.min(100, oldSpin + spinGrowth);
+          player.pitching.spinRate = newSpin;
+          growthReport.push({ statName: 'スピン', before: oldSpin, after: newSpin, growth: newSpin - oldSpin });
+        }
       }
-      // 既習得変化球1球種のレベルを +2〜4
+      // 持ち球の**全部**が +1 程度（器用さで上下）。
+      // ⚠ いしだ 2026-11-25「スピン練習は、変化球にも1程度全部が伸びるようにしましょうか」。
+      //    前は「1球種だけ +2〜4」で、変化球練習（プールを配る）と役目が重なっていた。
+      //    全部を少しずつにすると「持ち球の多い投手ほど得」＝変化球練習（1つに寄せられる）と
+      //    役目が分かれる。合計は 2球種で約2・5球種で約5（前はどちらも約3）。
+      // ⚠ 天井は変化球練習と**同じ物差し**（`dampBreakingGain`）。掛けないと
+      //    「変化球練習が止まったらスピン解析で磨く」に流れるだけで抜けが残る
+      //    （直す前の実測で Lv30 でも Lv95 でも +3.0 固定だった）
       const arsenal = player.pitching.arsenal || [];
-      const upgradeable = arsenal.filter(a => a.type !== 'straight' && (a.level || 0) < 100);
-      if (upgradeable.length > 0) {
-        const tgt = upgradeable[Math.floor(Math.random() * upgradeable.length)];
-        const oldLv = tgt.level || 0;
-        // ⚠ 変化球練習と**同じ天井**（`dampBreakingGain`）を掛ける。掛けないと
-        //    「変化球練習が止まったらスピン解析で磨く」に流れるだけで抜けが残る
-        //    （実測で Lv30 でも Lv95 でも +3.0 固定だった）
-        const lv = dampBreakingGain(oldLv, Math.floor(Math.random() * 3) + 2);
-        tgt.level = Math.min(100, oldLv + lv);
-        growthReport.push({ statName: `${getPitchTypeName(tgt.type)}LV`, before: oldLv, after: tgt.level, growth: tgt.level - oldLv });
+      for (const pitch of arsenal) {
+        if (pitch.type === 'straight' || (pitch.level || 0) >= 100) continue;
+        const oldLv = pitch.level || 0;
+        const lv = dampBreakingGain(oldLv, 1 * dexterityMult(player, 0.5));
+        if (lv <= 0) continue;
+        pitch.level = Math.min(100, oldLv + lv);
+        growthReport.push({ statName: `${getPitchTypeName(pitch.type)}LV`, before: oldLv, after: pitch.level, growth: pitch.level - oldLv });
       }
       // 制球 +0〜1（40%の確率・高能力値減衰あり）
       if (Math.random() < 0.4) {
