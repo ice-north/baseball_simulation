@@ -44,7 +44,7 @@ fun eventNotices(
             EventNotice(
                 start,
                 if (proc.kind == "pack_select") "初期メンバーを選んでください" else "${proc.label}が始まりました",
-                listOfNotNull(due?.let { "締め切り $it" }, proc.progress, "アプリの「手続き」から決めてください").joinToString("\n"),
+                listOfNotNull(due?.let { "締め切り $it" }, proc.progress, "アプリの「手続き・交渉」から決めてください").joinToString("\n"),
             ),
         )
         val left = proc.deadline?.let(millisOf)?.minus(now)
@@ -111,7 +111,7 @@ fun eventNotices(
         )
     }
     raw["lastCamp"].obj()?.let { r ->
-        add(EventNotice("result:camp:${r.at("year").int() ?: year}", "キャンプが終わりました", "選手ごとの伸びは「手続き」で見られます"))
+        add(EventNotice("result:camp:${r.at("year").int() ?: year}", "キャンプが終わりました", "選手ごとの伸びは「手続き・交渉」で見られます"))
     }
     raw["lastOffseason"].obj()?.let { r ->
         val departed = r.at("departed").list().size

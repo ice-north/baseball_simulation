@@ -48,6 +48,7 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -66,7 +67,8 @@ enum class Tab(val label: String, val icon: ImageVector) {
     Games("試合", Icons.Filled.DateRange),
     Players("チーム", Icons.Filled.Person),
     Plan("編成", Icons.Filled.List),
-    Procedures("手続き", Icons.Filled.Edit),
+    // ⚠ 名前は「手続き・交渉」（中にトレード・練習試合・予告先発がある。「手続き」だけでは想像しにくかった。UI総点検 A6）
+    Procedures("手続き・交渉", Icons.Filled.Edit),
 }
 
 @Composable
@@ -176,7 +178,8 @@ fun OnlineApp(model: AppViewModel) {
                                     Icon(item.icon, contentDescription = null)
                                 }
                             },
-                            label = { Text(item.label) },
+                            // 長い名前（「手続き・交渉」）は1行に収まるよう少し小さく（狭い端末で2行に折れないように）
+                            label = { Text(item.label, maxLines = 1, softWrap = false, fontSize = if (item.label.length > 4) 11.sp else androidx.compose.ui.unit.TextUnit.Unspecified) },
                         )
                     }
                 }
