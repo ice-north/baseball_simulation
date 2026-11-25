@@ -5,6 +5,7 @@ import LineupSettingScreen from './LineupSettingScreen.jsx';
 import { ScreenShell, ScreenHeader } from './GameUIComponents.jsx';
 import { AbilityValue, OverallBadge } from './AbilityValue.jsx';
 import { ensureTeamJerseyNumbers } from '../utils/jerseyNumbers.js';
+import { pitchingFromTeam, writePitching, fillVacantStarters } from './lineup/soloPitchingEdit.js';
 
 const POS_NAMES = {
   pitcher: '投', catcher: '捕', first: '一', second: '二',
@@ -69,13 +70,18 @@ const Stat = ({ label, value, isVel, isSta }) => {
 };
 
 // --- PlayerCard コンポーネント ---
-const PlayerCard = ({ player, isActive, canActivate, isStarter, onClick }) => {
+// ⚠ 枠が満員のときは、ベンチ外の選手を押すと「選択中」（`picked`）になり、続けて登録選手を
+//    押すと2人を入れ替える（S11。スタメン設定の「2回押して入れ替え」と同じ操作）。
+//    `swapWith` は選択中の選手の名前（登録選手の側のカードに、入れ替え先として出す）
+const PlayerCard = ({ player, isActive, canActivate, isStarter, onClick, picked = false, swapWith = null }) => {
   const isPitcher = player.position === 'pitcher';
   const grade = player.universityYear ? `${player.universityYear}年` : `${player.age}歳`;
   const blocked = isActive ? isStarter : !canActivate;
   const tooltip = isActive
-    ? (isStarter ? 'スタメン出場中のため変更不可' : 'ベンチ外に移動')
-    : (canActivate ? '登録選手に追加' : `登録枠満員（${ACTIVE_LIMIT}名）`);
+    ? (isStarter ? 'スタメン出場中のため変更不可' : swapWith ? `${swapWith}と入れ替え` : 'ベンチ外に移動')
+    : picked
+      ? '選択中（もう一度押すと取り消し）'
+      : canActivate ? '登録選手に追加' : `登録枠満員（${ACTIVE_LIMIT}名）`;
 
   // ⚠ **「移動できない」を opacity で表さないこと**。カード全体を薄くすると
   //    前景も背景も一緒に地色へ寄るので、`opacity-50` で選手名が **2.87:1**、
@@ -85,13 +91,16 @@ const PlayerCard = ({ player, isActive, canActivate, isStarter, onClick }) => {
   return (
     <div
       title={tooltip}
+      aria-pressed={isActive ? undefined : picked}
+      data-roster-player={player.id}
       onClick={blocked ? undefined : onClick}
       className={`flex items-center gap-1.5 px-2 py-1.5 rounded border text-xs select-none transition-colors
         ${blocked ? 'cursor-not-allowed' : 'cursor-pointer'}
         ${isActive
           ? 'bg-surface-2 border-gray-600 ' + (blocked ? '' : 'hover:bg-red-950/60')
           : 'bg-surface-1 border-gray-700 ' + (blocked ? '' : 'hover:bg-green-950/60')}
-        ${isStarter ? 'border-yellow-600/40' : ''}`}
+        ${isStarter ? 'border-yellow-600/40' : ''}
+        ${picked ? '!bg-sky-900 !border-sky-400' : ''}`}
     >
       {/* ポジションバッジ */}
       {/* ⚠ 色は `POSITION_COLORS` を使う。ここに独自の表を持っていたため、
@@ -145,8 +154,8 @@ const PlayerCard = ({ player, isActive, canActivate, isStarter, onClick }) => {
 
       {/* 切替矢印 */}
       <span className={`flex-shrink-0 font-bold text-xs ml-1
-        ${blocked ? 'text-gray-400' : isActive ? 'text-red-400' : 'text-green-400'}`}>
-        {isActive ? '▶' : '◀'}
+        ${blocked ? 'text-gray-400' : swapWith ? 'text-sky-300' : isActive ? 'text-red-400' : 'text-green-400'}`}>
+        {swapWith && !blocked ? '⇄' : isActive ? '▶' : '◀'}
       </span>
     </div>
   );
@@ -178,6 +187,8 @@ const RosterScreen = ({ seasonData, gameMode }) => {
   const [tick, setTick] = useState(0);
   const [activeTab, setActiveTab] = useState('roster');
   const [sortMode, setSortMode] = useState('position');
+  // 満員のときに押したベンチ外の選手（続けて登録選手を押すと入れ替える。S11）
+  const [pickedId, setPickedId] = useState(null);
   const refresh = () => setTick(v => v + 1);
 
   const userTeamName = seasonData?.userTeamName || Object.keys(TEAMS_DATA || {})[0];
@@ -209,15 +220,33 @@ const RosterScreen = ({ seasonData, gameMode }) => {
   const inactivePlayers = isUniversityMode ? players.filter(p => !p.isActive) : [];
   const isFull = activePlayers.length >= ACTIVE_LIMIT;
 
+  const picked = isFull ? inactivePlayers.find(p => p.id === pickedId) || null : null;
+
   const handleActivate = (player) => {
-    if (isFull) return;
+    if (isFull) {
+      setPickedId(pickedId === player.id ? null : player.id);
+      return;
+    }
     player.isActive = true;
+    setPickedId(null);
     refresh();
   };
 
   const handleDeactivate = (player) => {
     if (starterIds.has(player.id)) return;
     player.isActive = false;
+    if (picked) picked.isActive = true;
+    setPickedId(null);
+    refresh();
+  };
+
+  // ベンチ外にした投手が先発ローテに残っていないか（S1。投手起用の表で警告が出る前に知らせる）
+  const rotationIds = team.pitchingRotation?.starters || [];
+  const leftInRotation = rotationIds
+    .map((id, i) => ({ player: players.find(p => p.id === id), order: i + 1 }))
+    .filter(({ player }) => player && player.isActive === false);
+  const handleFillRotation = () => {
+    writePitching(team, fillVacantStarters(pitchingFromTeam(team), players));
     refresh();
   };
 
@@ -314,6 +343,7 @@ const RosterScreen = ({ seasonData, gameMode }) => {
           <div className="flex items-center gap-3 mb-3">
             <div className="bg-surface-2 rounded px-3 py-2 text-xs text-gray-300 flex-1">
               選手をクリックして<span className="text-white font-medium">登録選手 ↔ ベンチ外</span>を切り替えます。
+              満員のときはベンチ外 → 登録選手の順に押すと入れ替わります。
               <span className="text-yellow-400 ml-2">先発</span>表示中は変更不可。
               <span className="ml-3 text-green-400">■</span><span className="ml-0.5">高値</span>
               <span className="ml-2 text-yellow-300">■</span><span className="ml-0.5">平均</span>
@@ -333,6 +363,20 @@ const RosterScreen = ({ seasonData, gameMode }) => {
               ))}
             </div>
           </div>
+
+          {/* ⚠ カードの上の警告は text-yellow-400（index.css の「文字色の決まり」） */}
+          {leftInRotation.length > 0 && (
+            <div className="flex items-center gap-3 mb-3 bg-surface-2 border border-yellow-500 rounded px-3 py-2 text-sm" role="status" data-testid="roster-rotation-notice">
+              <span className="flex-1 text-yellow-400 font-bold">
+                ベンチ外の投手が先発ローテに残っています：
+                {leftInRotation.map(({ player, order }) => `${player.name}（${order}番手）`).join('・')}。
+                <span className="text-gray-100 font-normal">試合では投げないので、ローテの枠が空きます。</span>
+              </span>
+              <button onClick={handleFillRotation} className="btn-primary text-xs px-3 py-1.5 rounded flex-shrink-0">
+                空いた枠を自動で埋める
+              </button>
+            </div>
+          )}
 
           {/* 2パネル */}
           <div className="grid grid-cols-2 gap-4">
@@ -362,6 +406,7 @@ const RosterScreen = ({ seasonData, gameMode }) => {
                         {ps.map(p => (
                           <PlayerCard key={p.id} player={p} isActive={true}
                             canActivate={true} isStarter={starterIds.has(p.id)}
+                            swapWith={picked?.name || null}
                             onClick={() => handleDeactivate(p)} />
                         ))}
                       </div>
@@ -377,7 +422,11 @@ const RosterScreen = ({ seasonData, gameMode }) => {
                   ベンチ外
                   <span className="ml-1.5 text-gray-300">({inactivePlayers.length}名)</span>
                 </h2>
-                {isFull && <span className="text-xs text-gray-400">枠が満員のため追加不可</span>}
+                {isFull && (
+                  <span className={`text-xs ${picked ? 'text-sky-300 font-bold' : 'text-gray-300'}`}>
+                    {picked ? `${picked.name}を選択中：登録選手を押すと入れ替えます` : '満員：押してから登録選手を押すと入れ替えます'}
+                  </span>
+                )}
               </div>
 
               <div className="overflow-y-auto space-y-2.5 max-h-[680px] pr-0.5">
@@ -395,7 +444,8 @@ const RosterScreen = ({ seasonData, gameMode }) => {
                       <div className="space-y-0.5">
                         {ps.map(p => (
                           <PlayerCard key={p.id} player={p} isActive={false}
-                            canActivate={!isFull} isStarter={false}
+                            canActivate={true} isStarter={false}
+                            picked={picked?.id === p.id}
                             onClick={() => handleActivate(p)} />
                         ))}
                       </div>

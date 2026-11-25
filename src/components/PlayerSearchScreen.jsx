@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef, useLayoutEffect } from 'react';
 import PlayerDetailModal from './PlayerDetailModal.jsx';
 import { ScreenShell, ScreenHeader } from './GameUIComponents.jsx';
 import { TEAMS_DATA } from '../teams-data.js';
@@ -114,6 +114,22 @@ const PlayerSearchScreen = ({ onBack, gameMode, userTeamName }) => {
   const [selectedPlayer, setSelectedPlayer] = useState(null);
   const [scoutAddMsg, setScoutAddMsg] = useState(null);
   const [scoutTick, setScoutTick] = useState(0); // スカウト追加後の再描画トリガー
+  // 能力の条件（16個のチェック）を開いているか（S14。ふだんは「能力で絞る」の1つのボタンに畳む）
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  // ⚠ 絞り込みの枠は上に固定し、表の見出しはその下に固定する（S7）。枠の高さは条件を開くと
+  //    変わるので測って見出しの `top` にする
+  const filterBox = useRef(null);
+  const [filterHeight, setFilterHeight] = useState(0);
+  useLayoutEffect(() => {
+    const el = filterBox.current;
+    if (!el) return undefined;
+    const measure = () => setFilterHeight(el.offsetHeight);
+    measure();
+    if (typeof window === 'undefined' || !window.ResizeObserver) return undefined;
+    const observer = new window.ResizeObserver(measure);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
 
   const allPlayers = useMemo(() => collectAllPlayers(gameMode), [gameMode]);
 
@@ -162,6 +178,8 @@ const PlayerSearchScreen = ({ onBack, gameMode, userTeamName }) => {
     else { setSortKey(key); setSortAsc(false); }
   };
 
+  const activeFilterCount = FILTER_DEFS.filter((def) => filters[def.key]?.enabled).length;
+
   const resetFilters = () => {
     setFilters(JSON.parse(JSON.stringify(DEFAULT_FILTERS)));
     setPosFilter('all');
@@ -185,6 +203,9 @@ const PlayerSearchScreen = ({ onBack, gameMode, userTeamName }) => {
         <ScreenHeader title="選手検索"
           right={onBack && <button onClick={onBack} className="btn-secondary px-3 py-1.5 rounded text-sm">戻る</button>} />
 
+        {/* 絞り込みの枠（所属・守備位置・名前・能力の条件）。⚠ 上に固定する（S7）。地色の上に
+            固定するので、下を流れる表が透けないように地は不透明（bg-surface-0） */}
+        <div ref={filterBox} className="sticky top-0 z-20 bg-surface-0 pt-1" data-testid="search-filters">
         {/* Source toggles */}
         <div className="flex flex-wrap gap-2 mb-3">
           {SOURCES.map(s => (
@@ -202,7 +223,7 @@ const PlayerSearchScreen = ({ onBack, gameMode, userTeamName }) => {
               className={`px-2 py-1 rounded text-xs font-bold transition ${posFilter === p.key ? 'seg-on' : 'seg'}`}
             >{p.label}</button>
           ))}
-          <button onClick={resetFilters} className="btn-danger px-2 py-1 rounded text-xs transition ml-auto">リセット</button>
+          <button onClick={resetFilters} className="btn-danger px-2 py-1 rounded text-xs transition ml-auto">条件をすべて外す</button>
         </div>
 
         {/* Name search */}
@@ -215,12 +236,23 @@ const PlayerSearchScreen = ({ onBack, gameMode, userTeamName }) => {
             className="bg-surface-2 border border-gray-700 rounded px-3 py-1.5 text-sm text-white placeholder-gray-500 w-64 focus:outline-none focus:border-blue-500"
           />
           {nameQuery && <button onClick={() => setNameQuery('')} className="text-ink-sub hover:text-ink text-sm" aria-label="検索の文字を消す">✕</button>}
+          {/* 能力の条件は1つのボタンから開く（S14。以前は16個のチェックが常に並び、押すまで何が出るか分からなかった） */}
+          <button
+            type="button"
+            onClick={() => setFiltersOpen((v) => !v)}
+            aria-expanded={filtersOpen}
+            className={`px-3 py-1.5 rounded text-xs font-bold transition ${filtersOpen || activeFilterCount > 0 ? 'seg-on' : 'seg'}`}
+          >
+            能力で絞る{activeFilterCount > 0 ? `（${activeFilterCount}件）` : ''} {filtersOpen ? '▲' : '▼'}
+          </button>
           {/* ⚠ この行は**地色の上に直に載る**（カードの外）ので暗い文字にすること */}
           <span className="text-ink-sub text-xs ml-2">※ スカウト画面の能力値は推定値です。実際の数値と異なる場合があります</span>
         </div>
 
         {/* Filters */}
+        {filtersOpen && (
         <div className="bg-surface-2 rounded-lg p-3 mb-3">
+          <p className="text-xs text-gray-300 mb-2">チェックを入れた能力に、下限と上限を決めて絞ります。</p>
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2">
             {FILTER_DEFS.map(def => {
               const f = filters[def.key];
@@ -251,21 +283,28 @@ const PlayerSearchScreen = ({ onBack, gameMode, userTeamName }) => {
             })}
           </div>
         </div>
+        )}
 
         {/* Results */}
-        <div className="text-xs text-ink-sub mb-1">{filtered.length}件{filtered.length >= 200 ? '（上位200件表示）' : ''}</div>
-        <div className="bg-surface-2 rounded-lg overflow-x-auto">
+        <div className="text-xs text-ink-sub pb-1">
+          {filtered.length}件{filtered.length >= 200 ? '（上位200件表示）' : ''}
+          {scoutAddMsg && <span className="ml-3 font-bold text-ink-accent" role="status">{scoutAddMsg}</span>}
+        </div>
+        </div>
+        {/* ⚠ 見出しを窓のスクロールに付けるので、横に送らない幅（xl 以上）では overflow を付けない */}
+        <div className="bg-surface-2 rounded-lg overflow-x-auto xl:overflow-visible">
           <table className="w-full text-xs">
-            <thead>
+            {/* ⚠ 見出しの地は不透明に（下を流れる行が透けないように） */}
+            <thead className="sticky z-10" style={{ top: filterHeight }}>
               {/* グループ行 */}
-              <tr className="bg-gray-700/60 text-gray-400 text-xs border-b border-gray-600/50">
+              <tr className="bg-gray-800 text-gray-300 text-xs border-b border-gray-600/50">
                 <th colSpan={6} className="py-0.5 px-2 text-left text-gray-300 font-bold">選手</th>
                 <th colSpan={8} className="py-0.5 px-1 text-center border-l border-gray-600/50 text-blue-300 font-bold">野手</th>
                 <th colSpan={3} className="py-0.5 px-1 text-center border-l border-gray-600/50 text-gray-300 font-bold">フィジカル</th>
                 <th colSpan={4} className="py-0.5 px-1 text-center border-l border-gray-600/50 text-red-300 font-bold">投手</th>
                 <th colSpan={gameMode === 'university' ? 6 : 5} className="py-0.5 px-1 text-center border-l border-gray-600/50 text-gray-300 font-bold">属性</th>
               </tr>
-              <tr className="bg-gray-700/80 text-gray-300 text-xs">
+              <tr className="bg-gray-700 text-gray-300 text-xs">
                 <th className="py-1 px-2 text-left w-20">選手名</th>
                 <SortTh k="overall" w="w-9">総合</SortTh>
                 <th className="py-1 px-1 text-center w-8">ポジ</th>
@@ -295,7 +334,7 @@ const PlayerSearchScreen = ({ onBack, gameMode, userTeamName }) => {
                 <SortTh k="fame" w="w-8">知名度</SortTh>
                 <th className="py-1 px-1 text-center w-10">投/打</th>
                 <th className="py-1 px-1 text-center w-8">投法</th>
-                {gameMode === 'university' && <th className="py-1 px-1 text-center w-8 text-purple-400">スカ</th>}
+                {gameMode === 'university' && <th className="py-1 px-1 text-center w-20 text-purple-300" title="高校生を推薦スカウトの候補に加える">スカウト</th>}
               </tr>
             </thead>
             <tbody>
@@ -372,19 +411,20 @@ const PlayerSearchScreen = ({ onBack, gameMode, userTeamName }) => {
                   {isScoutable && (
                     <td className="py-0.5 px-1 text-center" onClick={e => e.stopPropagation()}>
                       {alreadyScouted
-                        ? <span className="text-xs text-green-400 font-bold">済</span>
+                        ? <span className="text-xs text-green-400 font-bold whitespace-nowrap" title="推薦スカウトの候補に入っています">候補済み</span>
                         : <button
-                            className="btn-secondary text-xs px-1.5 py-0.5 rounded transition"
+                            className="btn-secondary text-xs px-1.5 py-0.5 rounded transition whitespace-nowrap"
+                            title="推薦スカウトの候補に加えます（大学のスカウト画面で調査・注目できます）"
                             onClick={() => {
                               const teamData = TEAMS_DATA[userTeamName];
                               const uniRank = teamData?.universityData?.rank || 'C';
                               const reputation = teamData?.universityData?.reputation ?? 30;
                               const result = addHighSchoolPlayerToScoutList(p, uniRank, reputation);
-                              setScoutAddMsg(result.success ? `${p.name} を候補追加` : '追加失敗');
+                              setScoutAddMsg(result.success ? `${p.name}を推薦スカウトの候補に追加しました` : '候補に追加できませんでした');
                               setTimeout(() => setScoutAddMsg(null), 2000);
                               setScoutTick(v => v + 1);
                             }}
-                          >+</button>
+                          >候補に追加</button>
                       }
                     </td>
                   )}

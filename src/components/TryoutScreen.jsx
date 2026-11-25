@@ -674,16 +674,16 @@ const TryoutScreen = ({ seasonData, setSeasonData, allTeams, isInitialTryout = f
                                   <tr>
                                     <th className="px-2 py-1">名前</th>
                                     <th className="px-2 py-1">年齢</th>
-                                    <th className="px-2 py-1">守備</th>
-                                    <th className="px-2 py-1">ミ</th>
-                                    <th className="px-2 py-1">パ</th>
-                                    <th className="px-2 py-1">走</th>
-                                    <th className="px-2 py-1">肩</th>
-                                    <th className="px-2 py-1">守</th>
-                                    <th className="px-2 py-1">速</th>
-                                    <th className="px-2 py-1">制</th>
-                                    <th className="px-2 py-1">ス</th>
-                                    <th className="px-2 py-1">回転</th>
+                                    <th className="px-2 py-1" title="ポジション">守備</th>
+                                    <th className="px-2 py-1 cursor-help" title="ミート（打撃精度）">ミ</th>
+                                    <th className="px-2 py-1 cursor-help" title="パワー（長打力）">パ</th>
+                                    <th className="px-2 py-1 cursor-help" title="走力">走</th>
+                                    <th className="px-2 py-1 cursor-help" title="肩力">肩</th>
+                                    <th className="px-2 py-1 cursor-help" title="守備力">守</th>
+                                    <th className="px-2 py-1 cursor-help" title="球速（km/h）">速</th>
+                                    <th className="px-2 py-1 cursor-help" title="制球力">制</th>
+                                    <th className="px-2 py-1 cursor-help" title="スタミナ">ス</th>
+                                    <th className="px-2 py-1 cursor-help" title="球の回転数">回転</th>
                                     <th className="px-2 py-1" title="プロ意識・度胸をまとめた大雑把な評価。成長を最も左右するが、正確には見抜けない">精神</th>
                                   </tr>
                                 </thead>
@@ -906,7 +906,7 @@ const TryoutScreen = ({ seasonData, setSeasonData, allTeams, isInitialTryout = f
                 <span><b className="text-gray-100">野</b> 野手としての総合</span>
                 <span><b className="text-gray-100">投</b> 投手としての総合</span>
                 <span><b className="text-gray-100">精</b> 精神（成長を左右するが正確には分からない）</span>
-                <span className="text-gray-400">見出しを押すと並べ替え</span>
+                <span className="text-gray-300">見出しに重ねると項目名、押すと並べ替え。スカウト評価の全文は ⓘ</span>
               </div>
               <table className="w-full text-xs text-left">
                 <thead className="bg-surface-2 text-gray-300 text-xs sticky top-0 border-b border-gray-700/50">
@@ -936,8 +936,8 @@ const TryoutScreen = ({ seasonData, setSeasonData, allTeams, isInitialTryout = f
                       // <th>を直接の子にしてツールチップは native title で付ける
                       <th
                         key={i}
-                        title={col.tip || undefined}
-                        className={`px-1 py-1.5 whitespace-nowrap ${col.key ? 'cursor-pointer hover:text-white' : ''}`}
+                        title={col.tip ? `${col.tip}${col.key ? '（押すと並べ替え）' : ''}` : undefined}
+                        className={`px-1 py-1.5 whitespace-nowrap ${col.key ? 'cursor-pointer hover:text-white' : col.tip ? 'cursor-help' : ''}`}
                         onClick={col.key ? () => handleSort(col.key) : undefined}
                       >
                         {col.label}{col.key ? getSortIndicator(col.key) : ''}
@@ -1018,7 +1018,9 @@ const TryoutScreen = ({ seasonData, setSeasonData, allTeams, isInitialTryout = f
                         </td>
                         <td className={`px-1 py-1 font-bold text-center ${getRankColor(fRank)}`}>{fRank}</td>
                         <td className={`px-1 py-1 font-bold text-center ${getRankColor(pRank)}`}>{pRank}</td>
-                        <td className="px-1 py-1 text-xs leading-tight">
+                        {/* ⚠ 評価文は1行で切る（S15。文の長さで行の高さがまちまちだった）。全文は ⓘ の詳細と title。
+                            伸びしろ・素質の短い印は切れないように文より前に出す */}
+                        <td className="px-1 py-1 text-xs whitespace-nowrap">
                           {(() => {
                             const comment = player.scoutComment || generateScoutComment(player);
                             const sc = typeof comment === 'string' ? { text: comment, potentialHint: '', potentialLevel: 3 } : comment;
@@ -1029,11 +1031,12 @@ const TryoutScreen = ({ seasonData, setSeasonData, allTeams, isInitialTryout = f
                               : '';
                             const talentColor = (sc.talentHint || '').includes('線が細') || (sc.talentHint || '').includes('不器用')
                               ? 'text-gray-400' : 'text-emerald-400';
+                            const full = [sc.potentialHint, sc.talentHint, sc.text].filter(Boolean).join(' ');
                             return (
-                              <span>
+                              <span className="block max-w-[16rem] truncate" title={full} data-testid="tryout-scout-comment">
+                                {sc.potentialHint && <span className={`mr-0.5 ${hintColor}`}>{sc.potentialHint}</span>}
+                                {sc.talentHint && <span className={`mr-0.5 ${talentColor}`}>{sc.talentHint}</span>}
                                 <span className="text-gray-300">{sc.text}</span>
-                                {sc.talentHint && <span className={`ml-0.5 ${talentColor}`}>{sc.talentHint}</span>}
-                                {sc.potentialHint && <span className={`ml-0.5 ${hintColor}`}>{sc.potentialHint}</span>}
                               </span>
                             );
                           })()}

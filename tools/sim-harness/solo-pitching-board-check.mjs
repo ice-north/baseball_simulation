@@ -14,6 +14,8 @@ import {
   nextStarterIdOf,
   unassignedPitchers,
   roleBlocked,
+  vacantStarterIds,
+  fillVacantStarters,
 } from '../../src/components/lineup/soloPitchingEdit.js';
 
 let id = 0;
@@ -200,6 +202,26 @@ function consistent(team, label) {
   const state = setRole(pitchingFromTeam(t.team), t.idle.id, 'closer');
   assert.equal(state.roles[t.idle.id], 'closer');
   assert.equal(state.roles[t.closer.id], 'auto_r', '前のクローザーが役割なしに落ちた');
+}
+
+// ---- 「空いた枠を自動で埋める」: 抹消中・名簿に居ない先発の枠だけを、役割なし → おまかせの救援で埋める
+{
+  const t = makeTeam();
+  t.starters[4].isActive = false; // ベンチ登録から外した5番手
+  t.team.pitchingRotation.starters.push(999); // 名簿に居ない投手
+  const before = pitchingFromTeam(t.team);
+  assert.deepEqual(vacantStarterIds(before, t.team.players), [t.starters[4].id, 999]);
+  const state = fillVacantStarters(before, t.team.players);
+  assert.deepEqual(vacantStarterIds(state, t.team.players), [], '空いた枠が残った');
+  assert.equal(state.starters[4], t.idle.id, '役割なしの投手が先に入らない');
+  assert.deepEqual(state.starters.slice(0, 4), before.starters.slice(0, 4), '空いていない枠が動いた');
+  assert.equal(state.roles[t.idle.id], 'auto_s');
+  assert.equal(state.roles[t.closer.id], 'closer', 'クローザーが先発に回された');
+  assert.equal(state.roles[t.setup.id], 'setup', 'セットアッパーが先発に回された');
+  writePitching(t.team, state);
+  consistent(t.team, '空いた枠を埋めた');
+  // 空いていなければ変えない
+  assert.equal(fillVacantStarters(state, t.team.players), state);
 }
 
 // ---- 「変化」の列は封印した球を数えない（試合では投げない）
