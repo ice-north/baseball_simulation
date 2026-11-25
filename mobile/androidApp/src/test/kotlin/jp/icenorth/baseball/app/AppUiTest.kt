@@ -121,15 +121,31 @@ class AppUiTest {
     /** 送った指示（本文） */
     private val commands: MutableList<String> = Collections.synchronizedList(mutableListOf())
 
-    @Test fun tradeAndProcedureNoticesBothRemainVisibleWithoutOverlap() {
+    @Test fun tradeNoticeIsOnlyOnHomeAndProcedureNoticeOnOtherTabs() {
         open(""""pendingPack":{"chosen":null,"packs":[]},"trades":[{"id":"t1","myTurn":true,"mine":false,"fromTeam":"other"}]""")
+        // ⚠ 届いた提案の帯はホームだけ（以前はどのタブでも上に出続けた。ほかのタブでは下のタブの数字で分かる）
+        rule.onNodeWithTag("trade-notice").assertIsDisplayed()
         // ⚠ ホームでは手続きの帯を出さない（紙面の「お知らせ」に同じ文がある）。ほかのタブで確かめる
+        rule.onNodeWithTag("procedure-notice").assertDoesNotExist()
         rule.onNodeWithTag("tab-Games").performClick()
-        val trade = rule.onNodeWithTag("trade-notice").assertIsDisplayed().fetchSemanticsNode().boundsInRoot
-        val procedure = rule.onNodeWithTag("procedure-notice").assertIsDisplayed().fetchSemanticsNode().boundsInRoot
-        assertTrue("トレード通知が手続き通知を隠しています", trade.bottom <= procedure.top)
-        rule.onNodeWithTag("procedure-notice").performClick()
+        rule.onNodeWithTag("trade-notice").assertDoesNotExist()
+        rule.onNodeWithTag("procedure-notice").assertIsDisplayed().performClick()
         rule.onNodeWithText("初期メンバー選択").assertIsDisplayed()
+    }
+
+    @Test fun tradeSearchHeadingFollowsTheChosenSlot() {
+        val roster = """[{"id":1,"name":"遊撃の人","position":"short"},{"id":2,"name":"先発の人","position":"pitcher"}]"""
+        open(""""roster":$roster,"lineup":{"battingOrder":[{"playerId":1,"position":"short","battingOrder":1}],"starters":[2]}""")
+        rule.onNodeWithTag("tab-Procedures").performClick()
+        rule.runOnIdle {
+            model.procTrade = true
+            model.tradeDraft = jp.icenorth.baseball.app.ui.TradeDraft(step = jp.icenorth.baseball.app.ui.TradeStep.Search, slot = "short")
+        }
+        rule.onNodeWithText("いまの遊撃: 遊撃の人", substring = true).assertExists()
+        // ⚠ 以前は持ち場を替えても見出しが前の持ち場の選手のまま（「いまの先発: 遊撃の人」）だった
+        rule.onNodeWithTag("chip-sp").performScrollTo().performClick()
+        rule.onNodeWithText("いまの先発: 先発の人", substring = true).assertExists()
+        rule.onNodeWithText("遊撃の人", substring = true).assertDoesNotExist()
     }
 
     @Test fun lastCampGainsCanBeReadAfterThePhaseHasFinished() {
@@ -391,6 +407,18 @@ class AppUiTest {
         rule.runOnIdle { assertTrue("fielderRest" in model.seenSituationTips) }
     }
 
+    @Test fun planBarKeepsUndoAndSaveAndTucksTheRestInAMenu() {
+        open(""""roster":[{"id":1,"name":"選手","position":"first"}],"lineup":{"battingOrder":[{"playerId":1,"position":"first","battingOrder":1}],"starters":[]}""")
+        rule.onNodeWithTag("tab-Plan").performClick()
+        // ⚠ 以前は「元に戻す・やり直す・保存済み・変更を取り消す・保存」が1行に小さく並んでいた
+        rule.onNodeWithText("↶ 元に戻す").assertIsDisplayed()
+        rule.onNodeWithText("保存済み").assertIsDisplayed()
+        rule.onNodeWithText("↷ やり直す").assertDoesNotExist()
+        rule.onNodeWithTag("plan-more").performClick()
+        rule.onNodeWithText("↷ やり直す").assertExists()
+        rule.onNodeWithText("変更を取り消す").assertExists()
+    }
+
     @Test fun delegatedProcedureShowsTheCoachPlanWithoutDecisions() {
         val roster = """[{"id":1,"name":"出す人","position":"first"},{"id":2,"name":"残す人","position":"second"}]"""
         open(
@@ -450,6 +478,28 @@ class AppUiTest {
         rule.onNodeWithTag("tab-Procedures").performClick()
         rule.onNodeWithText("解雇する選手（1人）").assertExists()
         rule.onNodeWithText(note).assertExists()
+    }
+
+    @Test fun contractRowOpensWordedActionsBelow() {
+        val roster = """[{"id":1,"name":"出す人","position":"first"},{"id":2,"name":"残す人","position":"second"}]"""
+        open(
+            """"roster":$roster,"lineup":{"battingOrder":[]},"phase":{"id":"ph1","kind":"contract"}""",
+            answer = { action -> if (action == "defaults") """{"phaseId":"ph1","plan":{"releaseIds":[]}}""" else null },
+        )
+        rule.onNodeWithTag("tab-Procedures").performClick()
+        rule.onNodeWithText("解雇する選手（0人）").assertExists()
+        // ⚠ 以前は行の右に「解雇」「投C」「野C」の小さな札が並んでいた。行を押すと、下に操作が言葉で開く
+        rule.onNodeWithTag("contract-actions").assertDoesNotExist()
+        rule.onNodeWithTag("contract-row-1").performScrollTo().performClick()
+        rule.onNodeWithText("投手コーチに打診").assertExists()
+        rule.onNodeWithText("野手コーチに打診").assertExists()
+        rule.onNodeWithText("解雇する").performScrollTo().performClick()
+        rule.onNodeWithText("解雇する選手（1人）").assertExists()
+        rule.onNodeWithText("解雇予定").assertExists()
+        rule.onNodeWithText("解雇を取り消す").assertExists()
+        // もう一度行を押すと閉じる
+        rule.onNodeWithTag("contract-row-1").performScrollTo().performClick()
+        rule.onNodeWithTag("contract-actions").assertDoesNotExist()
     }
 
     @Test fun coachPlanNoteIsGoneAfterDeciding() {

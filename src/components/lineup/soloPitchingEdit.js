@@ -183,3 +183,58 @@ export function pitchingNotes(state, roster) {
     notes.push(`先発が${state.starters.length}人です（5〜6人が目安）`);
   return notes;
 }
+
+/** 先発の枠に入っていて、試合で投げられない選手（名簿に居ない・抹消中・野手） */
+export function vacantStarterIds(state, roster) {
+  const ok = new Set(
+    (roster || [])
+      .filter((p) => isPitcher(p) && !!p.pitching && onStaff(state, p.id))
+      .map((p) => p.id),
+  );
+  return state.starters.filter((id) => !ok.has(id));
+}
+
+// 空いた先発の枠へ回す順: 役割なし → 救援の「おまかせ」→ ロング・敗戦処理などの救援。
+// ⚠ セットアッパー・クローザーは動かさない（勝ち試合の終盤が空くと、気づかないまま崩れる）
+const FILL_FROM = [NO_ROLE, 'auto_r', 'long', 'mopup', 'behind', 'onepoint', 'ace_relief'];
+
+/**
+ * 空いた先発の枠（`vacantStarterIds`）を、救援・役割なしの投手で埋める（同じ登板順に入る）。
+ * 埋める投手が居ない枠はローテから外す（先発が1人も居なくならないかぎり）。
+ * 投手起用の表の「空いた枠を自動で埋める」ボタン。⚠ 空いていない枠・救援の役割は変えない
+ * （以前の「自動設定」は全部を組み直して、どう変わるか分からなかった。2026-11-04 いしだ）。
+ */
+export function fillVacantStarters(state, roster) {
+  const vacant = vacantStarterIds(state, roster);
+  if (!vacant.length) return state;
+  const rank = (role) => {
+    const i = FILL_FROM.indexOf(role);
+    return i < 0 ? FILL_FROM.length : i;
+  };
+  const pool = (roster || [])
+    .filter(
+      (p) =>
+        isPitcher(p) &&
+        !!p.pitching &&
+        onStaff(state, p.id) &&
+        !state.starters.includes(p.id) &&
+        rank(state.roles[p.id]) < FILL_FROM.length,
+    )
+    .sort(
+      (a, b) =>
+        rank(state.roles[a.id]) - rank(state.roles[b.id]) ||
+        (b.pitching.stamina || 0) - (a.pitching.stamina || 0),
+    );
+  let starters = [...state.starters];
+  const roles = { ...state.roles };
+  for (const id of vacant) {
+    const next = pool.shift();
+    if (next) {
+      starters = starters.map((s) => (s === id ? next.id : s));
+      roles[next.id] = 'auto_s';
+    } else if (starters.length > 1) {
+      starters = starters.filter((s) => s !== id);
+    }
+  }
+  return { ...state, starters, roles };
+}

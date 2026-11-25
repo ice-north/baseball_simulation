@@ -673,7 +673,7 @@ function campSeen(view) {
   }
 }
 /** ホームのキャンプ結果のまとめ（何人が伸び、伸びの大きかった3人） */
-function CampHomeSummary({ camp, roster }) {
+function CampHomeSummary({ camp, roster, onHome = true }) {
   const table = campGainTable(camp?.gains || {}, roster, camp?.events || {});
   // ⚠ 上位は伸びた選手から（出来事だけの行・合計が負の行を入れない）。数字は表の「計」（`r.sum`）
   const { grown, top } = campTopGainers(table.rows, 3);
@@ -681,16 +681,50 @@ function CampHomeSummary({ camp, roster }) {
     <p className="online-muted">
       キャンプが終わりました。{grown.length}人が伸びました
       {top.length > 0 && `（伸びの大きかった選手: ${top.map((r) => `${r.player.name} ${formatGain(Math.round(r.sum * 10) / 10)}`).join('・')}）`}
-      。閉じたあとも「現在の手続き」の下で見られます。
+      。{onHome && '閉じたあとも「現在の手続き」の下で見られます。'}
     </p>
+  );
+}
+
+/**
+ * キャンプの伸びを**選手ごとに1行**で（伸びた項目だけ。例: 伊藤 +61 一塁適性+26 右翼適性+30）。
+ * シーズン中の「現在の手続き」で、畳んだキャンプ結果を開いたときに出す（P2 2026-11-25）。
+ * ⚠ 20列の表はほとんどのマスが「·」で、シーズン中に見返すには大きすぎた（スマホは横に流れた）
+ */
+function CampGainLines({ camp, roster }) {
+  const table = campGainTable(camp?.gains || {}, roster, camp?.events || {});
+  const rows = table.rows.filter((r) => r.items.some((i) => i.diff > 0) || r.events.length);
+  if (!rows.length) return <p className="online-muted">伸びた能力はありません。</p>;
+  return (
+    <ul className="online-camp-lines" aria-label="選手ごとの伸び">
+      {rows.map(({ player, items, sum, events }) => (
+        <li key={player.id}>
+          <PlayerStatsButton player={player} panel="abilities" />
+          <small>{POS[player.position]}</small>
+          <b className={`online-gain ${sum >= 0 ? 'is-up' : 'is-down'}`}>
+            {formatGain(Math.round(sum * 10) / 10)}
+          </b>
+          <span>
+            {items
+              .filter((i) => i.diff > 0)
+              .map((i) => `${i.label}${formatGain(i.diff)}`)
+              .join(' ')}
+            {events.length > 0 && ` ${events.join(' ')}`}
+          </span>
+        </li>
+      ))}
+    </ul>
   );
 }
 
 export function CompletedCamp({ view, onHome = false }) {
   const camp = view.lastCamp;
   const [closed, setClosed] = useState(() => onHome && campSeen(view));
+  // ⚠ **シーズン中の「現在の手続き」では畳んでおき**、開いたら選手ごとに1行（`CampGainLines`。
+  //    P2 2026-11-25）。決定待ちが無いときに画面のほとんどが20列の表になっていた
+  const inSeason = !onHome && view.stage?.key === 'season';
   // ⚠ ホームでは**まとめの1行だけ**出し、表は押して開く（ホームは1画面に収める決まり）
-  const [open, setOpen] = useState(!onHome);
+  const [open, setOpen] = useState(!onHome && !inSeason);
   if (!camp) return null;
   // ⚠ **その年のキャンプのものだけ**出す。年が替わったあと（年度更新〜開幕）は
   //    「その年のまとめ」だけにする（いしだ 2026-11-18「キャンプの結果…は要りません」）
@@ -716,15 +750,28 @@ export function CompletedCamp({ view, onHome = false }) {
           </button>
         )}
       </div>
-      {onHome && <CampHomeSummary camp={camp} roster={view.roster || []} />}
-      {onHome && (
+      {(onHome || inSeason) && (
+        <CampHomeSummary camp={camp} roster={view.roster || []} onHome={onHome} />
+      )}
+      {(onHome || inSeason) && (
         <div className="online-actions">
           <button type="button" aria-expanded={open} onClick={() => setOpen(!open)}>
-            {open ? '表を閉じる' : '選手ごとの表を開く'}
+            {inSeason
+              ? open
+                ? '閉じる'
+                : '選手ごとの伸びを開く'
+              : open
+                ? '表を閉じる'
+                : '選手ごとの表を開く'}
           </button>
         </div>
       )}
-      {open && <CampResultList camp={camp} roster={view.roster || []} />}
+      {open &&
+        (inSeason ? (
+          <CampGainLines camp={camp} roster={view.roster || []} />
+        ) : (
+          <CampResultList camp={camp} roster={view.roster || []} />
+        ))}
     </section>
   );
 }

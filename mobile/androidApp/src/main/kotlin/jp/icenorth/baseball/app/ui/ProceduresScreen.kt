@@ -4,7 +4,6 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.border
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
@@ -37,6 +36,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import kotlinx.coroutines.launch
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -98,7 +98,7 @@ fun ProceduresScreen(model: AppViewModel, onHome: () -> Unit = {}, onOpenStaff: 
     )
     Column(Modifier.fillMaxSize().statusBarsPadding()) {
         // ⚠ 球団名を変える入口はホームのメニューだけにした（以前はここの右上にもあった。手続きと関係が薄い）
-        ChipTabs(
+        SectionTabs(
             ProcTab.entries.map { it.name to it.label },
             tab.name,
             { model.procFace = it },
@@ -694,6 +694,8 @@ private fun ReleasePanel(model: AppViewModel, raw: JsonObject, plan: JsonObject,
     var ascending by rememberSaveable { mutableStateOf(false) }
     val sortColumn = columns.firstOrNull { it.id == sortId }
     val sorted = sortContractRoster(roster, sortColumn, ascending)
+    // 操作を開いている行（1行だけ。もう一度押すと閉じる）
+    var openId by rememberSaveable { mutableStateOf<Long?>(null) }
     Section(
         "解雇する選手（${releases.size}人）",
         trailing = {
@@ -701,9 +703,9 @@ private fun ReleasePanel(model: AppViewModel, raw: JsonObject, plan: JsonObject,
             InfoButton(
                 "契約更改",
                 listOf(
-                    "右端の「解雇」を押した選手が退団します（もう一度押すと取り消し）。最低9人を残してください。",
+                    "行を押すと、下に「解雇する」「投手コーチに打診」「野手コーチに打診」が開きます。解雇した選手は退団します（もう一度押すと取り消し）。最低9人を残してください。名前を押すと選手の詳細です。",
                     "見出しを押すと、その項目で並べ替えます（もう一度押すと逆順）。",
-                    "「投C」「野C」はコーチ打診です。打診した選手は現役を退いて名簿を離れ、年度更新でその役職のコーチに就きます（いまのコーチは市場へ戻ります。各役職1人まで）。監督の退任・コーチの昇格は上の「指導者の異動」で決められます。",
+                    "コーチに打診した選手は現役を退いて名簿を離れ、年度更新でその役職のコーチに就きます（いまのコーチは市場へ戻ります。各役職1人まで）。監督の退任・コーチの昇格は上の「指導者の異動」で決められます。",
                     "続くトライアウトで最大 ${(rosterLimitOf(raw) - remaining.size).coerceAtLeast(0)}人を獲れます（標準${rosterStandardOf(raw)}人・上限${rosterLimitOf(raw)}人。人数を決めなければ標準まで埋めます）。目標に足りない区分はトライアウトで優先して埋まります。",
                     "標準案は「30歳以上」と「能力の低さ」で点を付けて選び、トライアウトで入れ替えるため毎年少なくとも3人を出します。",
                     "このあとの年度更新で、若い選手は伸び、30歳を過ぎると衰えやすくなります。",
@@ -725,16 +727,44 @@ private fun ReleasePanel(model: AppViewModel, raw: JsonObject, plan: JsonObject,
             sub = { p ->
                 positionLabel(p.at("position").str()) + " " + handLabel(p)
             },
-            trailingHeader = "解雇・打診",
-            // ⚠ 幅は名前の列（118dp）と合わせて狭い端末に収まるように（監査 2026-11-21。172dp だと 360dp の端末で
-            //    成績の列が1列も見えなかった）。ふつうのボタンは最小幅 58dp なので、小さな札の形にする
-            trailingWidth = 108.dp,
+            // ⚠ 右端は今の扱い（残す・解雇予定・コーチ打診）だけを出し、行を押すと下に操作が言葉で開く（UI総点検 A4。
+            //    以前は「解雇」「投C」「野C」の小さな札が隣り合い、押し間違えやすく、意味も ⓘ を開かないと分からなかった）
+            trailingHeader = "契約",
+            trailingWidth = 84.dp,
             trailing = { p ->
-                Row(horizontalArrangement = Arrangement.spacedBy(3.dp), verticalAlignment = Alignment.CenterVertically) {
-                    val on = p.pid in releases
-                    MiniToggle(if (on) "予定" else "解雇", on, editable) { setPlan(Commands.withRelease(plan, p.pid, !on)) }
-                    COACH_OFFER_ROLES.forEach { (role, short) ->
-                        MiniToggle(short, offers[role] == p.pid, editable) { setPlan(Commands.withCoachOffer(plan, p.pid, role)) }
+                val role = COACH_OFFER_ROLES.firstOrNull { (role, _) -> offers[role] == p.pid }
+                val label = when {
+                    p.pid in releases -> "解雇予定"
+                    role != null -> COACH_OFFER_SHORT[role.first].orEmpty()
+                    else -> "残す"
+                }
+                val marked = p.pid in releases || role != null
+                Row(
+                    Modifier.fillMaxSize().testTag("contract-row-${p.pid}").padding(horizontal = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        label,
+                        fontSize = 11.sp,
+                        fontWeight = if (marked) FontWeight.Bold else FontWeight.Normal,
+                        color = if (marked) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        modifier = Modifier.weight(1f),
+                    )
+                    if (editable) Text(if (openId == p.pid) "▴" else "▾", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            },
+            onRow = if (editable) ({ p -> openId = if (openId == p.pid) null else p.pid }) else null,
+            expanded = { it.pid == openId },
+            expansion = { p ->
+                val on = p.pid in releases
+                Column(
+                    Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)).padding(horizontal = 8.dp, vertical = 6.dp).testTag("contract-actions"),
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    ContractAction("解雇する", "解雇を取り消す", on) { setPlan(Commands.withRelease(plan, p.pid, !on)) }
+                    COACH_OFFER_ROLES.forEach { (role, label) ->
+                        ContractAction(label, "${STAFF_ROLE_NAMES[role]}への打診を取り消す", offers[role] == p.pid) { setPlan(Commands.withCoachOffer(plan, p.pid, role)) }
                     }
                 }
             },
@@ -796,7 +826,7 @@ private fun StaffMovesPanel(raw: JsonObject, plan: JsonObject, setPlan: (JsonObj
     Section("指導者の異動", trailing = {
         InfoButton("指導者の異動", listOf(
             "監督の退任・コーチの監督への昇格・コーチの退任を決められます。動くのは年度更新のときです。",
-            "コーチを監督に上げると、そのコーチの席が空きます。同じ契約更改で「投C」「野C」のコーチ打診をすれば、打診した選手がその席に就きます。",
+            "コーチを監督に上げると、そのコーチの席が空きます。同じ契約更改で選手を「投手コーチに打診」「野手コーチに打診」すれば、打診した選手がその席に就きます。",
             "異動で空いた席は、すぐ後のキャンプの間に指導者の画面で市場から呼べます。呼ばなければキャンプの終わりに市場から埋めます。退任は解任に数えません。",
         ))
     }) {
@@ -819,24 +849,24 @@ private fun StaffMovesPanel(raw: JsonObject, plan: JsonObject, setPlan: (JsonObj
     }
 }
 
-/** 表の右端の小さな切り替え（解雇・投C・野C）。選んでいると塗り、選んでいないと枠だけ */
+/**
+ * 契約更改の行の下に開く操作の1つ（「解雇する」「投手コーチに打診」「野手コーチに打診」）。
+ * 選んでいるときは取り消す言葉（「解雇を取り消す」）にする。今の扱いは行の右端に出ている
+ */
 @Composable
-private fun MiniToggle(label: String, on: Boolean, enabled: Boolean, onClick: () -> Unit) {
-    val color = MaterialTheme.colorScheme.primary
-    Box(
-        Modifier
-            .height(28.dp)
-            .then(if (on) Modifier.background(color, RoundedCornerShape(4.dp)) else Modifier.border(1.dp, color.copy(alpha = if (enabled) 1f else 0.4f), RoundedCornerShape(4.dp)))
-            .clickable(enabled = enabled, onClick = onClick)
-            .padding(horizontal = 5.dp),
-        contentAlignment = Alignment.Center,
-    ) {
-        Text(label, fontSize = 11.sp, fontWeight = FontWeight.Bold, color = if (on) MaterialTheme.colorScheme.onPrimary else color, maxLines = 1)
+private fun ContractAction(label: String, cancel: String, on: Boolean, onClick: () -> Unit) {
+    OutlinedButton(onClick = onClick, modifier = Modifier.fillMaxWidth()) {
+        Text(if (on) cancel else label, maxLines = 1, color = if (on) MaterialTheme.colorScheme.error else Color.Unspecified)
     }
 }
 
-/** コーチ打診の役職（役職 → ボタンの短い名前）。⚠ Web 版 ContractPlanner の COACH_OFFER_ROLES と同じ役職 */
-private val COACH_OFFER_ROLES = listOf("pitching" to "投C", "batting" to "野C")
+/**
+ * コーチ打診の役職（役職 → 操作の言葉）。⚠ Web 版 ContractPlanner の COACH_OFFER_ROLES と同じ役職（pitching・batting）。
+ * 言葉はアプリでは行の下に開くので、略さずに書く
+ */
+private val COACH_OFFER_ROLES = listOf("pitching" to "投手コーチに打診", "batting" to "野手コーチに打診")
+/** 表の右端に出す、打診している役職の短い名前 */
+private val COACH_OFFER_SHORT = mapOf("pitching" to "投手コーチ", "batting" to "野手コーチ")
 
 /** 退団後の人数（「退団3人 · 残り21人 · 投9/11 捕2/2 内6/6 外4/7」）。決定の帯に出す */
 private fun releaseSummary(raw: JsonObject, plan: JsonObject): String {

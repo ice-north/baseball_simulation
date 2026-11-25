@@ -9,6 +9,7 @@ import { universityPool } from '../state/schoolPools.js';
 import { calcPlayerOverall } from '../season/dispatchSystem.js';
 import { POSITION_NAMES, getOverallColor } from '../utils/constants.js';
 import PlayerDetailModal from './PlayerDetailModal.jsx';
+import { SegmentBar, Segments } from './SoloSegments.jsx';
 
 const RANK_COLOR = { S: 'text-yellow-400', A: 'text-orange-400', B: 'text-green-400', C: 'text-blue-400', D: 'text-gray-300' };
 const RANK_BG = { S: 'bg-yellow-900/40 border-yellow-700/60', A: 'bg-orange-900/30 border-orange-700/50', B: 'bg-green-900/30 border-green-700/50', C: 'bg-blue-900/20 border-blue-700/40', D: 'bg-gray-900/20 border-gray-700/30' };
@@ -452,23 +453,22 @@ const TeamRankingScreen = ({ userTeamName, gameMode, seasonData, onBack }) => {
       </div>
 
       {/* Filters */}
-      <div className="flex flex-wrap gap-2 mb-3 bg-surface-2 rounded-xl p-2">
-        <div className="flex gap-1">
-          {[['all', '全て'], ['corporate', '社会人'], ['university', '大学'], ['independent', '独立']].map(([v, label]) => (
-            <button key={v} onClick={() => setFilterType(v)}
-              className={`px-2 py-1 rounded text-xs font-medium ${filterType === v ? 'seg-on' : 'seg'}`}>
-              {label}
-            </button>
-          ))}
-        </div>
-        <div className="flex gap-1">
-          {['all', 'S', 'A', 'B', 'C', 'D'].map(r => (
-            <button key={r} onClick={() => setFilterRank(r)}
-              className={`px-2 py-1 rounded text-xs font-medium ${filterRank === r ? 'seg-on' : 'seg'}`}>
-              {r === 'all' ? '全ランク' : r}
-            </button>
-          ))}
-        </div>
+      {/* ⚠ 切り替えはチーム情報と同じオンラインの丸い切り替え（X2。`SoloSegments.jsx`） */}
+      <div className="flex flex-wrap items-center gap-2 mb-3 bg-surface-2 rounded-xl p-2">
+        <SegmentBar>
+          <Segments
+            label="チームの種類"
+            value={filterType}
+            onChange={setFilterType}
+            items={[['all', '全て'], ['corporate', '社会人'], ['university', '大学'], ['independent', '独立']].map(([id, label]) => ({ id, label }))}
+          />
+          <Segments
+            label="ランク"
+            value={filterRank}
+            onChange={setFilterRank}
+            items={['all', 'S', 'A', 'B', 'C', 'D'].map((r) => ({ id: r, label: r === 'all' ? '全ランク' : r }))}
+          />
+        </SegmentBar>
         <input
           type="text"
           placeholder="チーム名検索..."

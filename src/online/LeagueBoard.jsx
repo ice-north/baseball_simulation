@@ -393,7 +393,10 @@ function Leaders({ view }) {
                         <span className="online-leader-rank" data-rank={i + 1}>
                           {i + 1}
                         </span>
-                        <span className="online-leader-name">
+                        {/* ⚠ 名前の欄は残りの幅いっぱい（可変）で、入らない名前は「…」で切り、
+                            全部は `title` で出す（P1 2026-11-25: 5文字の「山下 真名斗」が切れて
+                            すぐ右の球団名と重なっていた） */}
+                        <span className="online-leader-name" title={row.name}>
                           {/* 名前を押すと選手の詳細（能力・成績）を開く（先方要望 2026-11） */}
                           {/* ⚠ 今年プロに指名された選手（`pro`）はもう名簿に居ないので押せない。名前に「プロへ」と添える */}
                           {row.pro ? (

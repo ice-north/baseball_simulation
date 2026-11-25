@@ -948,27 +948,20 @@ try {
       .getByText('スライダー', { exact: true })
       .waitFor();
     await m.keyboard.press('Escape');
-    const pager = await m
-      .getByRole('button', { name: '次のページ', exact: true })
-      .boundingBox();
-    assert.ok(pager.y + pager.height <= 592, 'ページ送りが画面内に収まる');
-    const row = await m
-      .locator('.online-compact-roster article')
-      .last()
-      .boundingBox();
-    assert.ok(row.y + row.height <= pager.y, '最終行とページ送りが重ならない');
+    // ⚠ スマホの選手成績は**ページ送りをしない**（M1 2026-11-25）。全員を出し、
+    //    一覧の枠の中を縦に送る。枠は画面の中に収まり、画面全体は伸びない
+    assert.equal(await m.locator('.online-pager').count(), 0, 'スマホの選手成績にページ送りが残っている');
+    const rowsBox = await m.locator('.online-compact-roster .online-roster-rows').boundingBox();
+    assert.ok(rowsBox.y + rowsBox.height <= 592 + 1, '一覧の枠が画面内に収まる');
     await m.setViewportSize({ width, height: 844 });
     await m.waitForFunction(
       () =>
         document.querySelectorAll('.online-compact-roster article').length >=
-        14,
+        24,
     );
-    while (
-      await m
-        .getByRole('button', { name: '次のページ', exact: true })
-        .isEnabled()
-    )
-      await m.getByRole('button', { name: '次のページ', exact: true }).click();
+    await m
+      .getByRole('button', { name: '成績選手24の選手情報を見る', exact: true })
+      .scrollIntoViewIfNeeded();
     await m
       .getByRole('button', { name: '成績選手24の選手情報を見る', exact: true })
       .waitFor();
@@ -1018,9 +1011,13 @@ try {
       '成績選手12',
       '試合の全出場選手をソートしてからページ分割',
     );
+    // ⚠ スマホも**全員を出す**（M1 2026-11-25。以前は6人ごとのページ送り）。表の枠の中を
+    //    縦に送り、小窓そのものは縦に収める
+    assert.equal(await box.locator('.online-pager').count(), 0, 'スマホの試合成績にページ送りが残っている');
+    assert.equal(await box.locator('tbody tr').count(), 12, 'スマホの試合成績に全員が出ていない');
     assert.ok(
       await box.evaluate((node) => node.scrollHeight <= node.clientHeight + 1),
-      '打撃成績も6人ずつで縦スクロールなし',
+      '打撃成績を全員出しても小窓は縦スクロールなし',
     );
     await box.getByLabel('試合成績の表示項目').selectOption('pitching:basic');
     await box.getByText('6.0', { exact: true }).waitFor();

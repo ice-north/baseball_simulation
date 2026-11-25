@@ -121,7 +121,7 @@ fun PlayersScreen(model: AppViewModel, onOpenPlan: (String) -> Unit = {}, onOpen
                 Modifier.padding(end = 8.dp),
             )
         }
-        ChipTabs(PlayersMode.entries.map { it.name to it.label }, mode.name, { mode = PlayersMode.valueOf(it) })
+        SectionTabs(PlayersMode.entries.map { it.name to it.label }, mode.name, { mode = PlayersMode.valueOf(it) })
         // 「能力」「スタメン」「守備」は同じ球団の読み込みを分け合う（切り替えるたびに読み直さない）
         val teamData = if (mode in TEAM_DATA_MODES) rememberTeamData(model, view, raw, team) else null
         when (mode) {

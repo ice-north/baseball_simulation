@@ -296,9 +296,15 @@ try {
         top.y + top.height <= pool.y + 1,
         '「交渉する選手」が「受験者」より上に無い',
       );
+      // ⚠ PCは受験者の表の**横に「いまの名簿」と年齢構成を固定**する（P4 2026-11-25）。
+      //    受験者の欄＋横の欄で全幅、受験者の欄は横の欄より広い
+      const side = await t.locator('.online-tryout-side').boundingBox();
+      assert.ok(side, 'PCのトライアウトに、いまの名簿と年齢構成の横の欄が無い');
+      assert.ok(Math.abs(side.y - pool.y) < 2 && side.x > pool.x + pool.width - 1, '横の欄が受験者の表の右に無い');
+      await t.locator('.online-tryout-side .online-age-outlook').waitFor();
       assert.ok(
-        pool.width > top.width * 0.9,
-        `受験者の欄が狭い（${Math.round(pool.width)}px / 交渉 ${Math.round(top.width)}px）`,
+        pool.width + side.width > top.width * 0.9 && pool.width > side.width * 1.5,
+        `受験者の欄が狭い（${Math.round(pool.width)}px / 横 ${Math.round(side.width)}px / 交渉 ${Math.round(top.width)}px）`,
       );
     }
     // ⚠ 希望リストは**「交渉」を押した順そのもの**（いしだ要望の10人）。以前は
@@ -323,15 +329,15 @@ try {
       await t
         .locator('.online-tryout-pool .online-segments button', { hasText: '投手' })
         .click();
-      // 1ページ20人（PC）。そのページで交渉していない人が居なければ次のページへ
+      // 最初は20人（PC）。出ている中に交渉していない人が居なければ「続きを表示」（X1。ページ送りはやめた）
       const open = t.locator('.online-tryout-pool [data-player]:not([data-wanted])');
       for (let n = standard.length; n < Number(limitText[2]); n += 1) {
         while (!(await open.count()))
-          await t.locator('.online-tryout-pool').getByRole('button', { name: '次のページ', exact: true }).click();
+          await t.locator('.online-tryout-pool').getByRole('button', { name: /^続きを表示/ }).click();
         await open.first().getByRole('button', { name: /と交渉する$/ }).click();
       }
       while (!(await open.count()))
-        await t.locator('.online-tryout-pool').getByRole('button', { name: '次のページ', exact: true }).click();
+        await t.locator('.online-tryout-pool').getByRole('button', { name: /^続きを表示/ }).click();
       const start = await wantedNames();
       assert.equal(start.length, Number(limitText[2]), '交渉できる人数まで足せない');
       const row = t

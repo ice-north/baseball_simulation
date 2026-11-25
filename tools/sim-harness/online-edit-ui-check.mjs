@@ -1082,8 +1082,12 @@ try {
   await click(news.page, 'リーグの話題・リーグ便り →');
   await news.page.getByRole('heading', { name: 'リーグ便り', exact: true }).waitFor();
   await news.page.getByLabel('見るお知らせ').selectOption('notice:3');
-  await click(news.page, '次のページ');
-  await click(news.page, '次のページ');
+  // ⚠ リーグ便りは**ページ送りをせず「続きを表示」**（X1 2026-11-25）。8人ずつ足す
+  assert.equal(await news.page.locator('.online-news-list article').count(), 8);
+  await click(news.page, '続きを表示（残り16）');
+  await click(news.page, '続きを表示（残り8）');
+  assert.equal(await news.page.locator('.online-news-list article').count(), 24);
+  assert.equal(await news.page.locator('.online-show-more').count(), 0, '全部出たのに「続きを表示」が残る');
   news.view.notices = [news.view.notices[0]];
   news.view.notices[0].picks = news.view.notices[0].picks.slice(0, 1);
   news.view.revision++;
@@ -1095,10 +1099,7 @@ try {
     await news.page.getByLabel('見るお知らせ').inputValue(),
     'notice:0',
   );
-  assert.equal(
-    (await news.page.locator('.online-pager span').innerText()).trim(),
-    '1 / 1',
-  );
+  assert.equal(await news.page.locator('.online-show-more').count(), 0, '1件なのに「続きを表示」が出る');
   assert.ok(
     await news.page.evaluate(
       () => document.documentElement.scrollHeight <= innerHeight * 1.3,
