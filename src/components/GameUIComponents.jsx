@@ -461,6 +461,7 @@ const SidebarButton = ({ view, icon, label, screenMode, managementView, seasonDa
           : 'text-gray-300 hover:bg-gray-700/60 hover:text-white border-l-[3px] border-transparent'
       }`}
       title={title}
+      aria-current={isActive ? 'page' : undefined}
     >
       <span className="text-base w-5 text-center shrink-0">{icon}</span>
       <span>{label}</span>

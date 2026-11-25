@@ -20,6 +20,21 @@ const ui = driver(page);
 let failed = null;
 try {
   await ui.newUniversityGame();
+  // キー操作（監査16）: 左メニューの別の項目に合わせて Enter を押すと、その画面が開き、日は進まない
+  // （以前は nav のボタンを全部キー操作の例外から外していたので、1日進むだけで画面は替わらなかった）
+  {
+    await ui.dismissHint();
+    const dateOf = () => page.locator('h2 + div').first().innerText();
+    const before = await dateOf();
+    await page.getByRole('button', { name: /セーブ＆ロード/ }).focus();
+    await page.keyboard.press('Enter');
+    await page.waitForTimeout(800);
+    assert.equal(await page.getByRole('button', { name: /セーブ＆ロード/ }).getAttribute('aria-current'), 'page',
+      '左メニューの項目に合わせて Enter を押しても、その画面が開かない');
+    assert.equal(await dateOf(), before, '左メニューの項目で Enter を押したら日が進んだ');
+    await page.getByRole('button', { name: /日程進行/ }).click();
+    await page.waitForTimeout(500);
+  }
   for (const omakase of [true, false]) {
     for (let i = 0; i < 20; i++) {
       if (await page.getByRole('button', { name: /試合采配/ }).count()) break;
