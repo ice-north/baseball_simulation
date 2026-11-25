@@ -1239,7 +1239,7 @@ const ManualContent = ({ category }) => {
             制球力を強化する。1クールあたり+0〜2程度。
           </Entry>
           <Entry title="球速練習 ⚡" range="投手のみ">
-            球速を強化する。1クールあたり+0〜2km程度。155km/h以上では1kmごとに成長が20%減衰する。
+            球速を強化する。1クールあたり+0〜2km程度。肩力で決まる上限の10km手前から、1kmごとに成長が20%減衰する。1クールの伸びは4kmまで。
           </Entry>
           <Entry title="新球種習得 ✨" range="投手のみ">
             新しい変化球の習得に挑戦する。習得する球種を選択可能。
@@ -1406,14 +1406,14 @@ const ManualContent = ({ category }) => {
                   <tr><td className="py-0.5 px-2 text-green-300">フィジカル系（走力・肩・スタミナ・体力・回復）</td>
                     <td className="text-right px-2">80</td><td className="text-right px-2">-3%</td><td className="text-right px-2">10%</td></tr>
                   <tr><td className="py-0.5 px-2 text-blue-300">球速</td>
-                    <td className="text-right px-2">155km/h</td><td className="text-right px-2 text-red-400">-20%</td><td className="text-right px-2">10%</td></tr>
+                    <td className="text-right px-2">上限の10km手前</td><td className="text-right px-2 text-red-400">-20%</td><td className="text-right px-2">10%</td></tr>
                 </tbody>
               </table>
             </div>
             <ul className="list-disc list-inside text-sm space-y-1 mt-2">
               <li>技術系は60で70%、70で40%、79で15%（下限）まで落ちる。守備は80で50%、87で15%（下限）</li>
-              <li>球速は156km/hで80%、157km/hで60%…と急激に伸びにくくなる。
-                  さらに<b>肩力による上限</b>があり、そちらを超えることはできない</li>
+              <li>球速は<b>肩力による上限</b>の10km手前から1kmごとに20%ずつ伸びにくくなり、上限を超えることはできない（1クールの伸びは4kmまで）</li>
+              <li>集中練習は別の形の天井：しばらく減らずに伸び、そのあと0まで落ちる（技術系は70から減って86で0、守備・走力などは79から減って95で0）</li>
             </ul>
           </Entry>
           <h3 className="text-yellow-300 font-bold text-sm border-b border-yellow-800 pb-1 mt-6">覚醒システム</h3>
