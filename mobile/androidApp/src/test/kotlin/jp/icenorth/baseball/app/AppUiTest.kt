@@ -132,6 +132,21 @@ class AppUiTest {
         rule.onNodeWithText("初期メンバー選択").assertIsDisplayed()
     }
 
+    @Test fun tradeSearchHeadingFollowsTheChosenSlot() {
+        val roster = """[{"id":1,"name":"遊撃の人","position":"short"},{"id":2,"name":"先発の人","position":"pitcher"}]"""
+        open(""""roster":$roster,"lineup":{"battingOrder":[{"playerId":1,"position":"short","battingOrder":1}],"starters":[2]}""")
+        rule.onNodeWithTag("tab-Procedures").performClick()
+        rule.runOnIdle {
+            model.procTrade = true
+            model.tradeDraft = jp.icenorth.baseball.app.ui.TradeDraft(step = jp.icenorth.baseball.app.ui.TradeStep.Search, slot = "short")
+        }
+        rule.onNodeWithText("いまの遊撃: 遊撃の人", substring = true).assertExists()
+        // ⚠ 以前は持ち場を替えても見出しが前の持ち場の選手のまま（「いまの先発: 遊撃の人」）だった
+        rule.onNodeWithTag("chip-sp").performScrollTo().performClick()
+        rule.onNodeWithText("いまの先発: 先発の人", substring = true).assertExists()
+        rule.onNodeWithText("遊撃の人", substring = true).assertDoesNotExist()
+    }
+
     @Test fun lastCampGainsCanBeReadAfterThePhaseHasFinished() {
         open(""""roster":[{"id":1,"name":"育成選手","position":"first"}],"lastCamp":{"year":1,"rounds":4,"last":{"round":4,"gains":{"1":{"batting.meet":1}}},"gains":{"1":{"batting.meet":4}}}""")
         rule.onNodeWithTag("tab-Procedures").performClick()
