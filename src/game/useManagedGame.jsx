@@ -1837,6 +1837,10 @@ if (newOuts === 3) {
   // [SECTION: GAME_SETUP] → gameSetup.js に抽出済み（ラッパーのみ）
   // 試合を始める（以前は試合前のスタメン画面の「試合開始」だけが呼んでいた）
   const startManagedGame = () => {
+    // ⚠ 帳簿は effect（gameStarted の変化）に頼らず、ここで作り直す。2試合目は準備の
+    //    setGameStarted(false) とこの true が同じ描画にまとまり、値が変わらないので effect が走らない
+    //    （前の試合の投手・先発の印・リードが残り、勝敗投手を誤った。監査16）
+    decisionLogRef.current = createDecisionLog();
     setGameStarted(true);
     setSelectedBatterAway(null);
     setSelectedBatterHome(null);
@@ -1863,22 +1867,19 @@ if (newOuts === 3) {
     resetPerGameRefs();
     const { autoManager, startNow, ...info } = gameInfo || {};
     if (typeof autoManager === 'boolean') setAutoManagerMode(autoManager);
-    executeSetupManagedGame(gameSetupCtx, info);
+    const ready = executeSetupManagedGame(gameSetupCtx, info);
     // ⚠ 準備（両チームの state を作り直す）のあとに積むこと。`startManagedGame` の更新は関数の形なので、
     //    同じ描画の中で準備の値の上に重なる
-    if (startNow) startManagedGame();
+    if (startNow && ready) startManagedGame();
   };
   // 試合中に切り替えた入／切も、次の試合前の窓の初期値にする
   useEffect(() => { setAutoManagerPref(autoManagerMode); }, [autoManagerMode]);
 
-  // 試合中の両チームの投手とリードを記録する（試合開始で帳簿を作り直す）。
+  // 試合中の両チームの投手とリードを記録する（帳簿は startManagedGame で作り直す）。
   // ⚠ 以前の采配モードは「先発が5回以上なら先発の勝ち」「最少アウトの投手＝最後の投手」
   //    という推定で勝敗を付けており、0-0で5回に降りた先発に勝ちが付いていた
   const currentPitcherIdOf = (team) =>
     team?.players?.find(p => p.isStarter && p.position === 'pitcher')?.id ?? null;
-  useEffect(() => {
-    if (gameStarted) decisionLogRef.current = createDecisionLog();
-  }, [gameStarted]);
   // 画面のスタミナの棒は、いま守っている投手のもの（スタミナは投手ごとに帳簿に持つ）
   useEffect(() => {
     if (!gameStarted) return;

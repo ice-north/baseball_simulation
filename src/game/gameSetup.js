@@ -40,7 +40,11 @@ export function executeSetupManagedGame(ctx, gameInfo) {
   const htd = TEAMS_DATA[htn];
   const atd = TEAMS_DATA[atn];
 
-  if (!htd || !atd) return;
+  // 引けないときは false を返す（呼ぶ側は試合を始めない）
+  if (!htd || !atd) {
+    console.error('[executeSetupManagedGame] チームが見つかりません', htn, atn);
+    return false;
+  }
 
   const useDH = LEAGUE_SETTINGS.useDH;
 
@@ -226,6 +230,7 @@ export function executeSetupManagedGame(ctx, gameInfo) {
   setManagedGameInfo(gameInfo);
   managedGameInfoRef.current = gameInfo;
   setScreenMode('game');
+  return true;
 }
 
 /**
