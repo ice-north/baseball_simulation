@@ -87,6 +87,8 @@ const INTENSIVE_COST = 0.4;
 // 傾きを 1.5倍にし、下限を 0 にする。
 // 技術系（始まり50・3%/pt・下限15%）なら 集中は 始まり60・4.5%/pt・下限0 ＝ 能力82で0。
 // 守備（`EFFORT_DAMP`。始まり70・5%/pt・下限15%）なら 始まり80・7.5%/pt ＝ 能力93で0。
+// 球速の天井が効き始める、肩の上限（`getVelocityCap`）からの距離（km）
+const VELOCITY_DAMP_WINDOW = 10;
 const INTENSIVE_DAMP_SHIFT = 10;
 const INTENSIVE_DAMP_STEEP = 1.5;
 /** 高能力値の減衰。`intensive` なら集中用の形（上のずらし・傾き・下限0）で返す */
@@ -1594,8 +1596,13 @@ export function executeCampTraining(player, trainingType, newPitchType, staffBon
       const isIntensive = !!(menu.intensive && menu.penaltyPool);
       let dampCurve;
       if (targetStat === 'velocity') {
-        // 球速155km以上は伸びにくくなる（超過1kmごとに成長量20%減衰）
-        dampCurve = { from: 155, rate: 0.2, floor: 0.1 };
+        // ⚠ 球速の天井は**肩の上限までの距離**で決める（いしだ 2026-11-25）。
+        //    前は絶対値 155km からだったので、**肩の低い投手には天井が存在しなかった**
+        //    （肩60の上限は137kmで、155に届かないため減衰が一度も効かない）。
+        //    `getVelocityCap(肩)` の `VELOCITY_DAMP_WINDOW` km 手前から効かせると、
+        //    肩60でも肩100でも、集中でも満遍なくでも同じ形で上限手前で鈍る。
+        const armForDamp = getNestedValue(updatedPlayer, getStatPath('arm')) || 50;
+        dampCurve = { from: getVelocityCap(armForDamp) - VELOCITY_DAMP_WINDOW, rate: 0.2, floor: 0.1 };
       } else if (isPhysical) {
         // フィジカル系(speed/arm/stamina/bodyStamina/recovery): 能力値80以上で成長減衰（超過1ごとに3%減衰）
         // ⚠ しきい値は据え置き。体力・スタミナは「やれば伸びる」もので、
@@ -1655,11 +1662,25 @@ export function executeCampTraining(player, trainingType, newPitchType, staffBon
 
       // 球速⇔肩力の連動
       if (targetStat === 'velocity' && newValue !== currentValue) {
-        // 球速変動→肩力50%連動
-        const armChange = Math.round((newValue - currentValue) * 0.5);
+        const armPath = getStatPath('arm');
+        const currentArm = getNestedValue(updatedPlayer, armPath) || 50;
+        // 球速変動→肩力の連動。
+        // ⚠ **この連動は成長の抑えをまるごと素通りしていた**（いしだ 2026-11-25）。
+        //    `Math.round(球速の変化 × 0.5)` を肩に直接代入していたので、
+        //    高能力値の減衰（フィジカル系は能力80から）も才能の抑え
+        //    （`TALENT_STAT_MULTIPLIERS.arm` 0.3。「肩は生まれ持った体格に依存」）も掛からず、
+        //    球速集中で +24km 伸びた投手の肩が**1年で90→99**になっていた。
+        //    肩が上がると `getVelocityCap` が上がる＝**球速の上限が自分で上がるループ**で、
+        //    実測では毎年4クールの球速集中で 3年目に164km（上限158kmを越えて165kmまで）に達していた。
+        //    才能の抑えと肩自身の減衰を通し、確率的に丸める（期待値は保たれる）。
+        // ⚠ 下がる側（球速が落ちたとき）は抑えを掛けない（衰えは別の話で、
+        //    抑えを掛けると「球速だけ落ちて肩は残る」ことになる）。
+        const rawArm = (newValue - currentValue) * 0.5;
+        const armChange = rawArm > 0
+          ? stochasticRound(rawArm * (TALENT_STAT_MULTIPLIERS.arm ?? 1)
+            * highStatDamp(currentArm, { from: 80, rate: 0.03, floor: 0.1 }, false))
+          : Math.round(rawArm);
         if (armChange !== 0) {
-          const armPath = getStatPath('arm');
-          const currentArm = getNestedValue(updatedPlayer, armPath) || 50;
           const newArm = Math.max(1, Math.min(99, currentArm + armChange));
           if (newArm !== currentArm) {
             updatedPlayer = setNestedValue(updatedPlayer, armPath, newArm);
