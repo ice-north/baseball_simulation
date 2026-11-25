@@ -33,15 +33,70 @@ export const PITCH_TYPES = [
   'shoot',
 ];
 
-// 集中練習が1点に集約する倍率。通常メニューは3〜4能力に分散するので、
-// ここが 1.0 だと「集中しても総量は同じ・他能力に減点だけ付く」＝常に損になる。
-// 分散先の数（3〜4）より小さくしてあるのは、集中には減点という別の代償があるため。
-// ⚠ 2.4→3.0（先方指摘 2026-11-16: 減点の代償を負うのに伸びずに減点だけ受けることがある。
-//    リスクを負うぶん伸びを上げる）。あわせて、減点が出たクールは対象を最低+1にした
-//    （`INTENSIVE_PENALTY_FLOOR`）
-const INTENSIVE_FOCUS = 3.0;
-// 減点（他能力-1）が出たクールの、集中した能力の最低の伸び。上限に着いている能力は伸ばさない
-const INTENSIVE_PENALTY_FLOOR = 1;
+// ============================================================
+// 【集中練習】いしだ 2026-11-25
+//   「普通の練習と、集中練習のトータルは同じにしてほしいです。
+//     しかし、能力が育ち頭打ちになったところで集中練習をすることで
+//     個性を伸ばしやすい設定にしたいのです」
+//
+// ⚠ 直す前は**要望の真逆**だった（実測。24歳・意識60・器用50・他の技術系も同じ値に
+//    そろえた400人・4クール。「合計」はスタミナと球速を除く0〜99の能力の増減の総和）:
+//      ミートの帯 35: 打撃練習 合計+4.58 / ミート集中 合計+1.59（対象で勝つ差 +3.13）
+//                 80: 打撃練習 合計+0.78 / ミート集中 合計**-1.96**（差 +0.67）
+//    ・**トータルが揃っていない**。集中はいつも満遍なくより少なく、高い帯では**負**。
+//      代償が固定（-1×本数で4クール -3.0 前後）なのに、伸びは頭打ちで小さくなるから。
+//    ・**頭打ちで集中の優位が消える**。対象の伸びに高能力値減衰が掛かり、集中は
+//      全部を1能力に注ぐのでその減衰を丸ごと受ける。満遍なくは4能力に散るので
+//      1つが高くても他で稼げる。だから差は低い帯で最大・頭打ちで最小だった。
+//
+// 直した形は3つ組。
+//   (1) 代償を**対象の伸びの割合**にする（`INTENSIVE_COST`）。固定をやめるので
+//       「集中の合計 = 対象の伸び ×(1 - 割合)」が**帯に依らず**成り立つ。
+//       伸びが0なら代償も0＝「減点だけ受ける」が構造的に起きない
+//       （だから `INTENSIVE_PENALTY_FLOOR`（代償が出たクールは最低+1）は**落とした**。
+//        あれはリスクを直接打ち消していた）。
+//   (2) `INTENSIVE_FOCUS` を較正して、集中の差し引きを満遍なくの合計と同じ水準に置く。
+//       ⚠ 能力ごとの抑え（`batGrowthMult`・制球の `focusStatMult`）は集中では**掛けない**。
+//          あれはリーグの流れを抑えるための調整で、メニューごとに差し引きが変わってしまう。
+//          いしだの選び「物差しの違う能力は予算の外／集中の差し引きはどのメニューも同じ水準」。
+//          才能の抑え（`TALENT_STAT_MULTIPLIERS`。走力0.4・肩0.3・パワー0.5・球速0.8）は
+//          **残す**（「練習だけでは伸びない能力」は設計の軸で、何度も確かめられている）。
+//   (3) 集中のときだけ対象の天井を**別の形**にする（`intensiveDamp`）。
+//       これが「頭打ちになったところで個性を伸ばす」の実体。
+//       ⚠ **減衰を一律に緩めるのでは駄目だった**。技術系の減衰は下限 15% で止まるので、
+//          緩めると「毎クール必ず少し伸びる」が残り、15年×4クールで能力が **99 に張り付く**
+//          （実測。満遍なくの到達点はミート70・守備88・制球65 なのに、集中は 98〜99）。
+//          下限が0でない天井は、クールを積めばいくらでも越えられる。
+//       いまの形は「満遍なくと同じ形を**10 うしろにずらし・1.5倍急にし・下限を0**にする」。
+//         ・減衰の始まりが10うしろ＝満遍なくが鈍る帯（技術系50〜）で集中だけが伸びる
+//         ・1.5倍急＋下限0＝集中にも**終わり**がある（技術系なら能力82で0になる）
+//       結果、集中の到達点は満遍なくより10前後高いところで**止まる**＝個性が作れる。
+// ============================================================
+// 集中練習が1点に集約する倍率。**満遍なくの合計と差し引きが揃うところ**に較正する。
+// 3.0 → 3.7（2026-11-25）。実測（24歳・意識60・器用50・他の技術系も同じ値にそろえた300人・
+// 4クール・能力50の帯。「合計」はスタミナと球速を除く0〜99の能力の増減の総和）:
+//   打撃練習の合計 4.62 / ミート集中の差し引き **4.16**
+//   ノックの合計   3.64 / 守備集中の差し引き **4.13**
+//   投げ込みの合計 1.11（制球のみ。スタミナは予算の外）/ 制球集中の差し引き **3.91**
+// ⚠ 到達点は `INTENSIVE_FOCUS` ではなく天井（`highStatDamp` の下限0）が決めるので、
+//    ここを動かしても「集中の終わり」は動かない（速さだけが動く）
+const INTENSIVE_FOCUS = 3.7;
+// 代償の割合。対象に入った伸びのこの割合を、`penaltyPool` の他能力から引く
+const INTENSIVE_COST = 0.4;
+// 集中の天井の形。満遍なくの（始まり・傾き・下限）に対して、始まりを +10 ずらし、
+// 傾きを 1.5倍にし、下限を 0 にする。
+// 技術系（始まり50・3%/pt・下限15%）なら 集中は 始まり60・4.5%/pt・下限0 ＝ 能力82で0。
+// 守備（`EFFORT_DAMP`。始まり70・5%/pt・下限15%）なら 始まり80・7.5%/pt ＝ 能力93で0。
+const INTENSIVE_DAMP_SHIFT = 10;
+const INTENSIVE_DAMP_STEEP = 1.5;
+/** 高能力値の減衰。`intensive` なら集中用の形（上のずらし・傾き・下限0）で返す */
+function highStatDamp(currentValue, curve, intensive) {
+  const from = curve.from + (intensive ? INTENSIVE_DAMP_SHIFT : 0);
+  const rate = curve.rate * (intensive ? INTENSIVE_DAMP_STEEP : 1);
+  const floor = intensive ? 0 : curve.floor;
+  if (currentValue < from) return 1.0;
+  return Math.max(floor, 1.0 - (currentValue - from) * rate);
+}
 
 // 練習カテゴリ → スタッフ指導能力のマッピング
 const CATEGORY_TO_STAFF_ABILITY = {
@@ -259,7 +314,7 @@ export const TRAINING_MENUS = {
   intensive_power: {
     name: '長打集中',
     icon: '💥',
-    description: 'パワーを集中して大きく伸ばす。50%で代償なし、25%で他1つ-1、25%で他2つ-1（代償が出たクールは最低+1）',
+    description: 'パワーを集中して大きく伸ばす。伸びた分の4割を他の能力から引く代わりに、普通の練習が鈍る帯でも伸びる',
     targets: ['power'],
     category: 'batting',
     intensive: true,
@@ -268,7 +323,7 @@ export const TRAINING_MENUS = {
   intensive_meet: {
     name: 'ミート集中',
     icon: '🎯',
-    description: 'ミートを集中して大きく伸ばす。50%で代償なし、25%で他1つ-1、25%で他2つ-1（代償が出たクールは最低+1）',
+    description: 'ミートを集中して大きく伸ばす。伸びた分の4割を他の能力から引く代わりに、普通の練習が鈍る帯でも伸びる',
     targets: ['meet'],
     category: 'batting',
     intensive: true,
@@ -277,7 +332,7 @@ export const TRAINING_MENUS = {
   intensive_speed: {
     name: '走力集中',
     icon: '⚡',
-    description: '走力を集中して大きく伸ばす。50%で代償なし、25%で他1つ-1、25%で他2つ-1（代償が出たクールは最低+1）',
+    description: '走力を集中して大きく伸ばす。伸びた分の4割を他の能力から引く代わりに、普通の練習が鈍る帯でも伸びる',
     targets: ['speed'],
     category: 'batting',
     intensive: true,
@@ -286,25 +341,28 @@ export const TRAINING_MENUS = {
   intensive_control: {
     name: '制球集中',
     icon: '🎯',
-    description: '制球を集中して大きく伸ばす。50%で代償なし、25%で他1つ-1、25%で他2つ-1（代償が出たクールは最低+1）',
+    description: '制球を集中して大きく伸ばす。伸びた分の4割を他の能力から引く代わりに、普通の練習が鈍る帯でも伸びる',
     targets: ['control'],
     category: 'pitching',
     intensive: true,
-    penaltyPool: ['velocity', 'stamina', 'meet', 'defense']
+    // ⚠ スタミナ・球速は**代償の引き先に入れない**（物差しが違うので予算の外。いしだ 2026-11-25）。
+    //    入れていると、代償の一部が点数の外へ逃げて「同じトータル」が崩れる
+    penaltyPool: ['meet', 'defense', 'arm', 'speed']
   },
   intensive_velocity: {
     name: '球速集中',
     icon: '🔥',
-    description: '球速を集中して大きく伸ばす。50%で代償なし、25%で他1つ-1、25%で他2つ-1（代償が出たクールは最低+1）',
+    description: '球速を集中して大きく伸ばす。伸びた分の4割を他の能力から引く代わりに、普通の練習が鈍る帯でも伸びる',
     targets: ['velocity'],
     category: 'pitching',
     intensive: true,
-    penaltyPool: ['control', 'stamina', 'meet', 'defense']
+    // ⚠ 肩力は入れない（球速の伸びが肩力へ50%連動するので、同じクールで上げて下げることになる）
+    penaltyPool: ['control', 'meet', 'defense']
   },
   intensive_defense: {
     name: '守備集中',
     icon: '🛡️',
-    description: '守備を集中して大きく伸ばす。50%で代償なし、25%で他1つ-1、25%で他2つ-1（代償が出たクールは最低+1）',
+    description: '守備を集中して大きく伸ばす。伸びた分の4割を他の能力から引く代わりに、普通の練習が鈍る帯でも伸びる',
     targets: ['defense'],
     category: 'fielding',
     intensive: true,
@@ -313,7 +371,7 @@ export const TRAINING_MENUS = {
   intensive_eye: {
     name: '選球眼集中',
     icon: '👁️',
-    description: '選球眼を集中して大きく伸ばす。50%で代償なし、25%で他1つ-1、25%で他2つ-1（代償が出たクールは最低+1）',
+    description: '選球眼を集中して大きく伸ばす。伸びた分の4割を他の能力から引く代わりに、普通の練習が鈍る帯でも伸びる',
     targets: ['eye'],
     category: 'batting',
     intensive: true,
@@ -1395,10 +1453,11 @@ export function executeCampTraining(player, trainingType, newPitchType, staffBon
     ? _postStopFloor
     : Math.max(_postStopFloor, 1.0 - Math.max(0, age - (_stopAge - 4)) / 4 * (1.0 - _postStopFloor));
 
-  // 集中練習の代償（50%で±0、25%で1能力-1、25%で2能力-1）は**先に引く**。
-  // 代償が出たクールは対象を最低+1にする（`INTENSIVE_PENALTY_FLOOR`）ため
-  const penaltyRoll = menu.intensive && menu.penaltyPool ? Math.random() : null;
-  const penaltyCount = penaltyRoll === null ? 0 : penaltyRoll < 0.5 ? 0 : penaltyRoll < 0.75 ? 1 : 2;
+  // 集中練習の代償は**対象の伸びが決まってから**引く（`INTENSIVE_COST`）。
+  // ⚠ 以前は「50%で±0・25%で1能力-1・25%で2能力-1」を**先に**引いていた。
+  //    伸びと無関係な固定の代償だったので、頭打ちの帯では総量が負になっていた。
+  //    対象に入った伸びを受け取るための箱（集中メニューの対象は必ず1つ）
+  let intensiveGain = 0;
 
   // 通常の能力練習（成長量抑制: プロ級へ到達しにくくする）
   menu.targets.forEach((targetStat, targetIdx) => {
@@ -1451,18 +1510,14 @@ export function executeCampTraining(player, trainingType, newPitchType, staffBon
       //    入らないのに他能力に減点が付くので、**どの水準の選手でも
       //    「満遍なく」に負ける**（実測 ドラフト評価 211 対 230）。
       //    集中する意味が数字の上で一度も無かった。
-      // 通常メニューと同じ式で出してから1点に集約する。これで
-      //   ・能力が低い（減衰なし）→ 集中が満額入って一芸が作れる
-      //   ・能力が高い（75以上で4%/pt減衰）→ 集中しても伸びず、満遍なくが勝つ
-      // という反転が**既存の減衰カーブだけで**成立する（新しい係数を作らない）。
+      // 通常メニューと同じ式で出してから1点に集約する。
+      // ⚠ **能力ごとの抑えは掛けない**（上の「集中練習」の注の (2)）。
+      //    `batGrowthMult`（ミート・パワー 0.8）と制球の `focusStatMult`（投げ込みの係数）は
+      //    リーグの流れを抑えるための調整なので、集中の差し引きがメニューごとに変わってしまう。
+      //    才能の抑え（`talentMult`）だけは残す。
       const rawBase = (Math.floor(Math.random() * 3) + 1) * ageMultiplier * expBonus;
       const rawFocus = (Math.floor(Math.random() * 4) + 1) * ageMultiplier * expBonus;
-      // ⚠ 制球の集中にも、投げ込みと同じ係数（いまは0.4）を掛ける（`TRAINING_MENUS.control` の注と同じ理由）。
-      //    指導者の「長所を伸ばす」は投手の技術を制球と守備の2つでしか比べないので、ほとんどの投手が
-      //    毎年「制球集中」になる。野手の集中はミート・パワー・選球眼・守備・盗塁に散るので、制球だけが
-      //    積み上がり、10年でリーグの制球が 49→69・四球が半分になった（10年の長期シミュ 2026-11-23）
-      const focusStatMult = targetStat === 'control' ? TRAINING_MENUS.control.growthMultipliers.control : 1.0;
-      rawGrowth = ((rawBase + rawFocus) * 0.14 * INTENSIVE_FOCUS * focusStatMult * batGrowthMult
+      rawGrowth = ((rawBase + rawFocus) * 0.14 * INTENSIVE_FOCUS
         * talentMult * aptitudeFactor * physiqueMult * disciplineMult
         * campPotMult * coachingMult * moodMult * (isPhysical ? fitnessMult : 1.0) * stopAgeGate);
       isAwakening = false;
@@ -1525,17 +1580,18 @@ export function executeCampTraining(player, trainingType, newPitchType, staffBon
       //    4クールで+6は上がりすぎ。能力が低い場合はいまの伸びのままでOK」）。
       //    ここの `dampFactor` が掛かるのは `adjustedBaseGrowth` だけで、覚醒ぶんは
       //    上の `awakeningGrowth` で別に抑えてから足す（70未満は素通し）。
-      let dampFactor = 1.0;
+      // ⚠ **曲線は `highStatDamp` が1本で持つ**（集中のときは始まりを+10・傾き1.5倍・下限0に
+      //    差し替える。上の「集中練習」の注の (3)）。しきい値と率を2箇所に書かないこと。
+      const isIntensive = !!(menu.intensive && menu.penaltyPool);
+      let dampCurve;
       if (targetStat === 'velocity') {
         // 球速155km以上は伸びにくくなる（超過1kmごとに成長量20%減衰）
-        if (currentValue >= 155)
-          dampFactor = Math.max(0.1, 1.0 - (currentValue - 155) * 0.2);
+        dampCurve = { from: 155, rate: 0.2, floor: 0.1 };
       } else if (isPhysical) {
         // フィジカル系(speed/arm/stamina/bodyStamina/recovery): 能力値80以上で成長減衰（超過1ごとに3%減衰）
         // ⚠ しきい値は据え置き。体力・スタミナは「やれば伸びる」もので、
         //    足・肩は `TALENT_STAT_MULTIPLIERS` の側で抑える
-        if (currentValue >= 80)
-          dampFactor = Math.max(0.1, 1.0 - (currentValue - 80) * 0.03);
+        dampCurve = { from: 80, rate: 0.03, floor: 0.1 };
       } else {
         // 技術系(meet/power/eye/control/defense/steal): 能力値**50**以上で成長減衰
         // 超過1ごとに3%減衰、下限15%（78で下限に届く）
@@ -1550,20 +1606,13 @@ export function executeCampTraining(player, trainingType, newPitchType, staffBon
         //    ⚠ **普通の選手はほぼ無傷**（意識50の到達点 59.6 → 59.4）。減衰の開始が50なので、
         //      そこに届かない選手には一切掛からない。「4クールで+10」も能力50未満では同じ。
         //      上位の青天井だけを塞ぐ変更（いしだの選んだ案1）。
-        if (currentValue >= 50)
-          dampFactor = Math.max(0.15, 1.0 - (currentValue - 50) * 0.03);
+        dampCurve = { from: 50, rate: 0.03, floor: 0.15 };
       }
       // ⚠ 努力で上がる能力は天井を別に持つ（`EFFORT_DAMP` の注を見ること）。
       //    上の技術系・フィジカル系の判定を**上書きする**ので、順番を変えないこと
-      // ⚠ **置き換えること**（上の判定に足すのではない）。しきい値の下では 1.0 に戻す。
-      //    ここを `if (effort && currentValue >= effort.from)` にすると、守備60では
-      //    技術系の 0.70 が残ったままになる（実測 +2.2 のまま変わらなかった）
       const effort = EFFORT_DAMP[targetStat];
-      if (effort) {
-        dampFactor = currentValue >= effort.from
-          ? Math.max(effort.floor, 1.0 - (currentValue - effort.from) * effort.rate)
-          : 1.0;
-      }
+      if (effort) dampCurve = effort;
+      const dampFactor = highStatDamp(currentValue, dampCurve, isIntensive);
       const adjustedBaseGrowth = Math.max(0, stochasticRound(rawGrowth * growthMult * dampFactor));
 
       let totalGrowth = Math.max(0, adjustedBaseGrowth + awakeningGrowth);
@@ -1575,21 +1624,12 @@ export function executeCampTraining(player, trainingType, newPitchType, staffBon
       //    期待値は保たれる＝練習が構造的に無駄になることはない。
       // ⚠ スタミナ・体力だけは最低+1を残す（やれば伸びるもの。いしだ方針）
       if ((targetStat === 'stamina' || targetStat === 'bodyStamina') && totalGrowth < 1) totalGrowth = 1;
-      // ⚠ 集中練習で代償（減点）が出たクールは、伸びが0のまま減点だけにしない
-      // ⚠ 最低保証にも高能力値の減衰を掛ける（2026-11-23）。そのままの+1だと、代償の出る半分の
-      //    クールで減衰を素通りして必ず+1入り、集中した能力が天井なく伸び続けた（制球が
-      //    能力62でも1年+1.6。10年でリーグの制球 49→69・四球が半分）。期待値で丸める
-      // ⚠ 制球の集中は、最低保証にも投げ込みと同じ係数（`TRAINING_MENUS.control` から読むので
-      //    値をここに書き写さない）を掛ける（上の `focusStatMult` と同じ。
-      //    掛けないと制球60未満ではほぼ毎回+1が入り、係数を下げた効き目がほとんど無かった。2026-11-24 監査）
-      // ⚠ ミート・パワーの下げ（`CAMP_BAT_GROWTH_MULT`）と才能の係数（`TALENT_STAT_MULTIPLIERS`。
-      //    走力0.4・パワー0.5・球速0.8）も最低保証に掛ける（上の伸びと同じ能力ごとの係数。
-      //    `TALENT_STAT_MULTIPLIERS` の注「保証のほうもこの率で引くこと」）。掛けないと、代償の出た
-      //    クールは走力も必ず+1で、才能の係数が集中練習の半分のクールで効いていなかった
-      const floorStatMult = (targetStat === 'control' ? TRAINING_MENUS.control.growthMultipliers.control : 1.0)
-        * batGrowthMult * talentMult;
-      if (menu.intensive && penaltyCount > 0 && totalGrowth < INTENSIVE_PENALTY_FLOOR)
-        totalGrowth = Math.max(totalGrowth, stochasticRound(INTENSIVE_PENALTY_FLOOR * dampFactor * floorStatMult));
+      // ⚠ 【かつてここにあった集中練習の「最低保証」（`INTENSIVE_PENALTY_FLOOR`。代償が出た
+      //    クールは対象を最低+1）】は 2026-11-25 に落とした。代償を伸びの割合にしたので
+      //    「伸び0のまま減点だけ」が構造的に起きない（伸び0なら代償も0）。
+      //    あの保証は代償クールを損だけにしない仕掛けだったが、同時に**リスクを直接
+      //    打ち消していた**（いしだ「集中系の練習の、リスクが低いように感じます」）。
+      //    能力ごとの係数を保証にも掛ける手当て（`floorStatMult`）も一緒に不要になった。
       const armForCap = getNestedValue(updatedPlayer, getStatPath('arm')) || 50;
       // ⚠ 1〜99 の物差しの能力は ABILITY_CAP で止める（100 で止めていて、98 から練習すると100になった。2026-11-20 監査）
       const maxValue = targetStat === 'velocity' ? getVelocityCap(armForCap) : targetStat === 'stamina' ? 200 : ABILITY_CAP;
@@ -1601,6 +1641,8 @@ export function executeCampTraining(player, trainingType, newPitchType, staffBon
         before: currentValue, after: newValue,
         growth: newValue - currentValue, isAwakening
       });
+      // 集中練習の代償は、ここで決まった伸びの割合で後から引く（`INTENSIVE_COST`）
+      if (menu.intensive && menu.penaltyPool) intensiveGain += newValue - currentValue;
 
       // 球速⇔肩力の連動
       if (targetStat === 'velocity' && newValue !== currentValue) {
@@ -1620,26 +1662,37 @@ export function executeCampTraining(player, trainingType, newPitchType, staffBon
     }
   });
 
-  // 集中練習のペナルティ処理: 50%で±0、25%で1能力-1、25%で2能力-1
+  // 集中練習の代償: 対象に入った伸びの `INTENSIVE_COST` を、他能力から1点ずつ引く。
+  // ⚠ 伸びに比例させるのが要（上の「集中練習」の注の (1)）。固定だと頭打ちの帯で
+  //    総量が負になり、「トータルは同じ」が成り立たない。
+  // ⚠ **確率的に丸める**（`stochasticRound`）。1クールの代償は 0.4〜1.6 点なので
+  //    `Math.round` だと 0 か 1 に潰れ、割合が効かない。
+  // ⚠ 引く先は `penaltyPool` を混ぜて1点ずつ。点数が能力の数より多ければ**巡回して2点目**を引く
+  //    （大きく伸びたクールは同じ能力が2点下がる）。
   if (menu.intensive && menu.penaltyPool) {
-    const pool = menu.penaltyPool.filter(s => !menu.targets.includes(s));
-    if (penaltyCount > 0 && pool.length > 0) {
+    const pool = menu.penaltyPool.filter(s => !menu.targets.includes(s) && getStatPath(s));
+    let cost = stochasticRound(Math.max(0, intensiveGain) * INTENSIVE_COST);
+    if (cost > 0 && pool.length > 0) {
       const shuffled = [...pool].sort(() => Math.random() - 0.5);
-      const chosen = shuffled.slice(0, Math.min(penaltyCount, shuffled.length));
-      chosen.forEach(penaltyStat => {
+      const taken = new Map();
+      for (let i = 0; cost > 0 && i < shuffled.length * 3; i += 1) {
+        const penaltyStat = shuffled[i % shuffled.length];
         const penaltyPath = getStatPath(penaltyStat);
-        if (penaltyPath) {
-          const currentVal = getNestedValue(updatedPlayer, penaltyPath) || 50;
-          const newVal = Math.max(1, currentVal - 1);
-          updatedPlayer = setNestedValue(updatedPlayer, penaltyPath, newVal);
-          growthReport.push({
-            stat: penaltyStat,
-            statName: getStatName(penaltyStat),
-            before: currentVal, after: newVal,
-            growth: newVal - currentVal, isAwakening: false, isPenalty: true
-          });
-        }
-      });
+        const currentVal = getNestedValue(updatedPlayer, penaltyPath) || 50;
+        if (currentVal <= 1) continue;   // 1 より下げない
+        updatedPlayer = setNestedValue(updatedPlayer, penaltyPath, currentVal - 1);
+        if (!taken.has(penaltyStat)) taken.set(penaltyStat, currentVal);
+        cost -= 1;
+      }
+      for (const [penaltyStat, before] of taken) {
+        const after = getNestedValue(updatedPlayer, getStatPath(penaltyStat));
+        growthReport.push({
+          stat: penaltyStat,
+          statName: getStatName(penaltyStat),
+          before, after,
+          growth: after - before, isAwakening: false, isPenalty: true
+        });
+      }
     }
   }
 
