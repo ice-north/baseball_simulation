@@ -89,6 +89,8 @@ const INTENSIVE_COST = 0.4;
 // 守備（`EFFORT_DAMP`。始まり70・5%/pt・下限15%）なら 始まり80・7.5%/pt ＝ 能力93で0。
 // 球速の天井が効き始める、肩の上限（`getVelocityCap`）からの距離（km）
 const VELOCITY_DAMP_WINDOW = 10;
+// 球速の1クールの伸びの上限（km）。追いつき倍率×集中の倍率の掛け算を止める
+const VELOCITY_PER_ROUND_MAX = 4;
 const INTENSIVE_DAMP_SHIFT = 10;
 const INTENSIVE_DAMP_STEEP = 1.5;
 /** 高能力値の減衰。`intensive` なら集中用の形（上のずらし・傾き・下限0）で返す */
@@ -1646,6 +1648,15 @@ export function executeCampTraining(player, trainingType, newPitchType, staffBon
       //    あの保証は代償クールを損だけにしない仕掛けだったが、同時に**リスクを直接
       //    打ち消していた**（いしだ「集中系の練習の、リスクが低いように感じます」）。
       //    能力ごとの係数を保証にも掛ける手当て（`floorStatMult`）も一緒に不要になった。
+      // ⚠ **球速は1クールの伸びを `VELOCITY_PER_ROUND_MAX` km で止める**（いしだ 2026-11-25
+      //    「球速集中効果の上限は1クール4kmとしましょう」）。
+      //    肩の上限までの距離が大きいと、追いつき倍率（`getVelocityCatchupMult` は差38kmで2.65倍）と
+      //    集中練習の倍率（3.7）が掛け算になり、肩90・球速120 の投手が**1クールで+7.0km**
+      //    （4クールで+23km・1年で120→143.6km）伸びていた。
+      //    ⚠ 天井（`dampCurve`）は上限の手前10kmからしか効かないので、そこへ届くまでの帯は
+      //      この1クールの上限だけが止める。球速練習は 1クール1.2km 程度なので実際には掛からない。
+      if (targetStat === 'velocity' && totalGrowth > VELOCITY_PER_ROUND_MAX)
+        totalGrowth = VELOCITY_PER_ROUND_MAX;
       const armForCap = getNestedValue(updatedPlayer, getStatPath('arm')) || 50;
       // ⚠ 1〜99 の物差しの能力は ABILITY_CAP で止める（100 で止めていて、98 から練習すると100になった。2026-11-20 監査）
       const maxValue = targetStat === 'velocity' ? getVelocityCap(armForCap) : targetStat === 'stamina' ? 200 : ABILITY_CAP;
