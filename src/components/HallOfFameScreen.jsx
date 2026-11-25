@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { getPitchTypeName } from '../season/yearProgressionSystem.js';
 import { ScreenShell, ScreenHeader } from './GameUIComponents.jsx';
+import { SegmentBar, Segments } from './SoloSegments.jsx';
 import { exportDraftedPlayers } from '../game/saveSystem.js';
 import { summarizeNpbCareer } from '../game/npbCareer.js';
 import { resolveWatchList, removeFromWatchList, WATCH_STATUS_LABEL } from '../game/watchList.js';
@@ -367,82 +368,26 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory =
 
   return (
     <ScreenShell>
-        <ScreenHeader title="資料室" right={
-          <div className="flex gap-1 flex-wrap justify-end">
-            <button
-              onClick={() => setActiveTab('npbdraft')}
-              className={`px-3 py-1.5 rounded-md text-sm font-bold transition ${
-                activeTab === 'npbdraft'
-                  ? 'seg-on' : 'seg'
-              }`}
-            >
-              NPBドラフト
-            </button>
-            <button
-              onClick={() => setActiveTab('roster')}
-              className={`px-3 py-1.5 rounded-md text-sm font-bold transition ${
-                activeTab === 'roster'
-                  ? 'seg-on' : 'seg'
-              }`}
-            >
-              入団記録
-            </button>
-            <button
-              onClick={() => setActiveTab('stats')}
-              className={`px-3 py-1.5 rounded-md text-sm font-bold transition ${
-                activeTab === 'stats'
-                  ? 'seg-on' : 'seg'
-              }`}
-            >
-              通算成績
-            </button>
-            <button
-              onClick={() => setActiveTab('teamhistory')}
-              className={`px-3 py-1.5 rounded-md text-sm font-bold transition ${
-                activeTab === 'teamhistory'
-                  ? 'seg-on' : 'seg'
-              }`}
-            >
-              チーム成績
-            </button>
-            <button
-              onClick={() => setActiveTab('almanac')}
-              className={`px-3 py-1.5 rounded-md text-sm font-bold transition ${
-                activeTab === 'almanac'
-                  ? 'seg-on' : 'seg'
-              }`}
-            >
-              年鑑
-            </button>
-            <button
-              onClick={() => setActiveTab('tournaments')}
-              className={`px-3 py-1.5 rounded-md text-sm font-bold transition ${
-                activeTab === 'tournaments'
-                  ? 'seg-on' : 'seg'
-              }`}
-            >
-              大会記録
-            </button>
-            <button
-              onClick={() => setActiveTab('alumni')}
-              className={`px-3 py-1.5 rounded-md text-sm font-bold transition ${
-                activeTab === 'alumni'
-                  ? 'seg-on' : 'seg'
-              }`}
-            >
-              OB名鑑
-            </button>
-            <button
-              onClick={() => setActiveTab('watch')}
-              className={`px-3 py-1.5 rounded-md text-sm font-bold transition ${
-                activeTab === 'watch'
-                  ? 'seg-on' : 'seg'
-              }`}
-            >
-              注目選手
-            </button>
-          </div>
-        } />
+        {/* ⚠ 切り替えはチーム情報と同じオンラインの丸い切り替え（X2。`SoloSegments.jsx`）。
+            8つあるので見出しの右に詰めず、見出しの下に1列で並べる */}
+        <ScreenHeader title="資料室" />
+        <SegmentBar className="mb-4">
+          <Segments
+            label="資料室の区分"
+            value={activeTab}
+            onChange={setActiveTab}
+            items={[
+              { id: 'npbdraft', label: 'NPBドラフト' },
+              { id: 'roster', label: '入団記録' },
+              { id: 'stats', label: '通算成績' },
+              { id: 'teamhistory', label: 'チーム成績' },
+              { id: 'almanac', label: '年鑑' },
+              { id: 'tournaments', label: '大会記録' },
+              { id: 'alumni', label: 'OB名鑑' },
+              { id: 'watch', label: '注目選手' },
+            ]}
+          />
+        </SegmentBar>
 
         {/* NPBドラフトタブ（3×4グリッド年度別表示） */}
         {activeTab === 'npbdraft' && (
