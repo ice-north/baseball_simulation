@@ -159,7 +159,7 @@ export default function MobileTactics({
       </fieldset>
       {group === 'roles' ? (
         <>
-          {/* ⚠ スマホでも変えられる（「打順」の「投手起用を開く」の全画面。`OnlineLineup.jsx`）。
+          {/* ⚠ スマホでも変えられる（「打順」の「投手起用を開く」の全画面。`MobilePitching.jsx`）。
               以前は「PCから」と書いていて、同じ画面にある入口と食い違っていた（再監査 B6） */}
           <p className="online-mobile-tactic-note">
             役割・ローテーションは「打順」の「投手起用を開く」で変えられます

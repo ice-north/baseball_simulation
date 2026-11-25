@@ -625,7 +625,8 @@ export function useManagedGame(app) {
       guessType: userIsBatting ? batGuessTypeRef.current : 'auto',
       guessZone: userIsBatting ? batGuessZoneRef.current : 'auto',
       swingMult: userIsBatting ? (approach === 'take' ? 0.55 : approach === 'aggressive' ? 1.3 : 1.0) : null,
-      approach: userIsBatting ? approach : null,
+      // 「普通」は指示なし（球団の打撃方針 strategy.batting がそのまま効く。自動の試合と同じ）
+      approach: userIsBatting && approach !== 'normal' ? approach : null,
       // エンドランは打者を必ず打ちにいかせる
       swingFloor: forceSwingRef.current ? 0.92 : null,
     };
@@ -1357,6 +1358,9 @@ if (Math.random() < stealThirdAttempt) {
 if (newOuts === 3) {
   newOuts = 0;
   newBases = [false, false, false];
+  // 打席の途中の3アウト（盗塁死・牽制死など）でもカウントは0-0に戻す。打者は次の回の先頭に残る。
+  // ⚠ 戻さないと次の回が前のカウントで始まり、0-0 でだけ走る CPU の采配（継投・守備固め）も飛んでいた
+  newCount = { balls: 0, strikes: 0 };
 
   // 半イニングの後のスタミナ回復（+3）・継投・守備固めは次の球の前に CPU の采配で行う
   noteHalfInningEnd(tacticsMemoryRef.current);
@@ -1484,6 +1488,9 @@ if (newOuts === 3) {
   // バント実行ハンドラー（手動操作モード用）
   const handleBunt = () => {
     if (!count || count.balls === undefined) return;
+    // CPU の采配は throwPitch と同じく打席の頭（0-0）で先に走らせる。交代したらこのバントはしない
+    // ⚠ 以前は初球のバントだと CPU の継投・守備固め・代打が飛ばされていた
+    if (count.balls === 0 && count.strikes === 0 && applyCpuTactics()) return;
 
     const currentBatter = getCurrentBatter();
     const currentPitcher = getCurrentPitcher();
@@ -1548,7 +1555,9 @@ if (newOuts === 3) {
     // バント安打の進塁。一塁が埋まっていれば押し出し、二塁だけなら三塁へ進める。
     // ⚠ 以前は満塁のバント安打で三塁走者を上書きしており、1点と走者が消えていた。
     //    二塁走者を三塁へ送ったら二塁を空けること（二塁にも残ると走者が1人増える）
+    let buntHit = false;   // 先発のダメージ（noteAtBatEnd）で単打に数える
     const advanceOnBuntHit = () => {
+      buntHit = true;
       setTeamHits(prev => ({ ...prev, [offense]: prev[offense] + 1 }));
       if (!newBases[0] && newBases[1] && !newBases[2]) { newBases[2] = newBases[1]; newBases[1] = false; }
       const fa = forceAdvance(newBases, batterAsRunner());
@@ -1740,7 +1749,7 @@ if (newOuts === 3) {
       advanceBatter();
       noteAtBatEnd(tacticsMemoryRef.current, {
         defenseSide: isTopInning ? 'home' : 'away', pitcherId: currentPitcher?.id,
-        kind: 'out', runs: isTopInning ? newScore.away - score.away : newScore.home - score.home,
+        kind: buntHit ? 'single' : 'out', runs: isTopInning ? newScore.away - score.away : newScore.home - score.home,
       });
     }
     if (halfInningEnded) noteHalfInningEnd(tacticsMemoryRef.current);
@@ -1762,8 +1771,16 @@ if (newOuts === 3) {
     setIsAutoSimulating
   };
   // [SECTION: GAME_CONTROLS] → gameControls.js に抽出済み（ラッパーのみ）
-  const resetGame = () => {
+  // 1試合のあいだだけ持つ ref を作り直す（試合をまたいで持ち越さない）。
+  // ⚠ 以前は CPU の采配の帳簿だけを作り直し、自責点の「免れたアウト数」と配球の記憶は
+  //    前の試合の最後の回のものが次の試合の1回に残っていた（同じ打者が先頭なら配球も続きから）
+  const resetPerGameRefs = () => {
     tacticsMemoryRef.current = createManagedTacticsMemory();
+    inningErrorOutsRef.current = 0;
+    pitchSeqRef.current = { key: null, seq: createSequence() };
+  };
+  const resetGame = () => {
+    resetPerGameRefs();
     executeResetGame(gameControlsCtx);
   };
   const startSimMode = (mode) => executeStartSimMode(gameControlsCtx, mode);
@@ -1842,8 +1859,8 @@ if (newOuts === 3) {
   //   （UI点検 S9。以前はここで「野球シミュレーター」の見出しの画面がもう一度スタメンを並べ、
   //   試合前の窓へ戻る手段も無かった）
   const setupManagedGame = (gameInfo) => {
-    // CPU の采配の帳簿は1試合ごとに作り直す
-    tacticsMemoryRef.current = createManagedTacticsMemory();
+    // CPU の采配の帳簿・自責点・配球の記憶は1試合ごとに作り直す
+    resetPerGameRefs();
     const { autoManager, startNow, ...info } = gameInfo || {};
     if (typeof autoManager === 'boolean') setAutoManagerMode(autoManager);
     executeSetupManagedGame(gameSetupCtx, info);

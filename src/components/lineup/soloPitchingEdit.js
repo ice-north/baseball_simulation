@@ -18,7 +18,7 @@
 //     の履歴が受け持つ。`pitchingRotation` は丸ごと控えに入っている）。
 // ⚠ 書くときは**試合の側が読む古い形の配列もそろえる**（`middleRelievers`・`setupMen`・
 //    `closer`・`relievers`）。自動試合の救援選び・AI監督はこれを読む（`autoSimulation.js`・
-//    `aiManager.js`）。並べ方はサーバーの保存（`server/lineupTactics.mjs`）と同じ。
+//    `cpuTactics.js`）。並べ方はサーバーの保存（`server/lineupTactics.mjs`）と同じ。
 // ============================================================
 
 import { STARTER_ROLES, RELIEF_ROLES } from '../../online/tactics.js';

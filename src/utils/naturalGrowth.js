@@ -24,8 +24,9 @@ import { expectedNaturalGrowth, naturalGrowthPlanOf } from '../season/growthSyst
 /** 選手の自然成長（能力1つあたり・年）。小数2桁。年齢曲線で伸びない選手は null */
 export const naturalGrowthOf = (player, team) => {
   // ⚠ オンラインの選手はサーバーが出した値（`naturalGrowth`。`online` の区分）をそのまま使う。
-  //    オンラインの編成画面（`OnlineLineup`）はこの一人用の画面を流用しており、手元の
-  //    `team` には一人用の区分を決める手がかり（社会人・独立）が無い
+  //    オンラインの球団には一人用の区分を決める手がかり（社会人・独立）が無い。以前はオンラインの
+  //    編成画面（`OnlineLineup`。いまは無い）が一人用の画面を流用していたので要った。いまの
+  //    オンラインの画面は `src/online/playerInfo.js` でサーバーの値を直に出すが、念のため残す
   if (Number.isFinite(player?.naturalGrowth)) return player.naturalGrowth;
   const plan = naturalGrowthPlanOf(team);
   if (!plan || !player) return null;

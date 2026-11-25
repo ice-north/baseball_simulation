@@ -2,8 +2,6 @@ import { numberLeagueTeams, captainsOfYear, updateTeamFace } from './teamFace.mj
 import './engine-bootstrap.mjs';
 import { schedulePlayoffReplay, PLAYOFF_REPLAY } from './playoffReplay.mjs';
 import { selectHonors } from './seasonAwards.mjs';
-// 打撃フォーム（野手のフォーム改造の対象）。既定は名前とIDから決まる
-import { battingStanceOf } from '../src/game/batterZone.js';
 import {
   recordMilestones,
   recordKoshien,
@@ -75,7 +73,7 @@ import { reliefOrderOf, isPitcher, isStaffableFielder } from '../src/online/pitc
 import { setRecommendedLineup, withFielderGameFatigue } from '../src/game/autoSimulation.js';
 import { ensureCompleteLineup } from '../src/game/lineup.js';
 import { prepareDailyLineup, benchTwoWayStarter } from './dailyLineup.mjs';
-import { initializeAllPlayersCondition } from '../src/game/condition.js';
+import { initializeAllPlayersCondition, CONDITION_LEVELS } from '../src/game/condition.js';
 import { simulateScheduledGamesOnDate } from '../src/game/daySimulation.js';
 import { hashSeed, withSeededRandom } from '../src/game/rng.js';
 import {
@@ -91,6 +89,7 @@ import {
   menuFitsPlayer,
   subMenuFitsPlayer,
   canonicalSubMenu,
+  campSubKey,
   SUB_TRAINING_MENUS,
   calcSecondAffinity,
 } from '../src/season/campTraining.js';
@@ -116,7 +115,7 @@ import {
 } from '../src/online/trades.js';
 import { tradeValueOf } from './tradeValue.mjs';
 import { tradeJudgeForLeague } from './tradeJudge.mjs';
-import { tradeStrengthGap, playingTimeFactor,
+import { tradeStrengthGap, givingTradeValues,
 } from '../src/online/tradeSearch.js';
 import {
   planCpuTrade,
@@ -185,7 +184,6 @@ import {
   CAMP_BATS,
   CAMP_STANCES,
   campTargetKind,
-  currentBats,
   onlineFielderFatigueFor,
 } from '../src/online/shared.js';
 import {
@@ -407,29 +405,9 @@ function campTargetOptions(key, value, player) {
   return {};
 }
 
-/**
- * 実際に回すサブ練習。フォーム改造（投手）と打席変更は、**対象が無いか、もうその形なら基礎体力**。
- * ⚠ 一人用は対象が無ければ抽選する。オンラインは4クールを同じ指示で回すので、抽選だと
- *    クールごとにフォームが変わり続け、変わったあとも次のクールでまた別の形に変わる
- *    （`executeSubTraining` は対象＝いまの形なら抽選に戻る）。
- * ⚠ 打席変更は失敗すると打席が変わらないので、次のクールでまた挑む（成功したら止まる）
- */
-export function campSubKey(rawKey, player, target) {
-  // ⚠ まとめた古い名前（守備補強 → サブポジ練習）は今の名前で回す。保存済みの計画に残っている
-  const key = canonicalSubMenu(rawKey);
-  // ⚠ フォーム改造は投手と野手で別物（投球フォーム / 打撃フォーム）
-  if (key === 'form_change' && player?.position !== 'pitcher')
-    return CAMP_STANCES.includes(target) && target !== battingStanceOf(player)
-      ? key
-      : 'physique';
-  if (key === 'form_change')
-    return CAMP_FORMS.includes(target) && target !== (player.pitching?.form || 'threeQuarter')
-      ? key
-      : 'physique';
-  if (key === 'switch_hit')
-    return CAMP_BATS.includes(target) && target !== currentBats(player) ? key : 'physique';
-  return key;
-}
+// 実際に回すサブ練習（フォーム改造・打席変更は、対象が無いか、もうその形なら基礎体力）。
+// ⚠ 一人用のキャンプ画面と同じ規則なので `campTraining.js` に置いた。検査が読むのでここからも出す
+export { campSubKey };
 
 /**
  * キャンプを**1クールだけ**走らせる。
@@ -607,7 +585,7 @@ function assertNoPendingPack(league, teamNames) {
   for (const name of teamNames)
     requireOnline(
       !hasPendingPack(league, name),
-      `${name}は開幕前に初期メンバーへ入れ替わるため、それまではトレードできません`,
+      `${teamLabelIn(league, name)}は開幕前に初期メンバーへ入れ替わるため、それまではトレードできません`,
       409,
     );
 }
@@ -618,10 +596,8 @@ export { tradeValueOf };
 /**
  * CPU球団 `to` の返事（`cpuTradeDecision`）。提案のときと、CPUの逆提案を受けるときに使う。
  */
-function cpuDecisionFor(league, fromTeam, to, offerIds, wantIds, judge = tradeJudgeForLeague(league)) {
+export function cpuDecisionFor(league, fromTeam, to, offerIds, wantIds, judge = tradeJudgeForLeague(league)) {
   const theirs = TEAMS_DATA[to];
-  // この交換で出ていく選手を抜いた名簿（受け取る選手に出番があるかを測る土台）
-  const theirsAfter = (theirs.players || []).filter((p) => !(wantIds || []).includes(p.id));
   // ⚠ CPU球団の監督の見る目（育成なら若手を高く、勝負なら主力の年齢を高く）
   const factor = tradeFactorFor(league, to);
   // ⚠ 値段は**画面に出すものと同じ関数**（`tradeJudge`。素質・いまの力・成績・
@@ -629,17 +605,24 @@ function cpuDecisionFor(league, fromTeam, to, offerIds, wantIds, judge = tradeJu
   //    出したのに断られる
   // ⚠ `judge` は名簿が変わっていない間だけ使い回せる（球団の事情を名簿ごとに覚える）。
   //    1日のCPUトレード（`runCpuTrades`）は1回作って渡し、交換が成立したら作り直す
+  // ⚠ 検査（`human-trade-probe`・`online-trade-check`）もこの関数で判断させる（値段の式を写さない）
   return cpuTradeDecision({
     // 受け取る選手（こちらが出す選手）は、相手の事情を抜いた値段で見る。
+    valueOf: (player) => judge.valueOf(player) * factor(player),
     // ⚠ **その球団で出番があるかを乗せる**（いしだ 2026-11-24「トレードは…選手に活躍の場を
     //    与える場にすべきです。もっとも得点が高いのは、余剰戦力が相手チームでレギュラーに
-    //    なれる場合です」）。持ち場の一番になれるなら満額（+35%）、控え止まりなら上乗せ0。
-    //    画面の見込みメーター（`TradeScreen.jsx`）も同じ関数を掛ける
-    //    ⚠ **出す選手を抜いた名簿で測ること**。1対1は同じ持ち場の交換になりやすく、
+    //    なれる場合です」）。持ち場の一番になれるなら満額（+`PLAYING_TIME_BONUS`＝50%）、
+    //    控え止まりなら上乗せ0。画面の見込みメーター（`TradeScreen.jsx`）とアプリも同じ関数
+    //    （`givingTradeValues`）。何人か受け取るときは1人ずつ順に足した分だけを数える
+    //    ⚠ **出す選手（`want`）を抜いた名簿で測ること**。1対1は同じ持ち場の交換になりやすく、
     //       抜く前の名簿で測ると「いま居る主力（これから出す本人）に勝てないから控え止まり」と
-    //       判定され、上乗せが入るべき交換にほとんど入らなかった
-    valueOf: (player) =>
-      judge.valueOf(player) * factor(player) * playingTimeFactor(theirsAfter, player),
+    //       判定され、上乗せが入るべき交換にほとんど入らなかった。逆提案は差し替えた顔ぶれで測り直す
+    giveValuesOf: (players, want) =>
+      givingTradeValues(
+        (theirs.players || []).filter((p) => !(want || []).includes(p.id)),
+        players,
+        (player) => judge.valueOf(player) * factor(player),
+      ),
     // 自分が出す選手は、その球団の事情こみ（抜けると穴が空く選手ほど高い）
     valueOfOwn: (player) => judge.valueOf(player, to) * factor(player),
     // まとめて出すときは、まとめて抜けた穴で値段を付ける（`needFactors`）
@@ -736,13 +719,13 @@ export function openTrade(league, userId, { to, offer, want, note }, now) {
   // ⚠ 断られたら**何も残さない**。`requireOnline` で画面に理由を出す
   requireOnline(
     decision.reason !== 'lopsided',
-    `${to} は、この交換ではそちらの戦力ばかり上がるので応じませんでした。もらう選手を見直してください`,
+    `${teamLabelIn(league, to)} は、この交換ではそちらの戦力ばかり上がるので応じませんでした。もらう選手を見直してください`,
     409,
     'trade',
   );
   requireOnline(
     false,
-    `${to} はこの内容では応じませんでした。出す選手を足すか、もらう選手を見直してください`,
+    `${teamLabelIn(league, to)} はこの内容では応じませんでした。出す選手を足すか、もらう選手を見直してください`,
     409,
     'trade',
   );
@@ -811,7 +794,7 @@ export function respondTrade(league, userId, { tradeId, action, offer, want, not
       // ⚠ 応じないときは例外で返す（命令ごと取り消されるので、元の提案がそのまま残る）
       requireOnline(
         answer.action === 'accept',
-        `${trade.fromTeam} はこの逆提案には応じませんでした。元の提案のまま受けるか、断ってください`,
+        `${teamLabelIn(league, trade.fromTeam)} はこの逆提案には応じませんでした。元の提案のまま受けるか、断ってください`,
         409,
         'trade',
       );
@@ -846,7 +829,7 @@ export function respondTrade(league, userId, { tradeId, action, offer, want, not
       trade.toTeam,
       trade.offer,
       trade.want,
-      `${trade.toTeam} は、名簿や選手の力が変わったので、この逆提案ではもう応じません。断ってから出し直してください`,
+      `${teamLabelIn(league, trade.toTeam)} は、名簿や選手の力が変わったので、この逆提案ではもう応じません。断ってから出し直してください`,
     );
   if (trade.from === null)
     rejudge(
@@ -854,7 +837,7 @@ export function respondTrade(league, userId, { tradeId, action, offer, want, not
       trade.fromTeam,
       trade.want,
       trade.offer,
-      `${trade.fromTeam} は、名簿や選手の力が変わったので、この提案をもう続けません。断って閉じてください`,
+      `${teamLabelIn(league, trade.fromTeam)} は、名簿や選手の力が変わったので、この提案をもう続けません。断って閉じてください`,
     );
   drop();
   applyTrade(league, trade, now);
@@ -1719,6 +1702,33 @@ function releasePlayers(teamName, ids, year) {
  *    おすすめに戻っていた（手続き中も編成画面は開けて保存できる）。
  *    ローテの投手が名簿から消えた・打順が埋まらないときだけ作り直す。
  */
+
+/**
+ * 保存する打順を組む（`setRecommendedLineup`）。**組む間だけ疲労と調子を平らにする**。
+ * ⚠ 保存した打順は次に組み直すまで毎試合使う。CPU球団は名簿が変わった日（CPU同士のトレード・
+ *    プロ指名など）に組み直すので、その日の疲れ・調子で選ぶと、疲れていたレギュラーが外れて
+ *    控えの打順のまま何十試合も固まっていた（2026-11-25 の計測で、実際の打順の持ち場の力が
+ *    名簿の最良より平均で約20点、ひどい球団で約90点低かった。人の球団の2年目 .534 の一因）。
+ * ⚠ その日の疲れは**毎日の休養**（`restTiredFielders`）がその日だけ控えと入れ替える。
+ *    保存する打順は「疲れていないときの一番の組」にしておく。
+ */
+function recommendedLineupForSave(team, name) {
+  const saved = team.players.map((p) => [p, p.fatigue, p.condition]);
+  for (const p of team.players) {
+    p.fatigue = 0;
+    p.condition = CONDITION_LEVELS.NORMAL;
+  }
+  try {
+    return setRecommendedLineup(team, name);
+  } finally {
+    for (const [p, fatigue, condition] of saved) {
+      if (fatigue === undefined) delete p.fatigue;
+      else p.fatigue = fatigue;
+      if (condition === undefined) delete p.condition;
+      else p.condition = condition;
+    }
+  }
+}
 function refreshTeamPlan(league, name, { force = false } = {}) {
   const team = TEAMS_DATA[name];
   // 名簿に居なくなった投手（トレード・退団）の予告先発を消す
@@ -1741,7 +1751,7 @@ function refreshTeamPlan(league, name, { force = false } = {}) {
     }
     if (!ownLineup) {
       const registered = new Map(team.players.map((p) => [p.id, p.position]));
-      setRecommendedLineup(team, name);
+      recommendedLineupForSave(team, name);
       for (const player of team.players)
         if (registered.has(player.id)) player.position = registered.get(player.id);
     }
@@ -1776,7 +1786,7 @@ function refreshTeamPlan(league, name, { force = false } = {}) {
   //    ローテに残る・一塁手が三塁手に変わる、が黙って起きていた。守備位置は
   //    打順の側（`lineupSettings`）にあるので、登録は元に戻してよい
   const registered = new Map(team.players.map((p) => [p.id, p.position]));
-  setRecommendedLineup(team, name);
+  recommendedLineupForSave(team, name);
   for (const player of team.players)
     if (registered.has(player.id)) player.position = registered.get(player.id);
 }
@@ -1932,7 +1942,7 @@ function resolvePackSelect(league, plans) {
   for (const name of names) {
     if (assigned[name]) continue;
     const pack = free.shift();
-    requireOnline(pack, `${name}に渡す初期メンバーが足りません`, 409);
+    requireOnline(pack, `${teamLabelIn(league, name)}に渡す初期メンバーが足りません`, 409);
     pack.takenBy = name;
     assigned[name] = pack;
   }
@@ -2901,7 +2911,7 @@ function advanceOneDay(league, key, now) {
         // ⚠ 知らせるのは指名したときだけ（ローテの順の投手が疲れて回るのは今までどおり黙って）
         if (pick != null && (!lock || lock.picked))
           pickReports.push({ name, game, pick, report, shownName: lock?.name });
-        return prepareDailyLineup(TEAMS_DATA[name], name, { pick, report, outside: !!lock });
+        return prepareDailyLineup(TEAMS_DATA[name], name, { pick, report, outside: !!lock, label: teamLabelIn(league, name) });
       });
     // その日の采配（指導者の考え方）。⚠ 保存した設定は書き換えず、試合の後に戻す
     for (const name of league.season.settings.teamNames)

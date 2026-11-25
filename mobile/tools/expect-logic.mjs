@@ -12,6 +12,7 @@ import {
 import { pitchingFromLineup, reliefGroups, moveRelief, reliefOrderOf } from '../../src/online/pitchingEdit.js';
 import { planRest } from '../../src/online/restPlan.js';
 import { tradeMerits, meritSummaryText } from '../../src/online/tradeMerit.js';
+import { playingTimeShares, givingTradeValues } from '../../src/online/tradeSearch.js';
 
 const view = JSON.parse(fs.readFileSync(new URL('../shared/src/jvmTest/resources/view-running.json', import.meta.url)));
 const roster = view.roster;
@@ -134,5 +135,21 @@ for (const give of meritGives)
         summary: meritSummaryText(m),
       });
     }
-const text = JSON.stringify({ restPlans, restPlansTwoWay, camp, wish, recommended, relief, tryout: { ranked, picks, added, removed, shifted, moved, totals, shorts, blocking: summary.blocking, warnings: summary.warnings, warningCases: [fullStaff.warnings, fewPitchers.warnings] }, tradeMerit });
+// CPU球団が受け取る選手の値段（`givingTradeValues`。出番の上乗せを1人ずつ順に足した分だけ乗せる）。
+// 名簿の分け方と組み合わせは上のメリットと同じ。値段は名簿の並び i から 40 + 3i（ビューの名簿に値段が無いため）。
+// 野手をまとめて出す組（同じ持ち場に重なる）も足す
+const priceOf = (p) => 40 + 3 * roster.indexOf(p);
+const givingGives = [...meritGives, mineFielders, meritMine];
+const giving = [];
+for (const give of givingGives)
+  for (const get of meritGets) {
+    const after = meritTheirs.filter((p) => !get.includes(p.id));
+    giving.push({
+      give: give.map((p) => p.id),
+      get,
+      shares: playingTimeShares(after, give),
+      values: givingTradeValues(after, give, priceOf),
+    });
+  }
+const text = JSON.stringify({ restPlans, restPlansTwoWay, camp, wish, recommended, relief, tryout: { ranked, picks, added, removed, shifted, moved, totals, shorts, blocking: summary.blocking, warnings: summary.warnings, warningCases: [fullStaff.warnings, fewPitchers.warnings] }, tradeMerit, giving });
 emitExpected(text, { script: 'expect-logic.mjs', file: 'logic-expected.json', also: 'アプリの共通部も揃えること' });
