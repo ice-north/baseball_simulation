@@ -19,7 +19,7 @@ import { FIELD, planField, planRest } from '../src/online/restPlan.js';
  * ⚠ **全球団に当てること**。かつては「CPUは毎試合 `generateAILineup` が
  *    疲労を見て組み直すから不要」として人の球団だけに当てていたが、
  *    **オンラインではその前提が成り立たない**。サーバーは CPU 球団にも
- *    打順を保存する（`refreshTeamPlan` → `setRecommendedLineup`）ので、
+ *    打順を保存する（`refreshTeamPlan` → `recommendedLineupForSave`。疲れ・調子抜きで組む）ので、
  *    `isUserTeam`（`lineupSettings.battingOrder` があるか）が12球団すべてで
  *    真になり、AIの組み直しは一度も走らない。実測で、CPU球団の中堅手が
  *    60試合すべてに出続けて疲労497まで積み上がっていた。

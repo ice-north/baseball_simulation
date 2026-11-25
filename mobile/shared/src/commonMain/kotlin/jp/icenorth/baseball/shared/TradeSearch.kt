@@ -317,7 +317,9 @@ fun squadStrength(roster: List<Player>): Double {
     total += catchers.getOrNull(1) ?: 0.0
     val (rotation, pen) = pitchingStaff(roster)
     total += rotation.sumOf { slotStrength(it, "sp") ?: 0.0 }
-    total += pen.take(BULLPEN_SIZE).sumOf { slotStrength(it, "rp") ?: 0.0 } * SQUAD_PEN_WEIGHT
+    // ⚠ Web 版と同じ順で足す（1人ずつ重みを掛けて足す）。4人を足してから掛けると浮動小数の最後の桁が違い、
+    //    開きの線（5点）ちょうどでサーバーと判断が分かれ得る（監査16）
+    total += pen.take(BULLPEN_SIZE).sumOf { (slotStrength(it, "rp") ?: 0.0) * SQUAD_PEN_WEIGHT }
     return total
 }
 
