@@ -8,6 +8,7 @@ import { TRAINING_MENUS, SUB_TRAINING_MENUS, executeTeamCampTraining, executeSub
 import { POSITION_NAMES, POSITION_ORDER, getAbilityColor, POSITION_GROUP_COLORS, FORM_SHORT } from '../utils/constants.js';
 import { AbilityValue } from './AbilityValue.jsx';
 import { BATTING_STANCES, battingStanceOf } from '../game/batterZone.js';
+import { campSubKey } from '../season/campTraining.js';
 import { getTeamStaffBonus } from '../corporate/staffData.js';
 import { SPECIALTY_LABELS, SPECIALTY_ICONS } from '../university/universityTeamsData.js';
 import { naturalGrowthOf, naturalGrowthText, naturalGrowthColor, naturalGrowthTitle } from '../utils/naturalGrowth.js';
@@ -75,7 +76,9 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
   const [formSelections, setFormSelections] = useState({});
   // ⚠ 打撃フォーム（オープン/スクエア/クローズ）の行き先。野手の「フォーム改造」で選ぶ
   //    （いしだ 2026-11-24「キャンプの練習に、打撃フォーム変更を追加してください」）。
-  //    選ばなければ中で別のフォームが選ばれる（投手のフォーム改造と同じ）
+  //    選ばなければ（「未選択」）基礎体力で回す。投手のフォーム改造・打席変更も同じ
+  //    （`campSubKey`。オンラインと同じ規則）。選んだ形に変わったあとも基礎体力になり、
+  //    次のクールでまた別の形に変わらない（選択はクールをまたいで残るため）
   const [stanceSelections, setStanceSelections] = useState({});
   const [batsSelections, setBatsSelections] = useState({});
   const [roundResults, setRoundResults] = useState(null);
@@ -298,13 +301,23 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
 
     updatedTeam.players.forEach(p => {
       if (p.dispatchedThisCamp) return; // 派遣中は副練習もしない
-      const subType = subAssignments[p.id] || 'physique';
+      // ⚠ 選んだサブ練習と対象は**クールをまたいで残る**。フォーム改造・打席変更は、対象が
+      //    無いか、もうその形（前のクールで変わった）なら基礎体力で回す（`campSubKey`。
+      //    オンラインと同じ規則）。止めないと中で別の形が抽選され、変わったフォームが次の
+      //    クールでまた変わり、ミート・制球の減点も重なっていた
+      const chosenSub = subAssignments[p.id] || 'physique';
+      const subTarget = chosenSub === 'switch_hit' ? batsSelections[p.id]
+        : isPitcher(p) ? formSelections[p.id] : stanceSelections[p.id];
+      const subType = campSubKey(chosenSub, p, subTarget);
       const subOptions = {
         targetPosition: subPositionSelections[p.id],
         targetPitch: subPitchSelections[p.id],
         targetForm: formSelections[p.id],
         targetStance: stanceSelections[p.id],
         targetBats: batsSelections[p.id],
+        // ⚠ 自分の球団の守備位置は編成の画面が正本。サブポジ練習の後に適性へ合わせて
+        //    黙って動かさない（オンラインの人の球団と同じ。`executeSubTraining`）
+        keepPosition: true,
       };
       const { growthReport: subGrowth } = executeSubTraining(p, subType, subOptions, userStaffBonus);
       const mainReport = allReports.find(r => r.player.id === p.id);
@@ -1016,8 +1029,9 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
                                 value={formSelections[player.id] || ''}
                                 onChange={(e) => setFormSelections(prev => ({ ...prev, [player.id]: e.target.value }))}
                                 className="bg-gray-600 text-white text-xs px-1.5 py-0.5 rounded w-20"
+                                title="変えたいフォーム（未選択なら基礎体力）"
                               >
-                                <option value="">自動</option>
+                                <option value="">未選択</option>
                                 {Object.entries(FORM_SHORT)
                                   .filter(([k]) => k !== player.pitching?.form)
                                   .map(([k,v]) => <option key={k} value={k}>{v}</option>)}
@@ -1030,9 +1044,9 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
                                 value={stanceSelections[player.id] || ''}
                                 onChange={(e) => setStanceSelections(prev => ({ ...prev, [player.id]: e.target.value }))}
                                 className="bg-gray-600 text-white text-xs px-1.5 py-0.5 rounded w-24"
-                                title="打撃フォーム（オープン=内角が得意 / クローズ=外角が得意）"
+                                title="打撃フォーム（オープン=内角が得意 / クローズ=外角が得意。未選択なら基礎体力）"
                               >
-                                <option value="">自動</option>
+                                <option value="">未選択</option>
                                 {Object.entries(BATTING_STANCES)
                                   .filter(([k]) => k !== battingStanceOf(player))
                                   .map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
@@ -1043,10 +1057,11 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
                                 value={batsSelections[player.id] || ''}
                                 onChange={(e) => setBatsSelections(prev => ({ ...prev, [player.id]: e.target.value }))}
                                 className="bg-gray-600 text-white text-xs px-1.5 py-0.5 rounded w-16"
+                                title="変えたい打席（未選択なら基礎体力）"
                               >
-                                <option value="">自動</option>
+                                <option value="">未選択</option>
                                 {[['right','右打'],['left','左打'],['switch','両打']]
-                                  .filter(([k]) => k !== (player.batting?.bats || player.physical?.bats))
+                                  .filter(([k]) => k !== (player.batting?.bats || player.physical?.bats || 'right'))
                                   .map(([k,v]) => <option key={k} value={k}>{v}</option>)}
                               </select>
                             )}

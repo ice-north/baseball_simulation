@@ -21,6 +21,7 @@ import {
 import { TEAMS_DATA } from '../../src/teams-data.js';
 import { CAMP_PITCH_TYPES, currentBats } from '../../src/online/shared.js';
 import { campSubKey } from '../../server/leagueEngine.mjs';
+import { campSubKey as soloCampSubKey } from '../../src/season/campTraining.js';
 import { subMenusFor } from '../../src/online/campMenus.js';
 import { CAMP_STANCES } from '../../src/online/shared.js';
 import { battingStanceOf } from '../../src/game/batterZone.js';
@@ -99,6 +100,8 @@ const roster = () => league.game.teams[name].players;
   //    野手は打撃フォーム（オープン/スクエア/クローズ）。中身は `campTargetKind` が分ける
   assert.ok(subMenusFor(batter).some(([k]) => k === 'form_change'), '野手にフォーム改造が出ていない');
   assert.ok(subMenusFor(batter).some(([k]) => k === 'switch_hit'), '野手に打席変更が出ていない');
+  // ⚠ 一人用のキャンプ画面と同じ規則（`campTraining.js` の1つを両方が使う。写しを作らない）
+  assert.equal(campSubKey, soloCampSubKey, 'サーバーの campSubKey が一人用と別の関数になっている');
   // 対象が無い・もうその形 → 基礎体力
   assert.equal(campSubKey('form_change', pitcher, undefined), 'physique');
   assert.equal(campSubKey('form_change', pitcher, from), 'physique');

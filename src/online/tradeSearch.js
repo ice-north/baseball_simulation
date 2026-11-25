@@ -46,6 +46,13 @@ export const TRADE_MIN_FITNESS = SUBSTITUTE_MIN_FITNESS;
 /** ローテの人数・ブルペンの人数 */
 export const ROTATION_SIZE = 5;
 export const BULLPEN_SIZE = 4;
+/**
+ * 球団の力（`squadStrength`）に中継ぎを数える重み。
+ * ⚠ 2026-11-25 の計測で、同じ10点でも 野手の持ち場 +.033・先発 +.013・**中継ぎ +.0015** だった
+ *    （中継ぎは投げる回が少ない）。等しく数えると、中継ぎを集めるトレードで「戦力が上がった」ように
+ *    見えて勝ちに結びつかなかった（トレードの伸びの6割近くが投手）。アプリの `SQUAD_PEN_WEIGHT` と同じ値
+ */
+export const SQUAD_PEN_WEIGHT = 0.25;
 
 /** 守る力を重く見る位置ほど大きい（捕手・遊撃・二塁・中堅） */
 const DEFENSE_WEIGHT = {
@@ -65,11 +72,16 @@ const isActive = (p) => p.isActive !== false;
 const average = (list) =>
   list.length ? list.reduce((a, b) => a + b, 0) / list.length : 0;
 
-/** 打つ力（ミ パ 眼 走） */
+/**
+ * 打つ力（ミ パ 眼 走）。
+ * ⚠ 重みは**試合で効く順**に合わせた（2026-11-25、全球団の2年ぶん768球団・年の計測。
+ *    打順の平均が1上がったときの勝率: ミート +8.6厘・パワー +6.8厘・走力 +3.6厘・選球眼 ほぼ0）。
+ *    以前は 0.35/0.3/0.15/0.2 で、選球眼を重く見すぎていた。アプリの `battingPower`（TradeSearch.kt）と同じ値
+ */
 export const battingPower = (p) =>
-  n(p.batting?.meet) * 0.35 +
-  n(p.batting?.power) * 0.3 +
-  n(p.batting?.eye) * 0.15 +
+  n(p.batting?.meet) * 0.4 +
+  n(p.batting?.power) * 0.35 +
+  n(p.batting?.eye) * 0.05 +
   n(p.physical?.speed) * 0.2;
 
 /**
@@ -85,8 +97,10 @@ export function slotStrength(p, slot) {
     const ctl = n(p.pitching?.control);
     const spin = n(p.pitching?.spinRate);
     const sta = normalizedStamina(p.pitching?.stamina);
+    // ⚠ 先発は制球を重く・スタミナを軽く（2026-11-25 の計測。ローテの平均が1上がったときの勝率:
+    //    制球 +3.3厘・球速 +2.4厘・回転 +0.9厘・スタミナ ほぼ0）。以前は 0.3/0.3/0.15/0.25
     return slot === "sp"
-      ? vel * 0.3 + ctl * 0.3 + spin * 0.15 + sta * 0.25
+      ? vel * 0.3 + ctl * 0.4 + spin * 0.15 + sta * 0.15
       : vel * 0.4 + ctl * 0.35 + spin * 0.2 + sta * 0.05;
   }
   if (isPitcher(p)) return null;
@@ -386,7 +400,7 @@ export const DROP_SCALE = 8;
  *
  * 数えるのは**実際に要る持ち場ぶん**だけ:
  *   野手 … 8つの持ち場の一番手（`fielderAssignment` の割り当て。1人1か所）＋ 2人目の捕手
- *   投手 … 先発 `ROTATION_SIZE` 人 ＋ 中継ぎ `BULLPEN_SIZE` 人
+ *   投手 … 先発 `ROTATION_SIZE` 人 ＋ 中継ぎ `BULLPEN_SIZE` 人（中継ぎは `SQUAD_PEN_WEIGHT` 倍）
  * ⚠ **一番手だけを数えないこと**。先発を1人しか数えないと、2〜5番手の先発が
  *    「抜けても落差0＝余り」になる。
  * ⚠ **捕手は2人**（名簿の最低条件が捕手1人なので、2人目が抜けると次の出場で詰まる）。
@@ -407,7 +421,8 @@ export function squadStrength(players) {
   total += catchers[1] ?? 0;
   const { rotation, pen } = pitchingStaff(roster);
   for (const p of rotation) total += slotStrength(p, "sp") ?? 0;
-  for (const p of pen.slice(0, BULLPEN_SIZE)) total += slotStrength(p, "rp") ?? 0;
+  for (const p of pen.slice(0, BULLPEN_SIZE))
+    total += (slotStrength(p, "rp") ?? 0) * SQUAD_PEN_WEIGHT;
   return total;
 }
 
@@ -462,6 +477,47 @@ export const playingTimeFactor = (roster, player) =>
   1 + PLAYING_TIME_BONUS * playingTimeShare(roster, player);
 
 /**
+ * 何人かまとめて受け取るときの、1人ずつの出番の度合い（並びは `players` と同じ）。
+ * ⚠ **1人ずつ順に名簿へ足して、その人が足した分だけを数える**。1人ずつ `roster` と比べると、
+ *    同じ持ち場に2人出したとき2人とも「一番になれる」と数え、上乗せが二重に付いた
+ *    （遊撃30の球団へ遊撃70を2人で、本当の上積み40に対して80ぶん。監査 2026-11-24）。
+ * ⚠ 足す順は**持ち場での力の高い順**（同じなら id の小さい順）。渡された並びに頼らない
+ *    （画面とサーバーで並びが違っても同じ答えにするため）。アプリの `playingTimeShares` と同じ。
+ */
+export function playingTimeShares(roster, players) {
+  const list = players || [];
+  const order = list
+    .map((p, i) => ({ p, i, own: bestSlot(p)?.strength ?? 0 }))
+    .sort((a, b) => b.own - a.own || Number(a.p.id) - Number(b.p.id));
+  const out = new Array(list.length).fill(0);
+  let base = [...(roster || [])];
+  let before = squadStrength(base);
+  for (const { p, i, own } of order) {
+    const next = [...base, p];
+    const after = squadStrength(next);
+    out[i] = own > 0 ? Math.max(0, Math.min(1, (after - before) / own)) : 0;
+    base = next;
+    before = after;
+  }
+  return out;
+}
+
+/**
+ * CPU球団が受け取る選手（提案した側が出す選手）の値段（並びは `give` と同じ）。
+ * `valueOf` の値段に、その球団で出番があるかの上乗せ（`PLAYING_TIME_BONUS`）を掛ける。
+ * `rosterAfter` は**この交換で出ていく選手を抜いた**受け取る側の名簿。
+ * ⚠ サーバーの `cpuDecisionFor`・Web の見込みメーター・アプリの `givingTradeValues` が同じこれを使う。
+ *    値段の読めない選手（数でない）はそのまま返す。
+ */
+export function givingTradeValues(rosterAfter, give, valueOf) {
+  const shares = playingTimeShares(rosterAfter, give);
+  return (give || []).map((p, i) => {
+    const v = valueOf(p);
+    return Number.isFinite(v) ? v * (1 + PLAYING_TIME_BONUS * shares[i]) : v;
+  });
+}
+
+/**
  * CPU球団が受ける「戦力の開き」の上限（`squadStrength` の点）。
  *
  * ⚠ **値段の釣り合いだけでは足りない**（いしだ 2026-11-14「2年目に人の球団が勝ちすぎる」）。
@@ -499,10 +555,16 @@ export const playingTimeFactor = (roster, player) =>
  *    「値段では払ってもらったのに戦力は増えない」。直すなら控えの厚みを戦力に
  *    数える側（`squadStrength`）で、線はその後で引き直す。
  *
+ * ⚠ **2026-11-25 に 8点 → 5点**（いしだ判断）。物差し（`squadStrength`）の重みを勝ちへの効き方に
+ *    合わせた（中継ぎ 0.25倍など）ら、同じ8点でも効くトレードだけが通るようになり、欲張りに約30件
+ *    トレードした人の球団の2年目の差が +.024 → +.045 に広がった（種32）。6点 +.038 ／ **5点 +.030**。
+ *    新しい重みでの断る割合（初期セットの自軍 × CPU6球団、値段が釣り合った案18,242件）:
+ *      3点 17.6% ／ **5点 15.0%** ／ 6点 13.8% ／ 8点 11.6%
+ *    先方の「断られすぎ」で緩めたときの 8点 17.7%（古い重み）より少ないままなので、緩めた狙いは崩れない。
  * ⚠ アプリの `STRENGTH_GAP_LIMIT`（TradeSearch.kt）と同じ値。サーバーは決まり（`team.trade.gapLimit`）
  *    でも渡すので、画面はそれを使う。
  */
-export const STRENGTH_GAP_LIMIT = 8;
+export const STRENGTH_GAP_LIMIT = 5;
 
 /**
  * 交換で開く戦力の差（点）＝提案した側の `squadStrength` の伸び − 受ける側の伸び。

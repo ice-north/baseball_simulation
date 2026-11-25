@@ -47,7 +47,7 @@ import {
   tradeStrengthGap,
   tradeRatio,
   setTradeValues,
-  playingTimeFactor,
+  givingTradeValues,
   tradeSlot,
   valueTiers,
 } from './tradeSearch.js';
@@ -317,15 +317,18 @@ function cpuOutlook({ rule, give, get, valueOf, roster, myRoster }) {
   // ⚠ 出す選手は**その球団で出番があるかを乗せた値段**で見る（サーバーの `cpuDecisionFor` と
   //    同じ。いしだ 2026-11-24「もっとも得点が高いのは、余剰戦力が相手チームでレギュラーに
   //    なれる場合です」）。掛けないと、メーターが「足りない」と出したのに受けられる
+  // ⚠ **もらう選手を抜いた名簿で測る**（サーバーと同じ）。何人か出すときは1人ずつ順に足した分だけ
+  //    （`givingTradeValues`。サーバー・アプリと同じ関数）
   const gotIds = new Set(get.map((p) => p.id));
-  const rosterAfter = (roster || []).filter((p) => !gotIds.has(p.id));
-  const giveValues = give
-    .map((p) => {
-      const v = valueOf(p);
-      // ⚠ **もらう選手を抜いた名簿で測る**（サーバーと同じ）
-      return Number.isFinite(v) && roster ? v * playingTimeFactor(rosterAfter, p) : v;
-    })
-    .filter(Number.isFinite);
+  const giveValues = (
+    roster
+      ? givingTradeValues(
+          roster.filter((p) => !gotIds.has(p.id)),
+          give,
+          valueOf,
+        )
+      : give.map(valueOf)
+  ).filter(Number.isFinite);
   // ⚠ 何人かまとめてもらうときは、まとめて抜けた穴の上乗せで引く（サーバーの
   //    `setValuesOf` と同じ式）。事情を抜いた値段（`tradeBase`）が無ければ1人ずつの値段
   const getValues = (

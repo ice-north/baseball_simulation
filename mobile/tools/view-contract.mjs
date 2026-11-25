@@ -2,7 +2,8 @@
 // ビューの約束: アプリが読む窓口の項目のうち、**名前を変えると黙って空になる**もの（どれも無ければ出さない
 // だけなので、画面の検査では気づきにくい）。以前は mobile/README.md の文にだけ書いてあった。
 //
-// ⚠ ここが正本。サーバー（server/projection.mjs など）で項目の名前を変える・消すときは、ここも直し、
+// ⚠ 載せたのは主な項目だけ（mobile/README.md の「サーバーとの約束」の文の項目を全部は載せていない）。
+//    サーバー（server/projection.mjs など）で項目の名前を変える・消すときは、ここも直し、
 //    アプリ（mobile/shared・androidApp）の読むところも直す。
 // ⚠ 確かめ方（tools/sim-harness/online-view-contract-check.mjs）: その場でリーグを作り、本物のサーバーの答えにあるかを見る。
 //    - check: 開幕直後に必ずある項目（`live: true`）を、アプリと同じ窓口（view・team・player・transactions）で。
@@ -13,6 +14,7 @@
 // 書き方: `a.b` は入れ子、`a[]` は配列の中のどれか1つ、`a{}` は鍵が何でもよい表の中のどれか1つ。
 // `when` はその項目が載る時期（offseason・running・late は --year で1年のどこかに出るかを見る。pro・staff・elsewhere は
 // 出る人・年・保存先が限られるので見ない）。`live: true` は開幕直後のビューに必ずある。
+// ⚠ どの項目にも `when` か `live` のどちらかを付ける（どちらも無い項目は確かめようがないので、検査が落とす）。
 // ============================================================
 
 /** @typedef {{ path: string, when?: string, live?: boolean, why: string }} Item */
@@ -21,10 +23,10 @@
 export const VIEW_CONTRACT = {
   view: [
     // 画面
-    { path: 'careerLeaders', why: '通算成績ランキング' },
+    { path: 'careerLeaders', live: true, why: '通算成績ランキング' },
     { path: 'chronicle.proDrafted[].round', when: 'offseason', why: 'プロ入りした選手の指名順位（「4位」）' },
     { path: 'chronicle.proDrafted[].ikusei', when: 'elsewhere', why: '育成指名（「育成2位」。育成で指名された選手にだけ付く）' },
-    { path: 'lastCamp', why: 'キャンプの結果' },
+    { path: 'lastCamp', live: true, why: 'キャンプの結果（キャンプの前は null で載る）' },
     { path: 'stage.key', live: true, why: 'season かどうかでキャンプ直後の案内を出す' },
     { path: 'rosterLimit', live: true, why: '選手枠の上限（無い古いサーバーだけアプリの表の数）' },
     { path: 'rosterStandard', live: true, why: '選手枠の標準の人数' },

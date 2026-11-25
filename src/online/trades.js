@@ -147,11 +147,17 @@ const tradeKind = (p) => (p?.position ? rosterGroup(p.position) : undefined);
  *    釣り合っても断る（`reason: 'lopsided'`）。逆提案の顔ぶれにも同じ線を当てる。
  *    値段は1人ずつの合計なので、これが無いと弱い2人で強い1人が取れる（いしだ 2026-11-14）。
  *    無ければ値段だけで決める（検査の古い呼び出し）。
+ * ⚠ `giveValuesOf(players, wantIds)` は**受け取る選手の値段を、出す顔ぶれ `wantIds` ごとに**付ける
+ *    （1人ずつの配列。無ければ `valueOf` を1人ずつ）。受け取る選手に出番があるかは「出ていく選手を
+ *    抜いた名簿」で測る（`givingTradeValues`）ので、逆提案で出す顔ぶれを替えると値段も変わる。
+ *    逆提案は、組んだ顔ぶれで**受けるときと同じ判断**をもう一度して、受けない案なら返さない
+ *    （以前は頼まれた顔ぶれの値段で組み、受けるときの測り直しで断っていた。監査 2026-11-24）。
  */
 export function cpuTradeDecision({
   valueOf,
   valueOfOwn = valueOf,
   lossOf = null,
+  giveValuesOf = null,
   fromPlayers,
   toPlayers,
   offerIds,
@@ -167,7 +173,11 @@ export function cpuTradeDecision({
   const total = (players, of) => players.reduce((a, p) => a + of(p), 0);
   const incoming = pick(fromPlayers, offerIds);
   const outgoing = pick(toPlayers, wantIds);
-  const gain = total(incoming, value);
+  const gainFor = (ids) =>
+    giveValuesOf
+      ? giveValuesOf(incoming, ids).reduce((a, v) => a + Math.max(1, v || 0), 0)
+      : total(incoming, value);
+  const gain = gainFor(wantIds);
   const setLoss = (players) =>
     lossOf
       ? lossOf(players).reduce((a, v) => a + Math.max(1, v || 0), 0)
@@ -198,6 +208,9 @@ export function cpuTradeDecision({
   }
   // まとめて抜けた穴の上乗せで予算を超えるなら、どう組んでも釣り合わない
   if (lossOf && setLoss(picked) > budget) return { action: 'reject', gain, loss };
+  // ⚠ 組んだ顔ぶれで受けるときと同じ判断をする（値段が顔ぶれで変わるため）。届かないなら返さない
+  if (gainFor(picked.map((p) => p.id)) < setLoss(picked) * CPU_ACCEPT_MARGIN)
+    return { action: 'reject', gain, loss };
   // ⚠ 差し替えた顔ぶれでも戦力の差が開きすぎるなら、逆提案にしない（受けない案を返さない）。
   // ⚠ 理由は付けない（`lopsided` は「出した形そのものが開きすぎる」ときだけ）。付けると、
   //    開いていない提案に「そちらの戦力ばかり上がる」と出ていた（監査 2026-11-14）

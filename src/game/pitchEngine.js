@@ -209,7 +209,7 @@ const pitchCore = ({ batterPlayer, pitcherPlayer, catcherPlayer, defense, count,
 
   // ===== 配球 → 投球位置 → スイング判定 =====
   // 制球は「ストライク率」ではなく「狙った所へ投げられる再現性」として効く。
-  // 詳細は pitchCalling.js 参照。采配モード(App.jsx)と同じモデルを共有している。
+  // 詳細は pitchCalling.js 参照。采配の試合もこの関数で投げる（useManagedGame.jsx）。
   const isBreaking = selectedPitch.type !== 'straight';
   // 変化球のばらつきは pitchShape.shapeSigma に一本化した
   // （旧 breakingControlPenalty。自動と采配で係数が 0.20 / 0.30 と食い違っていた）

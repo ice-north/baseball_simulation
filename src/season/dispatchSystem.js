@@ -7,6 +7,7 @@ import { getNestedValue, setNestedValueMut } from './growthUtils.js';
 import { getUtilityScore, normVelocity, normPitcherStamina } from '../utils/constants.js';
 import { getVelocityCap, getVelocityCatchupMult } from '../utils/physics.js';
 import { getPitchTypeName } from './campTraining.js';
+import { dampBreakingGain } from './growthSystem.js';
 import { getAvailableUniversityDispatches, getRemainingDispatchSlots } from '../university/universityPipeSystem.js';
 import { getUniversityTeamById, getSpecialtyLabel, SPECIALTY_LABELS, SPECIALTY_RANK_BOOST } from '../university/universityTeamsData.js';
 
@@ -296,7 +297,8 @@ export function resolveDispatchTraining(player) {
         for (const pitch of breakings) {
           const pGrowth = sg('defense', Math.floor(Math.random() * 3) + 1);
           const pBefore = pitch.level;
-          pitch.level = pBefore + pGrowth;
+          // 変化球の天井（磨き上げた球ほど伸びにくい）と上限100は、年の成長・キャンプと同じ決まり
+          pitch.level = Math.min(100, pBefore + dampBreakingGain(pBefore, pGrowth));
           growthReport.push({ statName: `${getPitchTypeName(pitch.type)}`, before: pBefore, after: pitch.level, growth: pitch.level - pBefore });
         }
       }
@@ -434,7 +436,7 @@ export function resolveDispatchTraining(player) {
       arsenal.filter(p => p.type !== 'straight').forEach(pitch => {
         const pGrowth = applyGrowthMult(Math.floor(Math.random() * 5) + 3);
         const pBefore = pitch.level;
-        pitch.level = pBefore + pGrowth;
+        pitch.level = Math.min(100, pBefore + dampBreakingGain(pBefore, pGrowth));
         growthReport.push({ statName: `${getPitchTypeName(pitch.type)}`, before: pBefore, after: pitch.level, growth: pitch.level - pBefore });
       });
 

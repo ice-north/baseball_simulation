@@ -241,4 +241,36 @@ class LogicTest {
         }
         assertEquals(cases.size, n)
     }
+
+    /** CPU球団が受け取る選手の値段（Web 版 `givingTradeValues`・`playingTimeShares`）。組み合わせは expect-logic.mjs と同じ */
+    @Test
+    fun givingTradeValuesMatchWeb() {
+        val players = roster.mapIndexed { i, e -> OnlineJson.decodeFromJsonElement(Player.serializer(), e).copy(tradeValue = 40.0 + 3 * i) }
+        val theirs = players.filterIndexed { i, _ -> i % 2 == 0 }
+        val mine = players.filterIndexed { i, _ -> i % 2 == 1 }
+        val fielders = mine.filter { !it.isPitcher }
+        val pitchers = mine.filter { it.isPitcher }
+        val gives = listOf(
+            emptyList(), fielders.take(1), pitchers.take(1), fielders.drop(1).take(2), pitchers.drop(1).take(2),
+            mine.filter { it.position == "catcher" }, mine.takeLast(3), fielders, mine,
+        )
+        val gets = listOf(emptySet(), setOf(theirs[0].id), theirs.drop(1).take(2).map { it.id }.toSet())
+        val cases = expected.at("giving").list()
+        var n = 0
+        for (give in gives) for (get in gets) {
+            val want = cases[n++]
+            val label = "give=${give.map { it.id }} get=$get"
+            assertEquals(want.at("give").list().map { it.long() }, give.map { it.id }, label)
+            val after = theirs.filter { it.id !in get }
+            val shares = playingTimeShares(after, give)
+            val values = givingTradeValues(after, give)
+            val wantShares = want.at("shares").list().map { it.num()!! }
+            val wantValues = want.at("values").list().map { it.num()!! }
+            assertEquals(wantShares.size, shares.size, label)
+            assertEquals(wantValues.size, values.size, label)
+            wantShares.forEachIndexed { i, w -> assertEquals(w, shares[i], 1e-9, "$label share[$i]") }
+            wantValues.forEachIndexed { i, w -> assertEquals(w, values[i]!!, 1e-9, "$label value[$i]") }
+        }
+        assertEquals(cases.size, n)
+    }
 }

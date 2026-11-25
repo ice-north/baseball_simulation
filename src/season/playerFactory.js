@@ -295,16 +295,14 @@ export function createCandidatePlayer(options) {
  */
 function generateAbilities(isPitcher, position, isSpecialist, specialistType, pitchingForm, age = 20, isTwoWay = false, playerTraits = []) {
   // フォームによる球速・制球の調整
-  // サイドスロー・アンダースローは球速-10、制球+15
+  // サイドスロー・アンダースローは制球+15（球速は下げていない。球速は肩の強さから決める＝velocityFromArm）
   const isSideOrUnder = pitchingForm === 'sidearm' || pitchingForm === 'submarine';
-  const velocityAdjust = isSideOrUnder ? -10 : 0;
   const controlAdjust = isSideOrUnder ? 15 : 0;
 
   // 年齢補正: 18歳を基準に、年齢が上がるほど即戦力（大卒・社会人の実力差を反映）
   // 線形+小さな二次項（18歳=0, 22歳=6, 25歳=10でキャップ）
   const ageBonus = Math.min(10, Math.max(0, Math.round((age - 18) * 1.2 + (age - 18) * (age - 18) * 0.08)));
   const battingAgeBonus = Math.floor(ageBonus * 0.5);
-  const velocityAgeBonus = Math.floor(ageBonus * 0.2);
 
   // バラつき付きランダム生成（能力値用、10-99制限）
   const randRangeWithVariance = (min, max, bonus = ageBonus) => {
@@ -312,20 +310,6 @@ function generateAbilities(isPitcher, position, isSpecialist, specialistType, pi
     const adjustedMin = Math.max(10, Math.min(min + bonus, max));
     const base = Math.floor(Math.random() * (max - adjustedMin + 1)) + adjustedMin;
     return Math.max(1, Math.min(99, base + variance));
-  };
-
-  // 球速用ランダム生成（120-160km/h範囲、正規分布風のバラつき）
-  const randVelocity = (min, max, bonus = 0) => {
-    // 2つの乱数の平均で中央に寄りやすく（でも例外的な高速投手も出る）
-    const r1 = Math.random();
-    const r2 = Math.random();
-    const normalRand = (r1 + r2) / 2; // 0-1の範囲で中央寄り
-    // 5%の確率で例外的な才能（より高い値）
-    const exceptional = Math.random() < 0.05 ? Math.floor(Math.random() * 4) + 2 : 0;
-    const base = Math.floor(normalRand * (max - min + 1)) + min + bonus + exceptional;
-    // バラつきを追加
-    const variance = Math.floor(Math.random() * 7) - 3; // -3 ~ +3
-    return Math.max(min, Math.min(160, base + variance));
   };
 
   // スタミナ用ランダム生成（40-150範囲、2/3に調整済み）

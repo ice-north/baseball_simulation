@@ -9,6 +9,9 @@
 //   ② CPU の采配（managedTactics.js → cpuTactics.js）: 球数の上限を越えた先発を代える／
 //      人が采配する球団（おまかせを切った自分の球団）は代えない／交代は1打席に1回だけ
 //   ③ スタミナは投手ごとに持つ（以前は両球団で1つを使い回していた）
+//   ④ 捕手の代打を本職の捕手に戻したとき、代打に「守っていない」印（_neverFielded）が画面の state へ戻る
+//   ⑤ 回の途中に入った救援は、この回の失点を自分の失点で数える（CPU の継投・人の継投とも）
+//   ⑥ 人の継投でも救援に登板疲労（+50・上限150）が付く（CPU の継投と同じ）
 //
 // 使い方: node tools/sim-harness/managed-game-check.mjs
 // ============================================================
@@ -20,8 +23,9 @@ import { simulatePitch, pitchArsenalOf, fieldDefenseOf } from '../../src/game/pi
 import { createSequence } from '../../src/game/pitchSequence.js';
 import { withSeededRandom } from '../../src/game/rng.js';
 import {
-  createManagedTacticsMemory, runManagedTactics, noteAtBatEnd, staminaOf, setStamina, startStaminaOf,
+  createManagedTacticsMemory, runManagedTactics, noteAtBatEnd, noteHalfInningEnd, staminaOf, setStamina, startStaminaOf,
 } from '../../src/game/managedTactics.js';
+import { isPitcherPlayer } from '../../src/utils/constants.js';
 
 const names = buildLeague(4, 28, 1);
 const [homeName, awayName] = names;
@@ -132,4 +136,81 @@ const tirePitcher = (team) => {
   assert.equal(staminaOf(memory, ap), startStaminaOf(ap), 'ホームの投手が投げたら相手の投手のスタミナまで減った');
 }
 
-console.log('■ 采配の試合: OK（1球の計算は人の指示を受ける / CPU の継投は自動の試合と同じ決まりで、人の球団は代えない / スタミナは投手ごと）');
+// 画面と同じく、updates を state に重ねる
+const applyUpdates = (team, map) => ({
+  ...team, players: team.players.map(p => (map.has(p.id) ? { ...p, ...map.get(p.id) } : p)),
+});
+
+// ---- ④ 捕手の代打を本職の捕手に戻す ----
+{
+  let home = managedTeam(homeName);
+  const away = managedTeam(awayName);
+  const memory = createManagedTacticsMemory();
+  // 名簿は毎回くじで作るので、控えに捕手が居なければ控えの野手を1人捕手の登録にする
+  const isCatcher = (p) => p.position === 'catcher' || p.originalPosition === 'catcher';
+  const benchFielders = () => home.players.filter(p => !p.isStarter && !isPitcherPlayer(p));
+  if (!benchFielders().some(isCatcher)) {
+    const c = benchFielders()[0];
+    if (c) { c.position = 'catcher'; c.originalPosition = 'catcher'; }
+  }
+  // 最初の呼び出しで登録の捕手・先発の捕手を覚える（ここでは誰も代えない）
+  runManagedTactics({ memory, ...situation(home, away), controls: { home: false, away: false } });
+  const catcher = home.players.find(p => p.isStarter && p.position === 'catcher');
+  const benchCatcher = home.players.find(p => !p.isStarter && memory.registeredCatchers.has(p.id) && !isPitcherPlayer(p));
+  const ph = home.players.find(p => !p.isStarter && !memory.registeredCatchers.has(p.id) && !isPitcherPlayer(p));
+  assert.ok(catcher && benchCatcher && ph, '捕手の代打の場面を作れない（控えの捕手か控えの野手が居ない）');
+  // 捕手に代打（代打がそのまま捕手の守備位置に入った形）
+  home = {
+    ...home,
+    players: home.players.map(p => (p.id === catcher.id ? { ...p, isStarter: false, hasSubbedOut: true }
+      : p.id === ph.id ? { ...p, isStarter: true, battingOrder: catcher.battingOrder, position: 'catcher' } : p)),
+  };
+  noteHalfInningEnd(memory);
+  const r = runManagedTactics({ memory, ...situation(home, away), isTopInning: false, controls: { home: true, away: true } });
+  const up = r.updates.home;
+  assert.equal(up.get(benchCatcher.id)?.battingOrder, catcher.battingOrder, '控えの捕手が捕手の打順に入っていない');
+  assert.equal(up.get(ph.id)?._neverFielded, true, '退いた捕手の代打に「守っていない」印が戻らない（捕手の守備経験に数えてしまう）');
+  console.log('  ④ 捕手の代打を本職の捕手に戻し、代打は守備経験に数えない');
+}
+
+// ---- ⑤⑥ 回の途中に入った救援の失点の基準・人の継投の登板疲労 ----
+{
+  // CPU の継投: 回の頭の失点が前の投手の3点のままだと、救援が失点しても差が0以下になる
+  const home = managedTeam(homeName), away = managedTeam(awayName);
+  tirePitcher(home).stats.pitching.runsAllowed = 3;
+  const memory = createManagedTacticsMemory();
+  memory.inningStartRuns.home = 3;
+  const r = runManagedTactics({ memory, ...situation(home, away), controls: { home: true, away: true } });
+  assert.ok(r.changed, '球数の上限を越えた CPU の先発を代えない');
+  assert.equal(memory.inningStartRuns.home, 0, `CPU の救援のこの回の失点の基準が前の投手のまま（${memory.inningStartRuns.home}）`);
+}
+{
+  // 人の継投
+  let home = managedTeam(homeName);
+  const away = managedTeam(awayName);
+  const memory = createManagedTacticsMemory();
+  const controls = { home: false, away: false };
+  const starter = home.players.find(p => p.isStarter && p.position === 'pitcher');
+  starter.stats = { pitching: { outs: 10, pitches: 60, runsAllowed: 2 } };
+  runManagedTactics({ memory, ...situation(home, away), controls });
+  memory.inningStartRuns.home = 2;
+  const rotation = TEAMS_DATA[homeName].pitchingRotation;
+  const reliever = home.players.find(p => !p.isStarter && isPitcherPlayer(p));
+  const savedFatigue = rotation.reliefFatigue[reliever.id];
+  rotation.reliefFatigue[reliever.id] = 120;
+  home = {
+    ...home,
+    players: home.players.map(p => (p.id === starter.id ? { ...p, isStarter: false, hasSubbedOut: true }
+      : p.id === reliever.id ? { ...p, isStarter: true, position: 'pitcher', battingOrder: starter.battingOrder } : p)),
+  };
+  runManagedTactics({ memory, ...situation(home, away), controls });
+  assert.equal(memory.inningStartRuns.home, 0, '人の継投の救援のこの回の失点の基準が前の投手のまま');
+  assert.equal(rotation.reliefFatigue[reliever.id], 150, `人の継投で登板疲労が付かない／上限150を越えた（${rotation.reliefFatigue[reliever.id]}）`);
+  // 同じ投手のまま呼び直しても、もう足さない
+  runManagedTactics({ memory, ...situation(home, away), controls });
+  assert.equal(rotation.reliefFatigue[reliever.id], 150);
+  rotation.reliefFatigue[reliever.id] = savedFatigue;
+  console.log('  ⑤⑥ 回の途中の救援はこの回の失点を自分の失点で数え、人の継投でも登板疲労が付く');
+}
+
+console.log('■ 采配の試合: OK（1球の計算は人の指示を受ける / CPU の継投は自動の試合と同じ決まりで、人の球団は代えない / スタミナは投手ごと / 捕手の代打の印 / 救援の失点の基準と登板疲労）');

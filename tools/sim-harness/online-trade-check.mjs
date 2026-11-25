@@ -25,6 +25,7 @@ import {
   loadLeagueWorld,
   submitPhase,
   tradeValueOf,
+  cpuDecisionFor,
 } from '../../server/leagueEngine.mjs';
 import {
   createTradeJudge,
@@ -49,6 +50,8 @@ import {
   STRENGTH_GAP_LIMIT,
   playingTimeShare,
   playingTimeFactor,
+  playingTimeShares,
+  givingTradeValues,
   PLAYING_TIME_BONUS,
 } from '../../src/online/tradeSearch.js';
 
@@ -728,17 +731,14 @@ try {
     const refreshJudge = async () => {
       judge = judgeFor(await live());
     };
-    // こちらが出す選手の値段（相手の事情は掛からない）。
-    // ⚠ **相手の球団で出番があるかを乗せる**（いしだ 2026-11-24。`playingTimeFactor`）。
-    //    乗せないと逆提案の予算がサーバーと食い違い、「払える範囲を超えた」と誤検出する
-    // ⚠ `asked` を渡すと、その選手を抜いた名簿で出番を測る（サーバーと同じ土台）
-    const value = (p, roster = null, asked = null) =>
-      judge.valueOf(p) *
-      factor(p) *
-      playingTimeFactor(
-        roster ? roster.filter((q) => !asked || q.id !== asked.id) : [],
-        p,
-      );
+    // こちらが出す選手の値段（相手の事情は掛からない。並べるときだけに使う）
+    const value = (p) => judge.valueOf(p) * factor(p);
+    // ⚠ CPUの判断は**サーバーの関数そのもの**で見る（`cpuDecisionFor`）。値段の式（出番の上乗せ・
+    //    まとめて抜けた穴）を写すと、評価式を変えたときに検査がサーバーと食い違う
+    const decide = (l, give, want) => {
+      loadLeagueWorld(l);
+      return cpuDecisionFor(l, TEAMS_DATA[teamA], cpu, give, want, judge);
+    };
     // CPUが出す選手の値段（その球団の事情こみ）
     const ownValue = (p) => judge.valueOf(p, cpu) * factor(p);
     const kindOf = (p) => rosterGroup(p.position);
@@ -818,14 +818,8 @@ try {
       for (const give of mine) {
         for (const ask of theirs) {
           if (kindOf(give) !== kindOf(ask)) continue;
-          if (value(give, theirs, ask) >= ownValue(ask) * CPU_ACCEPT_MARGIN) continue;
-          const affordable = theirs.some(
-            (p) =>
-              p.id !== ask.id &&
-              kindOf(p) === kindOf(ask) &&
-              ownValue(p) <= value(give, theirs, ask) / CPU_ACCEPT_MARGIN,
-          );
-          if (affordable) {
+          const d = decide(l, [give.id], [ask.id]);
+          if (d.action === 'counter') {
             pair = { give, ask };
             break;
           }
@@ -851,9 +845,13 @@ try {
       const chosen = theirs.find((p) => p.id === countered.want[0]);
       assert.ok(chosen, '逆提案の選手が名簿にいない');
       assert.equal(kindOf(chosen), kindOf(pair.ask), '守備の括りが変わった');
-      assert.ok(
-        ownValue(chosen) <= value(pair.give, theirs, pair.ask) / CPU_ACCEPT_MARGIN,
-        `払える範囲を超えた選手を出した（${ownValue(chosen)} > ${value(pair.give, theirs, pair.ask) / CPU_ACCEPT_MARGIN}）`,
+      // ⚠ **逆提案は、受けるときの測り直しで通る形だけ**（監査 2026-11-24）。出番の上乗せは
+      //    出ていく選手を抜いた名簿で測るので、顔ぶれを替えると値段が変わる。頼まれた顔ぶれの
+      //    値段で組むと、受けた途端に「もう応じません」になった
+      assert.equal(
+        decide(l, [pair.give.id], countered.want).action,
+        'accept',
+        'CPUが自分で出した逆提案を、受けるときの判断で断る',
       );
       // ⚠ CPUの逆提案に**こちらは逆提案で返せない**（投げ返しが続くと終わらない）
       await assert.rejects(
@@ -1340,6 +1338,67 @@ try {
   assert.ok(PLAYING_TIME_BONUS > 0, '活躍の場の上乗せが切れている');
   assert.ok(playingTimeShare([], star) > 0.9, '空の名簿で一番にならない');
   assert.equal(playingTimeShare(weak, { id: 0, name: '守れない' }), 0, '守れない選手に上乗せが付く');
+
+  // ⚠ **同じ持ち場に何人か出しても、上乗せは本当の上積みぶんだけ**（監査 2026-11-24）。
+  //    1人ずつ元の名簿と比べると、2人とも「一番になれる」と数えて二重に付いた
+  {
+    const a = mk(201, 80);
+    const b = mk(202, 80);
+    const shares = playingTimeShares(weak, [a, b]);
+    const credited = shares[0] * bestSlot(a).strength + shares[1] * bestSlot(b).strength;
+    const real = squadStrength([...weak, a, b]) - squadStrength(weak);
+    assert.ok(
+      Math.abs(credited - real) < 1e-6,
+      `同じ持ち場の2人に上乗せが二重に付く（上乗せの元 ${credited} / 本当の上積み ${real}）`,
+    );
+    // 1人だけなら今までと同じ
+    assert.equal(playingTimeShares(weak, [a])[0], playingTimeShare(weak, a), '1人のときの度合いが変わった');
+    // 渡す並びで答えが変わらない（画面とサーバーで並びが違ってもよい）
+    assert.deepEqual(
+      playingTimeShares(weak, [b, a]).reverse(),
+      playingTimeShares(weak, [a, b]),
+      '渡す並びで出番の度合いが変わる',
+    );
+    const values = givingTradeValues(weak, [a, b], () => 100);
+    assert.ok(
+      values.reduce((x, y) => x + y, 0) < 200 * (1 + PLAYING_TIME_BONUS) - 1,
+      `2人とも満額近い上乗せになる（${values}）`,
+    );
+  }
+
+  // ⚠ **CPUが出した逆提案は、受けるときの測り直しでも通る**（監査 2026-11-24）。
+  //    出番の上乗せは「CPUが出す選手を抜いた名簿」で測るので、頼まれた選手（遊撃の主力）を
+  //    抜いた名簿で組んだ予算のまま安い控えを返すと、受けたときには主力が残っていて
+  //    上乗せが消え、CPU自身が断っていた
+  {
+    const F = (id, pos, v) => ({
+      id, position: pos, isActive: true,
+      batting: { meet: v, power: v, eye: v }, physical: { speed: v, arm: v }, fielding: { defense: v },
+      positionFitness: { [pos === 'shortstop' ? 'short' : pos]: 100 }, subPositions: [],
+    });
+    let n = 300;
+    const cpuRoster = ['catcher', 'catcher', 'first', 'second', 'third', 'left', 'center', 'right'].map((p) => F(n++, p, 60));
+    const Y = F(n++, 'shortstop', 60);
+    const Z = F(n++, 'shortstop', 40);
+    cpuRoster.push(Y, Z);
+    const X = F(n++, 'shortstop', 62);
+    const base = (p) => (p.id === X.id ? 100 : p.id === Y.id ? 140 : p.id === Z.id ? 110 : 50);
+    const decideFor = (want) =>
+      cpuTradeDecision({
+        valueOf: base,
+        giveValuesOf: (players, ids) =>
+          givingTradeValues(cpuRoster.filter((p) => !ids.includes(p.id)), players, base),
+        fromPlayers: [X],
+        toPlayers: cpuRoster,
+        offerIds: [X.id],
+        wantIds: want,
+      });
+    const first = decideFor([Y.id]);
+    if (first.action === 'counter')
+      assert.equal(decideFor(first.want).action, 'accept', 'CPUが自分で出した逆提案を、受けるときに断る');
+    // 頼んだ遊撃の主力では足りず、控えの遊撃を出すと上乗せが消えて足りない＝逆提案にしない
+    assert.equal(first.action, 'reject', `受けない逆提案を返した（${JSON.stringify(first)}）`);
+  }
 }
 
 console.log(

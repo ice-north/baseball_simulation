@@ -243,12 +243,13 @@ export function benchTwoWayStarter(team, { resting = [] } = {}) {
 //   投手登録なら投げる（その日だけローテの今の位置に差し込み、試合の後はローテを進めない）。
 //   確定の後にローテから外して、相手に見えた先発を取り消せないようにするため。
 // ⚠ 指名が無ければ今までとまったく同じ（CPU球団と任せた人の球団は指名を持たない）。
-export function prepareDailyLineup(team, name, { pick = null, report = null, outside = false } = {}) {
+// `label`: 文に出す球団の名前（見せる名前。`teamLabelIn`）。無ければ `name`（内部名）
+export function prepareDailyLineup(team, name, { pick = null, report = null, outside = false, label = name } = {}) {
   const rotation = team.pitchingRotation;
   const starters = rotation?.starters || [];
   requireOnline(
     starters.length > 0,
-    `${name}の先発投手が未登録です`,
+    `${label}の先発投手が未登録です`,
     409,
     'roster',
   );
@@ -318,7 +319,7 @@ export function prepareDailyLineup(team, name, { pick = null, report = null, out
       const substitute = pitchers
         .filter((p) => p.position === 'pitcher')
         .sort((a, b) => (a.fatigue || 0) - (b.fatigue || 0))[0];
-      requireOnline(substitute, `${name}の投手が不足しています`, 409, 'roster');
+      requireOnline(substitute, `${label}の投手が不足しています`, 409, 'roster');
       const original = [...starters];
       rotation.starters[index] = substitute.id;
       restore = () => {
@@ -332,7 +333,7 @@ export function prepareDailyLineup(team, name, { pick = null, report = null, out
   const restoreTwoWay = benchTwoWayStarter(team, { resting: restoreFielders.resting });
   requireOnline(
     ensureCompleteLineup(team, false),
-    `${name}の編成を補完できません`,
+    `${label}の編成を補完できません`,
     409,
     'roster',
   );
