@@ -1,8 +1,7 @@
-import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { POS, POS_FULL } from './api.js';
 import { turnLabel, CONVERT_POSITIONS } from './shared.js';
 import { useActions } from './ActionContext.jsx';
-import { PageNav } from './PageNav.jsx';
 import PlayerDetailBody, { PlayerTags } from './PlayerDetailBody.jsx';
 import { useRead } from './useRead.js';
 import { inOnlineRoot } from './dialogPortal.js';
@@ -805,7 +804,6 @@ export function CompactRoster({
   league,
 }) {
   const look = useLook();
-  const [page, setPage] = useState(0);
   const [category, setCategory] = useState('batting');
   const [groupId, setGroupId] = useState(desktop ? 'overview' : 'basic');
   const [sort, setSort] = useState(null);
@@ -846,14 +844,12 @@ export function CompactRoster({
     setCategory(next);
     setGroupId(desktop ? 'overview' : 'basic');
     setSort(null);
-    setPage(0);
   };
   // ⚠ PCは**区分を変えても並びを保つ**。「今の表のメンバーのまま成績と能力を
   //    切り替えたい」という指摘。並べ替えた列が次の区分に無くても、並びは残す
   const chooseGroup = (next) => {
     setGroupId(next);
     if (!desktop) setSort(null);
-    setPage(0);
   };
   // ⚠ 同じ列かは**id で比べる**（`sameColumn`）。PCは区分を変えても並びを残すが、
   //    本塁打・試合数などは区分ごとに別の列として定義されているため、
@@ -870,7 +866,6 @@ export function CompactRoster({
             ? 'asc'
             : column.direction,
     }));
-    setPage(0);
   };
   const sameColumn = (a, b) =>
     a === b || (a && b && a !== 'name' && b !== 'name' && a.id === b.id);
@@ -895,30 +890,10 @@ export function CompactRoster({
       )}
     </button>
   );
-  const [size, setSize] = useState(8);
-  const rows = useRef(null);
-  const previousSize = useRef(8);
-  useLayoutEffect(() => {
-    if (desktop) return;
-    const measure = () => {
-      if (!rows.current) return;
-      const next = Math.max(1, Math.floor(rows.current.clientHeight / 44));
-      const old = previousSize.current;
-      if (next === old) return;
-      previousSize.current = next;
-      setPage((p) => Math.floor((p * old) / next));
-      setSize(next);
-    };
-    measure();
-    const observer = new window.ResizeObserver(measure);
-    observer.observe(rows.current);
-    return () => observer.disconnect();
-  }, [desktop]);
-  // ⚠ PCは**ページ送りをしない**（全員を1枚に）。24〜30人なら1画面で見渡せ、
-  //    送るたびに見出しの位置を探し直すほうが手間だった
-  const shown = desktop
-    ? order
-    : order.slice(page * size, page * size + size);
+  // ⚠ **ページ送りをしない**（全員を1枚に）。PCは24〜30人なら1画面で見渡せ、送るたびに
+  //    見出しの位置を探し直すほうが手間だった。スマホも 2026-11-25（M1）から全員を出し、
+  //    表の中を縦に送る（以前は画面の高さで人数を決めて6人ほどで「1/4」と区切っていた）
+  const shown = order;
   const sortedBy =
     active && (active.column === 'name' ? '選手名' : active.column.label);
   // 新しい見た目（試作）: 成績の札（リーグ平均比。⚠ 通算・過去の年は平均が違うので今季だけ）・
@@ -987,7 +962,7 @@ export function CompactRoster({
           )}
         </div>
       </div>
-      <div className="online-roster-rows" ref={rows}>
+      <div className="online-roster-rows">
         {/* ⚠ **空のまま出さない**。捕手の区分は受けた選手と捕手だけに絞るので
             （`isCatchingGroup`）、まだ誰も受けていない時期は一覧が空になる。
             何も出さないと「読み込めていないのか、記録が無いのか」が分からない */}
@@ -1075,14 +1050,6 @@ export function CompactRoster({
         <Approximation
           columns={group.columns}
           precise={view.roster.every((p) => p.seasonStats?.batting?.measured)}
-        />
-      )}
-      {!desktop && (
-        <PageNav
-          page={page}
-          count={order.length}
-          size={size}
-          setPage={setPage}
         />
       )}
     </section>

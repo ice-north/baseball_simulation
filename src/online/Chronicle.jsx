@@ -559,35 +559,63 @@ export default function Chronicle({ view }) {
             )}
             {/* ⚠ 欄はどれも折りたたむ（`Fold`）。2列に分けると、開いた欄の横に大きな空きが
                 できるので1列に並べる */}
-            <Fold id="seasons" title="年表" count={c.seasons?.length || 0}>
-              <Seasons seasons={c.seasons} />
-            </Fold>
-            <Fold id="records" title="歴代記録（各項目10位まで）">
-              <Records records={c.records} view={view} team={shown.teamName} />
-            </Fold>
-            <Fold id="face" title="球団の顔">
-              <TeamFace
-                face={c.face}
-                own={shown.teamName === view.teamName}
-                roster={shown.teamName === view.teamName ? view.roster || [] : []}
-                ties={view.ties}
-              />
-            </Fold>
-            <Fold id="milestones" title="節目の記録" count={c.milestones?.length || 0}>
-              <Milestones list={c.milestones} />
-            </Fold>
-            <Fold id="moves" title="入退団履歴" count={c.moves?.length || 0}>
-              <Moves key={shown.teamName} list={c.moves} />
-            </Fold>
-            <Fold id="proDrafted" title="プロ入りした選手" count={c.proDrafted?.length || 0}>
-              <ProDrafted
-                list={c.proDrafted}
-                empty="この球団からプロ入りした選手はまだいません。指名されるとチームメイトのプロ意識と経験が上がります。"
-              />
-            </Fold>
-            <Fold id="retired" title="引退した選手" count={c.retired?.length || 0}>
-              <Retired list={c.retired} />
-            </Fold>
+            {(() => {
+              // ⚠ **0件の欄は1行にまとめる**（P6 2026-11-25）。1年目は年表・節目の記録・入退団履歴が
+              //    「0件」の畳みのまま並び、開いても何も無かった。件数のある欄だけ畳みで出す
+              const counted = [
+                ['seasons', '年表', c.seasons, <Seasons key="s" seasons={c.seasons} />],
+                ['milestones', '節目の記録', c.milestones, <Milestones key="m" list={c.milestones} />],
+                ['moves', '入退団履歴', c.moves, <Moves key={shown.teamName} list={c.moves} />],
+                [
+                  'proDrafted',
+                  'プロ入りした選手',
+                  c.proDrafted,
+                  <ProDrafted
+                    key="p"
+                    list={c.proDrafted}
+                    empty="この球団からプロ入りした選手はまだいません。指名されるとチームメイトのプロ意識と経験が上がります。"
+                  />,
+                ],
+                ['retired', '引退した選手', c.retired, <Retired key="r" list={c.retired} />],
+              ];
+              const fold = ([id, title, list, body]) => (
+                <Fold key={id} id={id} title={title} count={list?.length || 0}>
+                  {body}
+                </Fold>
+              );
+              const empty = counted.filter(([, , list]) => !list?.length);
+              return (
+                <>
+                  {counted.slice(0, 1).filter(([, , list]) => list?.length).map(fold)}
+                  <Fold id="records" title="歴代記録（各項目10位まで）">
+                    <Records records={c.records} view={view} team={shown.teamName} />
+                  </Fold>
+                  <Fold id="face" title="球団の顔">
+                    <TeamFace
+                      face={c.face}
+                      own={shown.teamName === view.teamName}
+                      roster={shown.teamName === view.teamName ? view.roster || [] : []}
+                      ties={view.ties}
+                    />
+                  </Fold>
+                  {counted.slice(1).filter(([, , list]) => list?.length).map(fold)}
+                  {empty.length > 0 && (
+                    <section className="online-card online-fold-empty">
+                      <p>
+                        <b>{empty.map(([, title]) => title).join('・')}</b>
+                        <span>
+                          {' '}
+                          はまだ0件です。
+                          {(view.seasonYears || [view.year]).length <= 1 && !c.seasons?.length
+                            ? '1年目が終わると増えます。'
+                            : '記録ができると、ここに欄が出ます。'}
+                        </span>
+                      </p>
+                    </section>
+                  )}
+                </>
+              );
+            })()}
             {/* ⚠ リーグ全体の欄（リーグの話題・オーナー名鑑・年間表彰・リーグからプロへ・今季総括号）は
                 「リーグ史」へ移した（先方要望 2026-11-20 のリーグ史。`LeagueHistory.jsx`） */}
           </Page>

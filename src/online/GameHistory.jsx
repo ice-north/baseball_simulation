@@ -3,7 +3,7 @@ import ReplayViewer from './ReplayViewer.jsx';
 import MobileReplay from './MobileReplay.jsx';
 import { useRead } from './useRead.js';
 import { useMobile } from './useMobile.js';
-import { PageNav } from './PageNav.jsx';
+import { ShowMore } from './PageNav.jsx';
 import { turnLabel } from './shared.js';
 import { formatStat } from './statsView.js';
 import { ownOutcome, teamShort, teamLabel } from './gameText.js';
@@ -153,8 +153,8 @@ function RequestState({ result }) {
     </div>
   ) : null;
 }
-// スマホで1ページに出す人数。⚠ PC はページを分けない（下記）
-const COMPACT_PAGE_SIZE = 6;
+// 過去の試合の一覧に最初に出す数と「続きを表示」で足す数（X1。ページ送りはやめた）
+const HISTORY_STEP = 6;
 /**
  * 記録に載っている項目だけの区分（`knownOnly`）。練習試合の箱は一部の項目しか残さないので、
  * そのまま出すと列の多くが「—」になっていた。どの選手にも無い項目の列を外し、空になった区分も外す
@@ -197,9 +197,10 @@ const appeared = (p, category) =>
 
 export function BoxScore({ game, ownTeam, knownOnly = false }) {
   const groups = knownOnly ? knownGroups(game) : GROUPS;
-  // ⚠ **PC はページを分けず全員を出す**（小窓の中を縦に送る）。以前は12人で区切っていて、
-  //    1試合に出た打者は13〜16人いるので毎回2ページ目ができ、ページ送りは表の下
-  //    （1280×800 では小窓の外）にあって、残りの数人が見えないままになっていた
+  // ⚠ **ページを分けず全員を出す**（小窓の中を縦に送る）。以前は PC 12人・スマホ6人で区切って
+  //    いて、1試合に出た打者は13〜16人いるので毎回2ページ目ができ、ページ送りは表の下
+  //    （1280×800 では小窓の外）にあって、残りの数人が見えないままになっていた。
+  //    スマホも 2026-11-25（M1）から全員を出す
   const [wide, setWide] = useState(
     () => window.matchMedia('(min-width: 768px)').matches,
   );
@@ -207,7 +208,6 @@ export function BoxScore({ game, ownTeam, knownOnly = false }) {
     const media = window.matchMedia('(min-width: 768px)');
     const update = () => {
       setWide(media.matches);
-      setPage(0);
       setGroup(media.matches ? 'overview' : 'basic');
     };
     media.addEventListener('change', update);
@@ -220,7 +220,6 @@ export function BoxScore({ game, ownTeam, knownOnly = false }) {
     [groupId, setGroup] = useState(() =>
       window.matchMedia('(min-width: 768px)').matches ? 'overview' : 'basic',
     ),
-    [page, setPage] = useState(0),
     [sort, setSort] = useState(null);
   const overviewColumns = [
     ...new Map(
@@ -233,7 +232,7 @@ export function BoxScore({ game, ownTeam, knownOnly = false }) {
       : groups[category].find(([id]) => id === groupId) || groups[category][0];
   // ⚠ **タブを変えても枠が動かない**（いしだ 2026-11-20）。出た高さの最大を覚えて床にする。
   //    小窓を開いている間だけの値で、閉じれば消える
-  // ⚠ **PC だけ**（スマホはページ送りで行数が決まっているので当てない。CSS の
+  // ⚠ **PC だけ**（スマホは小窓が縦に送れるので当てない。CSS の
   //    `.online-desktop … .online-record-area` と同じ。2026-11-20 監査: スマホにも当たっていた）
   const areaRef = useRef(null);
   const [floor, setFloor] = useState(0);
@@ -274,7 +273,6 @@ export function BoxScore({ game, ownTeam, knownOnly = false }) {
               aria-pressed={team === name}
               onClick={() => {
                 setTeam(name);
-                setPage(0);
               }}
             >
               <TeamMark team={name} size={16} />
@@ -297,8 +295,7 @@ export function BoxScore({ game, ownTeam, knownOnly = false }) {
                   onClick={() => {
                     setCategory(c);
                     setGroup('overview');
-                    setPage(0);
-                    setSort(null);
+                        setSort(null);
                   }}
                 >
                   {c === 'batting' ? '打撃' : '投球'}
@@ -312,8 +309,7 @@ export function BoxScore({ game, ownTeam, knownOnly = false }) {
                   aria-pressed={group[0] === id}
                   onClick={() => {
                     setGroup(id);
-                    setPage(0);
-                    setSort(null);
+                        setSort(null);
                   }}
                 >
                   {label}
@@ -329,7 +325,6 @@ export function BoxScore({ game, ownTeam, knownOnly = false }) {
               const [c, g] = e.target.value.split(':');
               setCategory(c);
               setGroup(g);
-              setPage(0);
               setSort(null);
             }}
           >
@@ -365,8 +360,7 @@ export function BoxScore({ game, ownTeam, knownOnly = false }) {
                       key,
                       asc: sort?.key === key ? !sort.asc : false,
                     });
-                    setPage(0);
-                  }}
+                      }}
                 >
                   {label}
                   {sort?.key === key ? (sort.asc ? '▲' : '▼') : ''}
@@ -376,10 +370,7 @@ export function BoxScore({ game, ownTeam, knownOnly = false }) {
           </tr>
         </thead>
         <tbody>
-          {(wide
-            ? rows
-            : rows.slice(page * COMPACT_PAGE_SIZE, (page + 1) * COMPACT_PAGE_SIZE)
-          ).map((p) => (
+          {rows.map((p) => (
             <tr key={p.key || p.id}>
               <th title={p.name}>{p.name}</th>
               {group[2].map(([key, , format = 'count']) => (
@@ -394,14 +385,6 @@ export function BoxScore({ game, ownTeam, knownOnly = false }) {
       </table>
       {!rows.length && <p>この区分の出場記録はありません。</p>}
       </div>
-      {!wide && (
-        <PageNav
-          page={page}
-          count={rows.length}
-          size={COMPACT_PAGE_SIZE}
-          setPage={setPage}
-        />
-      )}
       {game.legacy && (
         <small className="online-stat-note">
           記録を取り始める前の試合です。残っていない項目は「—」です。
@@ -683,9 +666,11 @@ export default function GameHistory({ view }) {
 function History({ view, close }) {
   const mobile = useMobile();
   const [year, setYear] = useState(view.year),
-    [page, setPage] = useState(0),
+    [shown, setShown] = useState(HISTORY_STEP),
     [scope, setScope] = useState('own');
-  const result = useRead('games', { year, page, scope });
+    // ⚠ 「続きを表示」は**読む数を増やして読み直す**（`size`。上限はサーバーの GAMES_PAGE_MAX）。
+  //    読み直す間も前の一覧を残す（`keep`）ので、押しても一覧が一度消えない
+  const result = useRead('games', { year, page: 0, size: Math.min(shown, 200), scope }, { keep: true });
   return (
     <Panel title="試合記録" close={close}>
       <div className="online-stat-tools">
@@ -694,7 +679,7 @@ function History({ view, close }) {
           value={year}
           onChange={(e) => {
             setYear(Number(e.target.value));
-            setPage(0);
+            setShown(HISTORY_STEP);
           }}
         >
           {(view.seasonYears || [view.year]).map((n) => (
@@ -715,7 +700,7 @@ function History({ view, close }) {
                 aria-pressed={scope === id}
                 onClick={() => {
                   setScope(id);
-                  setPage(0);
+                  setShown(HISTORY_STEP);
                 }}
               >
                 {label}
@@ -728,7 +713,7 @@ function History({ view, close }) {
             value={scope}
             onChange={(e) => {
               setScope(e.target.value);
-              setPage(0);
+              setShown(HISTORY_STEP);
             }}
           >
             <option value="own">自球団</option>
@@ -775,11 +760,11 @@ function History({ view, close }) {
             })}
           </div>
           {!result.data.count && <p>この年度の試合記録はありません。</p>}
-          <PageNav
-            page={page}
-            count={result.data.count}
-            size={result.data.size}
-            setPage={setPage}
+          <ShowMore
+            shown={Math.min(shown, 200, result.data.games.length)}
+            count={Math.min(result.data.count, 200)}
+            step={HISTORY_STEP}
+            setShown={setShown}
           />
         </>
       )}

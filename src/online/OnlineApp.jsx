@@ -631,6 +631,29 @@ export default function OnlineApp() {
   // ⚠ 更新の取り込み待ちの画面ではヘッダー（ログアウト）を隠さない。
   //    スマホではここに戻る手段が他に無く、ログアウトできなくなっていた
   const compactMobile = mobile && view && !view.setupRequired && !view.versionMismatch;
+  // ⚠ **PCのいつもの画面（左メニューのある画面）では見出しの帯を出さない**（P5 2026-11-25）。
+  //    帯（約85px）にあったのは見た目の切り替え・一人用・ログアウトだけで、どの表も2行ぶん
+  //    下へ押されていた。3つは左メニューの下（`DesktopView` の `accountTools`）へ移した。
+  //    ログイン・参加・更新の取り込み・リーグの準備の画面は左メニューが無いので、帯を残す
+  const desktopShell =
+    !mobile &&
+    !!config &&
+    !!auth &&
+    !!view &&
+    !view.joinRequired &&
+    !view.versionMismatch &&
+    !view.setupRequired;
+  const accountLinks = (
+    <>
+      <LookToggle />
+      <a href="/">一人用</a>
+      {auth && (
+        <button onClick={logout} disabled={busy}>
+          ログアウト
+        </button>
+      )}
+    </>
+  );
   return (
     <LookContext.Provider value={look}>
     <div
@@ -638,7 +661,7 @@ export default function OnlineApp() {
       className={`online ${mobile ? 'online-mobile' : 'online-desktop'} ${compactMobile ? 'online-compact-shell' : ''}${lookOn ? ' online-look' : ''}`}
       style={lookOn ? teamColorVars(view?.teamName) : undefined}
     >
-      {!compactMobile && (
+      {!compactMobile && !desktopShell && (
         <header className="online-header">
           <a href="/online" className="online-brand">
             NEXT STAGE <span>オンラインペナント</span>
@@ -655,13 +678,7 @@ export default function OnlineApp() {
             {config?.local && !mobile && (
               <small className="online-dev">ローカル検証モード（公開環境では無効）</small>
             )}
-            <LookToggle />
-            <a href="/">一人用</a>
-            {auth && (
-              <button onClick={logout} disabled={busy}>
-                ログアウト
-              </button>
-            )}
+            {accountLinks}
           </nav>
         </header>
       )}
@@ -843,6 +860,25 @@ export default function OnlineApp() {
                     command={command}
                     away={away}
                     dismissAway={dismissAway}
+                    accountTools={
+                      <>
+                        <TestControls
+                          view={view}
+                          allowStep={config?.allowStep}
+                          busy={busy}
+                          run={run}
+                          command={command}
+                        />
+                        <div className="online-nav-account-links">{accountLinks}</div>
+                        {/* ⚠ 検証モードの注記は左メニューに入れない（1280×800 でも最後の項目まで
+                            入れるため）。画面の右下に小さく浮かせる */}
+                        {config.local && (
+                          <small className="online-dev online-dev-badge">
+                            ローカル検証モード（公開環境では無効）
+                          </small>
+                        )}
+                      </>
+                    }
                   />
                 )}
               </Drafts>
