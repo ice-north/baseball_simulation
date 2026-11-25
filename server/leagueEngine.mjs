@@ -73,7 +73,7 @@ import { reliefOrderOf, isPitcher, isStaffableFielder } from '../src/online/pitc
 import { setRecommendedLineup, withFielderGameFatigue } from '../src/game/autoSimulation.js';
 import { ensureCompleteLineup } from '../src/game/lineup.js';
 import { prepareDailyLineup, benchTwoWayStarter } from './dailyLineup.mjs';
-import { initializeAllPlayersCondition } from '../src/game/condition.js';
+import { initializeAllPlayersCondition, CONDITION_LEVELS } from '../src/game/condition.js';
 import { simulateScheduledGamesOnDate } from '../src/game/daySimulation.js';
 import { hashSeed, withSeededRandom } from '../src/game/rng.js';
 import {
@@ -1702,6 +1702,33 @@ function releasePlayers(teamName, ids, year) {
  *    おすすめに戻っていた（手続き中も編成画面は開けて保存できる）。
  *    ローテの投手が名簿から消えた・打順が埋まらないときだけ作り直す。
  */
+
+/**
+ * 保存する打順を組む（`setRecommendedLineup`）。**組む間だけ疲労と調子を平らにする**。
+ * ⚠ 保存した打順は次に組み直すまで毎試合使う。CPU球団は名簿が変わった日（CPU同士のトレード・
+ *    プロ指名など）に組み直すので、その日の疲れ・調子で選ぶと、疲れていたレギュラーが外れて
+ *    控えの打順のまま何十試合も固まっていた（2026-11-25 の計測で、実際の打順の持ち場の力が
+ *    名簿の最良より平均で約20点、ひどい球団で約90点低かった。人の球団の2年目 .534 の一因）。
+ * ⚠ その日の疲れは**毎日の休養**（`restTiredFielders`）がその日だけ控えと入れ替える。
+ *    保存する打順は「疲れていないときの一番の組」にしておく。
+ */
+function recommendedLineupForSave(team, name) {
+  const saved = team.players.map((p) => [p, p.fatigue, p.condition]);
+  for (const p of team.players) {
+    p.fatigue = 0;
+    p.condition = CONDITION_LEVELS.NORMAL;
+  }
+  try {
+    return setRecommendedLineup(team, name);
+  } finally {
+    for (const [p, fatigue, condition] of saved) {
+      if (fatigue === undefined) delete p.fatigue;
+      else p.fatigue = fatigue;
+      if (condition === undefined) delete p.condition;
+      else p.condition = condition;
+    }
+  }
+}
 function refreshTeamPlan(league, name, { force = false } = {}) {
   const team = TEAMS_DATA[name];
   // 名簿に居なくなった投手（トレード・退団）の予告先発を消す
@@ -1724,7 +1751,7 @@ function refreshTeamPlan(league, name, { force = false } = {}) {
     }
     if (!ownLineup) {
       const registered = new Map(team.players.map((p) => [p.id, p.position]));
-      setRecommendedLineup(team, name);
+      recommendedLineupForSave(team, name);
       for (const player of team.players)
         if (registered.has(player.id)) player.position = registered.get(player.id);
     }
@@ -1759,7 +1786,7 @@ function refreshTeamPlan(league, name, { force = false } = {}) {
   //    ローテに残る・一塁手が三塁手に変わる、が黙って起きていた。守備位置は
   //    打順の側（`lineupSettings`）にあるので、登録は元に戻してよい
   const registered = new Map(team.players.map((p) => [p.id, p.position]));
-  setRecommendedLineup(team, name);
+  recommendedLineupForSave(team, name);
   for (const player of team.players)
     if (registered.has(player.id)) player.position = registered.get(player.id);
 }

@@ -46,6 +46,13 @@ export const TRADE_MIN_FITNESS = SUBSTITUTE_MIN_FITNESS;
 /** ローテの人数・ブルペンの人数 */
 export const ROTATION_SIZE = 5;
 export const BULLPEN_SIZE = 4;
+/**
+ * 球団の力（`squadStrength`）に中継ぎを数える重み。
+ * ⚠ 2026-11-25 の計測で、同じ10点でも 野手の持ち場 +.033・先発 +.013・**中継ぎ +.0015** だった
+ *    （中継ぎは投げる回が少ない）。等しく数えると、中継ぎを集めるトレードで「戦力が上がった」ように
+ *    見えて勝ちに結びつかなかった（トレードの伸びの6割近くが投手）。アプリの `SQUAD_PEN_WEIGHT` と同じ値
+ */
+export const SQUAD_PEN_WEIGHT = 0.25;
 
 /** 守る力を重く見る位置ほど大きい（捕手・遊撃・二塁・中堅） */
 const DEFENSE_WEIGHT = {
@@ -65,11 +72,16 @@ const isActive = (p) => p.isActive !== false;
 const average = (list) =>
   list.length ? list.reduce((a, b) => a + b, 0) / list.length : 0;
 
-/** 打つ力（ミ パ 眼 走） */
+/**
+ * 打つ力（ミ パ 眼 走）。
+ * ⚠ 重みは**試合で効く順**に合わせた（2026-11-25、全球団の2年ぶん768球団・年の計測。
+ *    打順の平均が1上がったときの勝率: ミート +8.6厘・パワー +6.8厘・走力 +3.6厘・選球眼 ほぼ0）。
+ *    以前は 0.35/0.3/0.15/0.2 で、選球眼を重く見すぎていた。アプリの `battingPower`（TradeSearch.kt）と同じ値
+ */
 export const battingPower = (p) =>
-  n(p.batting?.meet) * 0.35 +
-  n(p.batting?.power) * 0.3 +
-  n(p.batting?.eye) * 0.15 +
+  n(p.batting?.meet) * 0.4 +
+  n(p.batting?.power) * 0.35 +
+  n(p.batting?.eye) * 0.05 +
   n(p.physical?.speed) * 0.2;
 
 /**
@@ -85,8 +97,10 @@ export function slotStrength(p, slot) {
     const ctl = n(p.pitching?.control);
     const spin = n(p.pitching?.spinRate);
     const sta = normalizedStamina(p.pitching?.stamina);
+    // ⚠ 先発は制球を重く・スタミナを軽く（2026-11-25 の計測。ローテの平均が1上がったときの勝率:
+    //    制球 +3.3厘・球速 +2.4厘・回転 +0.9厘・スタミナ ほぼ0）。以前は 0.3/0.3/0.15/0.25
     return slot === "sp"
-      ? vel * 0.3 + ctl * 0.3 + spin * 0.15 + sta * 0.25
+      ? vel * 0.3 + ctl * 0.4 + spin * 0.15 + sta * 0.15
       : vel * 0.4 + ctl * 0.35 + spin * 0.2 + sta * 0.05;
   }
   if (isPitcher(p)) return null;
@@ -386,7 +400,7 @@ export const DROP_SCALE = 8;
  *
  * 数えるのは**実際に要る持ち場ぶん**だけ:
  *   野手 … 8つの持ち場の一番手（`fielderAssignment` の割り当て。1人1か所）＋ 2人目の捕手
- *   投手 … 先発 `ROTATION_SIZE` 人 ＋ 中継ぎ `BULLPEN_SIZE` 人
+ *   投手 … 先発 `ROTATION_SIZE` 人 ＋ 中継ぎ `BULLPEN_SIZE` 人（中継ぎは `SQUAD_PEN_WEIGHT` 倍）
  * ⚠ **一番手だけを数えないこと**。先発を1人しか数えないと、2〜5番手の先発が
  *    「抜けても落差0＝余り」になる。
  * ⚠ **捕手は2人**（名簿の最低条件が捕手1人なので、2人目が抜けると次の出場で詰まる）。
@@ -407,7 +421,8 @@ export function squadStrength(players) {
   total += catchers[1] ?? 0;
   const { rotation, pen } = pitchingStaff(roster);
   for (const p of rotation) total += slotStrength(p, "sp") ?? 0;
-  for (const p of pen.slice(0, BULLPEN_SIZE)) total += slotStrength(p, "rp") ?? 0;
+  for (const p of pen.slice(0, BULLPEN_SIZE))
+    total += (slotStrength(p, "rp") ?? 0) * SQUAD_PEN_WEIGHT;
   return total;
 }
 

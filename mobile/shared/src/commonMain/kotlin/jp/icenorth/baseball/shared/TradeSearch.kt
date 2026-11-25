@@ -47,6 +47,8 @@ private const val ROTATION_SIZE = 5
 
 /** 中継ぎを比べるときに数える人数 */
 internal const val BULLPEN_SIZE = 4
+/** 球団の力に中継ぎを数える重み（Web 版 `SQUAD_PEN_WEIGHT` と同じ。中継ぎは勝ちへの効きが小さい） */
+const val SQUAD_PEN_WEIGHT = 0.25
 
 /** 守る力を重く見る位置ほど大きい（捕手・遊撃・二塁・中堅） */
 private val DEFENSE_WEIGHT = mapOf(
@@ -58,7 +60,7 @@ private fun Int?.v(): Double = (this ?: 0).toDouble()
 
 /** 打つ力（ミ パ 眼 走） */
 fun battingPower(p: Player): Double =
-    p.batting?.meet.v() * 0.35 + p.batting?.power.v() * 0.3 + p.batting?.eye.v() * 0.15 + p.physical?.speed.v() * 0.2
+    p.batting?.meet.v() * 0.4 + p.batting?.power.v() * 0.35 + p.batting?.eye.v() * 0.05 + p.physical?.speed.v() * 0.2
 
 /**
  * その持ち場での力（目安）。守れない（適性が線より下・投手の持ち場に野手）なら null。
@@ -72,7 +74,7 @@ fun slotStrength(p: Player, slot: String): Double? {
         val ctl = p.pitching?.control.v()
         val spin = p.pitching?.spinRate.v()
         val sta = normalizedStamina(p.pitching?.stamina?.toDouble())
-        return if (slot == "sp") vel * 0.3 + ctl * 0.3 + spin * 0.15 + sta * 0.25
+        return if (slot == "sp") vel * 0.3 + ctl * 0.4 + spin * 0.15 + sta * 0.15
         else vel * 0.4 + ctl * 0.35 + spin * 0.2 + sta * 0.05
     }
     if (p.isPitcher) return null
@@ -315,7 +317,7 @@ fun squadStrength(roster: List<Player>): Double {
     total += catchers.getOrNull(1) ?: 0.0
     val (rotation, pen) = pitchingStaff(roster)
     total += rotation.sumOf { slotStrength(it, "sp") ?: 0.0 }
-    total += pen.take(BULLPEN_SIZE).sumOf { slotStrength(it, "rp") ?: 0.0 }
+    total += pen.take(BULLPEN_SIZE).sumOf { slotStrength(it, "rp") ?: 0.0 } * SQUAD_PEN_WEIGHT
     return total
 }
 
