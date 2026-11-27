@@ -4409,7 +4409,8 @@ small.online-gain:not(:where(.online-sp *)) {
   border: 1px solid #f59e0b;
   border-left-width: 6px;
   border-radius: 8px;
-  background: rgba(245, 158, 11, 0.14);
+  /* 色は透かさず、カードの青の上に重ねる（下地が明るい灰色なので、透かすと薄い字が読めない。要望 #5） */
+  background: linear-gradient(rgba(245, 158, 11, 0.14), rgba(245, 158, 11, 0.14)), var(--surface-2);
   color: #fde68a;
 }
 .online-procedure-banner > div:not(:where(.online-sp *)) {
@@ -5315,7 +5316,7 @@ small.online-gain:not(:where(.online-sp *)) {
 .online-procedure-banner.is-waiting,
 .online-procedure-banner.is-away {
   border-color: #38bdf8;
-  background: rgba(56, 189, 248, 0.12);
+  background: linear-gradient(rgba(56, 189, 248, 0.12), rgba(56, 189, 248, 0.12)), var(--surface-2);
   color: #bae6fd;
 }
 .online-procedure-banner.is-waiting strong:not(:where(.online-sp *)),
@@ -5328,7 +5329,7 @@ small.online-gain:not(:where(.online-sp *)) {
 /* はじめての1週間（参加してから7日。`SocialPages.jsx` の FirstWeekBanner）。急ぎではない緑 */
 .online-procedure-banner.is-first-week {
   border-color: #34d399;
-  background: rgba(52, 211, 153, 0.12);
+  background: linear-gradient(rgba(52, 211, 153, 0.12), rgba(52, 211, 153, 0.12)), var(--surface-2);
   color: #bbf7d0;
 }
 .online-procedure-banner.is-first-week strong:not(:where(.online-sp *)) {
