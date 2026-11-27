@@ -284,8 +284,11 @@ export function buildTeamPageData(seasonData, userTeamName, getStartingPitcher) 
   const recent = played.slice(-5).map(toGame).reverse();
   const last = recent[0] || null;
   let streak = 0;
+  // ⚠ 連勝・連敗は直近5試合ではなく全部の試合を新しい順にたどって数える（以前は8連勝でも「5連勝」。監査16）
   if (last && last.verdict !== 'draw') {
-    for (const g of recent) { if (g.verdict === last.verdict) streak++; else break; }
+    for (let i = played.length - 1; i >= 0; i--) {
+      if (toGame(played[i]).verdict === last.verdict) streak++; else break;
+    }
   }
 
   // 順位（2リーグ制は自分のリーグの中で数える）

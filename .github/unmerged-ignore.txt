@@ -5,3 +5,7 @@ claude/stats-name-header-left   # 同じ直しが別の形で main に入って�
 claude/online-ui-overhaul       # 作り直しで置き換え済み。いしだ「古い直しはいりません」(2026-11-18)
 claude/roster-stats-panel       # いしだ「古い直しはいりません」(2026-11-18)
 claude/owner-quick-five-audit   # 3コミットとも owner-extra（PR #38）で cherry-pick して main 入り済み。衝突の直しで中身の指紋が変わり「未取り込み」に見える (2026-11-19)
+sim/trade-why                   # 計測だけの枝（long-sim.yml を書き換えてある）。道具は PR #84 で main 入り済み。main に入れない (2026-11-25 監査16)
+sim/trade-why2                  # 計測だけの枝（GAP_LIMIT を env で読む）。main に入れない (2026-11-25 監査16)
+sim/owner-four-before           # 計測だけの枝（前の値で10年）。main に入れない (2026-11-25 監査16)
+probe/long-sim-20261123         # 一時の計測（PR に入れない）(2026-11-25 監査16)

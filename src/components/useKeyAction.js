@@ -10,7 +10,9 @@ import { hasOpenModal } from './useEscapeToClose.js';
 // - 入力欄・選択欄で字を打っている
 // - Ctrl・Alt・⌘ との組み合わせ、押しっぱなしの繰り返し（1日ずつ勝手に進まないように）
 // - Space/Enter を、画面の中のボタンに当てたまま押した（ボタン自身を押す、いつもの動きに任せる）。
-//   ただし左メニュー（nav）のボタンは除く。左メニューで画面を開いたあと、そのまま Space で進められるように
+//   ただし左メニュー（nav）の「いま開いている項目」（aria-current）は除く。左メニューで画面を開いたあと、
+//   そのまま Space で進められるように。⚠ 以前は nav のボタンを全部除いていたので、Tab で別の項目に
+//   合わせて Enter を押すと、その画面は開かず1日進んでいた（監査16）
 const isTyping = (el) => !!el && (el.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName));
 const isControl = (el) => !!el?.closest?.('button, a[href], [role="button"], summary');
 
@@ -24,7 +26,7 @@ export const useKeyAction = (onKey, active = true) => {
       if (hasOpenModal()) return;
       const t = e.target;
       if (isTyping(t)) return;
-      if ((e.key === ' ' || e.key === 'Enter') && isControl(t) && !t.closest('nav')) return;
+      if ((e.key === ' ' || e.key === 'Enter') && isControl(t) && !t.closest?.('nav [aria-current]')) return;
       if (ref.current(e)) e.preventDefault();
     };
     window.addEventListener('keydown', handler);

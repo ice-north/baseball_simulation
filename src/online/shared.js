@@ -641,6 +641,8 @@ export const RETRY_ON_REVISION = ['lineup', 'submit', 'campRound'];
  *    変えた後。6回）。あわせて、それまで実測と食い違っていた体幹の数字も直した
  *    （`balanced:physique`・`patch:physique` は +8 と出していたが実測 +2、
  *     `sharpen:physique` は +8 と出していたが実測 +12。集中練習の変更とは別の、前からのずれ）。
+ *    監査16（2026-11-25 夜）にもう一度測り直した（集中の倍率 2.4・帯を平らにした天井・球速と肩の連動の後。
+ *    肩力は 0.5 未満になって消えた方針がある）。
  *    練習の式を変えたら測り直して書き直すこと。
  * ⚠ 体力・体幹は数字が大きく出るが、試合への効き方は打撃・制球より緩い
  *    （`ABILITY_HELP` の説明どおり）。合計の大きさで方針を選ばせないこと。
@@ -648,18 +650,18 @@ export const RETRY_ON_REVISION = ['lineup', 'submit', 'campRound'];
 export const CAMP_POLICY_GUIDE = {
   'balanced:skill': {
     fielder: '選球眼+2 ミート+2 パワー+1 回復+1',
-    pitcher: 'スタミナ+5 制球+1 回復+1 球速+1',
+    pitcher: 'スタミナ+5 制球+1 回復+1 肩力+1 球速+1',
   },
   'balanced:physique': {
     fielder: '体力+12 体幹+2 盗塁+2 バント+1',
-    pitcher: '体力+12 スタミナ+10 体幹+2 球速+2 肩力+2',
+    pitcher: '体力+12 スタミナ+10 体幹+2 球速+2',
   },
   'sharpen:skill': {
-    fielder: 'ミート+2 守備+2 選球眼+2（いちばん高い能力に集中）',
-    pitcher: '守備+3 制球+2',
+    fielder: 'ミート+2 選球眼+1 守備+1（いちばん高い能力に集中）',
+    pitcher: '制球+2 守備+2',
   },
   'sharpen:physique': {
-    fielder: '体幹+12 パワー+2 肩力+2 盗塁+1',
+    fielder: '体幹+12 パワー+2 肩力+2 盗塁+2',
     pitcher: '体幹+12 肩力+2 球速+2 守備+2 スタミナ+1',
   },
   'patch:skill': {
@@ -668,7 +670,7 @@ export const CAMP_POLICY_GUIDE = {
   },
   'patch:physique': {
     fielder: '体力+12 盗塁+2 体幹+2 バント+1',
-    pitcher: '体力+12 スタミナ+10 体幹+2 球速+1 肩力+1',
+    pitcher: '体力+12 スタミナ+9 体幹+2 球速+1',
   },
 };
 

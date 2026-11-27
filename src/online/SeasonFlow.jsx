@@ -92,18 +92,29 @@ const DECIDE_STEPS = ['contract', 'tryout', 'camp'];
  * ⚠ 時刻は帯と同じ曜日の枠（`SEASON_STEPS` の `when`）で書く。日付を画面で推し量らない
  *    （段階はサーバーが決める。検証モードは時計が違う）
  */
-export function NextProcedure({ view }) {
+// 次に決める手続き（無ければ null）。`NextProcedure` が出るかどうかもこれで決める
+const nextProcedureOf = (view) => {
   const stage = view?.stage;
   const index = SEASON_STEPS.findIndex((s) => s.key === stage?.key);
   if (index < 0) return null;
   // いまの段階が開いている（シーズン中など）なら次の段階から、開く前ならその段階から探す
-  const next = [...SEASON_STEPS.slice(stage.open ? index + 1 : index), ...SEASON_STEPS].find((s) =>
-    DECIDE_STEPS.includes(s.key),
+  return (
+    [...SEASON_STEPS.slice(stage.open ? index + 1 : index), ...SEASON_STEPS].find((s) =>
+      DECIDE_STEPS.includes(s.key),
+    ) || null
   );
+};
+export const nextProcedureShown = (view) => !!nextProcedureOf(view);
+
+export function NextProcedure({ view }) {
+  const stage = view?.stage;
+  const next = nextProcedureOf(view);
   if (!next) return null;
   const turn =
     stage.key === 'season' ? turnOfDate(view.currentDate, view.seasonTurns) : null;
-  const left = turn && view.seasonTurns ? view.seasonTurns - turn : null;
+  // ⚠ `currentDate` は**これから行う**ターン（LeagueBoard の直近の試合も now - 1 までを済んだ回とする）。
+  //    残りはそのターンも数える（以前は1少なく、最終ターンの前に「残り0ターン」と出た。監査16）
+  const left = turn && view.seasonTurns ? view.seasonTurns - turn + 1 : null;
   const lines = stageLines(view);
   return (
     <section className="online-card online-next-procedure" aria-label="次の手続き">

@@ -609,6 +609,9 @@ export default function Chronicle({ view }) {
                           {(view.seasonYears || [view.year]).length <= 1 && !c.seasons?.length
                             ? '1年目が終わると増えます。'
                             : '記録ができると、ここに欄が出ます。'}
+                          {/* 0件の欄の説明（ProDrafted の empty）は、まとめた1行に足す（監査16） */}
+                          {empty.some(([id]) => id === 'proDrafted') &&
+                            'プロに指名されるとチームメイトのプロ意識と経験が上がります。'}
                         </span>
                       </p>
                     </section>

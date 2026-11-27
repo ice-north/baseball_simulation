@@ -155,6 +155,8 @@ function RequestState({ result }) {
 }
 // 過去の試合の一覧に最初に出す数と「続きを表示」で足す数（X1。ページ送りはやめた）
 const HISTORY_STEP = 6;
+// サーバーが1回に返す試合の数の上限（server/projection.mjs の GAMES_PAGE_MAX）
+const GAMES_BLOCK = 200;
 /**
  * 記録に載っている項目だけの区分（`knownOnly`）。練習試合の箱は一部の項目しか残さないので、
  * そのまま出すと列の多くが「—」になっていた。どの選手にも無い項目の列を外し、空になった区分も外す
@@ -667,10 +669,25 @@ function History({ view, close }) {
   const mobile = useMobile();
   const [year, setYear] = useState(view.year),
     [shown, setShown] = useState(HISTORY_STEP),
-    [scope, setScope] = useState('own');
-    // ⚠ 「続きを表示」は**読む数を増やして読み直す**（`size`。上限はサーバーの GAMES_PAGE_MAX）。
-  //    読み直す間も前の一覧を残す（`keep`）ので、押しても一覧が一度消えない
-  const result = useRead('games', { year, page: 0, size: Math.min(shown, 200), scope }, { keep: true });
+    [scope, setScope] = useState('own'),
+    // 200試合より前は200試合ずつの塊で見る（`block`＝0 が最新の200試合）
+    [block, setBlock] = useState(0);
+  // ⚠ 「続きを表示」は**読む数を増やして読み直す**（`size`。上限はサーバーの GAMES_PAGE_MAX＝200）。
+  //    読み直す間も前の一覧を残す（`keep`）ので、押しても一覧が一度消えない。
+  //    ⚠ 以前は200試合で止まり、それより前の試合を開く手段が無かった（リーグ全体は約34ターンで超える。監査16）
+  const result = useRead(
+    'games',
+    block > 0
+      ? { year, page: block, size: GAMES_BLOCK, scope }
+      : { year, page: 0, size: Math.min(shown, GAMES_BLOCK), scope },
+    { keep: true },
+  );
+  const resetList = () => {
+    setShown(HISTORY_STEP);
+    setBlock(0);
+  };
+  // 読み直しの間に残っている前の年度の一覧から、別の年度の試合を開かないよう、記録の年度は答えのものを使う
+  const dataYear = result.data?.year ?? year;
   return (
     <Panel title="試合記録" close={close}>
       <div className="online-stat-tools">
@@ -679,7 +696,7 @@ function History({ view, close }) {
           value={year}
           onChange={(e) => {
             setYear(Number(e.target.value));
-            setShown(HISTORY_STEP);
+            resetList();
           }}
         >
           {(view.seasonYears || [view.year]).map((n) => (
@@ -700,7 +717,7 @@ function History({ view, close }) {
                 aria-pressed={scope === id}
                 onClick={() => {
                   setScope(id);
-                  setShown(HISTORY_STEP);
+                  resetList();
                 }}
               >
                 {label}
@@ -713,7 +730,7 @@ function History({ view, close }) {
             value={scope}
             onChange={(e) => {
               setScope(e.target.value);
-              setShown(HISTORY_STEP);
+              resetList();
             }}
           >
             <option value="own">自球団</option>
@@ -752,7 +769,7 @@ function History({ view, close }) {
                   </span>
                   <GameRecordButton
                     game={g}
-                    year={year}
+                    year={dataYear}
                     ownTeam={view.teamName}
                   />
                 </article>
@@ -760,12 +777,27 @@ function History({ view, close }) {
             })}
           </div>
           {!result.data.count && <p>この年度の試合記録はありません。</p>}
-          <ShowMore
-            shown={Math.min(shown, 200, result.data.games.length)}
-            count={Math.min(result.data.count, 200)}
-            step={HISTORY_STEP}
-            setShown={setShown}
-          />
+          {block === 0 && (
+            <ShowMore
+              shown={Math.min(shown, GAMES_BLOCK, result.data.games.length)}
+              count={Math.min(result.data.count, GAMES_BLOCK)}
+              step={HISTORY_STEP}
+              setShown={setShown}
+            />
+          )}
+          {(block > 0 || (shown >= GAMES_BLOCK && result.data.count > GAMES_BLOCK)) && (
+            <div className="online-show-more">
+              {block > 0 && (
+                <button onClick={() => setBlock(block - 1)}>新しい{GAMES_BLOCK}試合へ</button>
+              )}
+              {(block + 1) * GAMES_BLOCK < result.data.count && (
+                <button onClick={() => setBlock(block + 1)}>
+                  さらに前の試合（{block * GAMES_BLOCK + GAMES_BLOCK + 1}〜
+                  {Math.min(result.data.count, (block + 2) * GAMES_BLOCK)}試合目）
+                </button>
+              )}
+            </div>
+          )}
         </>
       )}
     </Panel>

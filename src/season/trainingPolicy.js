@@ -115,7 +115,7 @@ export function poleStats(player, phase) {
   return { best, bestValue: bestV, worst, worstValue: worstV, pool };
 }
 
-// 能力 → メニュー。集中コース（intensive_*）は「+1確定・他能力-1」なので
+// 能力 → メニュー。集中コース（intensive_*）は「伸びを1能力に集約・伸びの4割を他能力から引く」なので
 // **長所を尖らせるとき専用**。短所に使うと下げたくない能力まで削れる。
 const INTENSIVE_BY_STAT = {
   meet: 'intensive_meet', power: 'intensive_power', eye: 'intensive_eye',

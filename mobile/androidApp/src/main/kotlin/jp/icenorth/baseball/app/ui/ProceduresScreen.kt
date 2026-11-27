@@ -755,7 +755,8 @@ private fun ReleasePanel(model: AppViewModel, raw: JsonObject, plan: JsonObject,
                 }
             },
             onRow = if (editable) ({ p -> openId = if (openId == p.pid) null else p.pid }) else null,
-            expanded = { it.pid == openId },
+            // ⚠ 開いたまま任せる（編集できない）に変わったら閉じる。▾ が消えて閉じられず、押しても何も起きなかった（監査16）
+            expanded = { editable && it.pid == openId },
             expansion = { p ->
                 val on = p.pid in releases
                 Column(

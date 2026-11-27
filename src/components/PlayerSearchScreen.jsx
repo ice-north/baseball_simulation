@@ -295,7 +295,9 @@ const PlayerSearchScreen = ({ onBack, gameMode, userTeamName }) => {
         <div className="bg-surface-2 rounded-lg overflow-x-auto xl:overflow-visible">
           <table className="w-full text-xs">
             {/* ⚠ 見出しの地は不透明に（下を流れる行が透けないように） */}
-            <thead className="sticky z-10" style={{ top: filterHeight }}>
+            {/* ⚠ 絞り込みの枠の下に付けるのは xl 以上だけ。xl 未満は上の div が横送りの入れ物になり、
+                sticky の top はその入れ物の上端から測られるので、枠の高さぶん見出しが行の上へずれていた（監査16） */}
+            <thead className="sticky z-10 top-0 xl:top-[var(--filter-h)]" style={{ '--filter-h': `${filterHeight}px` }}>
               {/* グループ行 */}
               <tr className="bg-gray-800 text-gray-300 text-xs border-b border-gray-600/50">
                 <th colSpan={6} className="py-0.5 px-2 text-left text-gray-300 font-bold">選手</th>

@@ -25,7 +25,7 @@ import { ReporterMemo, EventScene } from './look/Story.jsx';
 import TradeScreen from './TradeScreen.jsx';
 import CampPlanner, { CompletedCamp } from './CampPlanner.jsx';
 import TryoutResult from './TryoutResult.jsx';
-import SeasonFlow, { NextProcedure, stageLines } from './SeasonFlow.jsx';
+import SeasonFlow, { NextProcedure, nextProcedureShown, stageLines } from './SeasonFlow.jsx';
 import YearSummary from './YearSummary.jsx';
 import ProDraftResult from './ProDraftResult.jsx';
 import { nextAdvanceText, STATUS } from './api.js';
@@ -819,13 +819,16 @@ export default function DesktopView(props) {
           <Page title="現在の手続き">
             <SeasonFlow view={view} />
             {/* ⚠ 「無い」だけで終わらせない。合間なら次に何が開くかを帯が書く */}
-            <section className="online-card">
-              <p>
-                {stageLines(view)?.head && view.stage?.key !== 'season'
-                  ? `いま決めることはありません。${stageLines(view).head}。`
-                  : '現在、決定待ちの手続きはありません。土曜のストーブリーグと日曜のキャンプで出ます。'}
-              </p>
-            </section>
+            {/* ⚠ シーズン中は下の「次に決める手続き」が次の手続きと開く時を書くので、同じことを2回言わない（監査16） */}
+            {!(view.stage?.key === 'season' && nextProcedureShown(view)) && (
+              <section className="online-card">
+                <p>
+                  {stageLines(view)?.head && view.stage?.key !== 'season'
+                    ? `いま決めることはありません。${stageLines(view).head}。`
+                    : '現在、決定待ちの手続きはありません。土曜のストーブリーグと日曜のキャンプで出ます。'}
+                </p>
+              </section>
+            )}
             {/* 次に決める手続きを大きく（P2。キャンプ結果はシーズン中は畳む） */}
             <NextProcedure view={view} />
             {/* ⚠ キャンプの結果は**その年のキャンプのものだけ**（年が替わったら出さない）。

@@ -34,6 +34,8 @@ const CHECKS = [
   { name: 'oneplayer-fix-check', group: 'quick', slow: 20 },
   // 采配の試合が自動の試合の正本（1球・CPU の采配）で動く
   { name: 'managed-game-check', group: 'quick', slow: 2 },
+  // 一人用の新聞1面の材料（連勝の数え方）
+  { name: 'solo-newspaper-check', group: 'quick', slow: 1 },
   { name: 'sim-integrity-check', group: 'quick', slow: 4 },
   { name: 'season-check', group: 'quick', slow: 8 },
   { name: 'draft-check', group: 'quick', slow: 8 },

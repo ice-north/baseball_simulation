@@ -217,7 +217,7 @@ fun PlanScreen(model: AppViewModel) {
             }
             if (stale) {
                 Text(
-                    "別の画面で編成が更新されました。この編集は保存できないので、「変更を取り消す」で最新の編成を読み直してから編集し直してください。",
+                    "別の画面で編成が更新されました。この編集は保存できないので、右上の ⋮ の「変更を取り消す」で最新の編成を読み直してから編集し直してください。",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.error,
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
@@ -905,7 +905,7 @@ private fun RoleOption(label: String, hint: String?, selected: Boolean, enabled:
 @Composable
 private fun TacticsEditor(view: LeagueView, draft: PlanDraft, edit: Edit) {
     // 下は少しだけ空ける（TIPS の印は面の切り替えの右に出すので、行には重ならない）
-    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(start = 12.dp, end = 12.dp, top = 12.dp, bottom = 16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(start = 12.dp, end = 12.dp, top = 12.dp, bottom = 80.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) { // 右下の TIPS の印に最後の欄が隠れないよう（監査16）
         // 指導者に任せているときは、ここで変えると「意見を聞く」に戻ることを先に知らせる（PC と同じ）
         if (view.staff?.mode("tactics")?.effective == "delegate")
             Muted("試合中の采配は指導者に任せています（「AI判断の中身」のとおりに動きます）。ここで変えて保存すると、任せ方は「意見を聞く」に戻ります。")

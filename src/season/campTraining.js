@@ -105,15 +105,20 @@ const VELOCITY_PER_ROUND_MAX = 4;
 //    「低い帯に効きすぎ・高い帯に効かない」が直る（いしだ 2026-11-25）。
 const INTENSIVE_ZERO_SHIFT = 8;
 const INTENSIVE_DAMP_WINDOW = 16;
+// 集中の天井のゼロ点の上限（Q2 監査16）。⚠ フィジカル系（80から3%/下限10%→110で下限）はゼロ点が118になり、
+//    能力は99までなので**走力集中に天井が無かった**（走力50でも95でも1クール約+0.8で同じ）。
+//    守備と同じ95で止める（走力なら79から減り始めて95で0）。
+//    ⚠ 球速（km の物差し）には掛けない（`highStatDamp` の `zeroMax`）
+const INTENSIVE_ZERO_MAX = 95;
 /** 高能力値の減衰。`intensive` なら集中用の形（平らな帯のあとゼロへ）で返す */
-function highStatDamp(currentValue, curve, intensive) {
+function highStatDamp(currentValue, curve, intensive, zeroMax = INTENSIVE_ZERO_MAX) {
   if (!intensive) {
     if (currentValue < curve.from) return 1.0;
     return Math.max(curve.floor, 1.0 - (currentValue - curve.from) * curve.rate);
   }
   // 元の曲線が下限に着く点 → そこから `INTENSIVE_ZERO_SHIFT` うしろがゼロ点
   const baseFloorAt = curve.from + (1 - curve.floor) / curve.rate;
-  const zero = baseFloorAt + INTENSIVE_ZERO_SHIFT;
+  const zero = Math.min(zeroMax, baseFloorAt + INTENSIVE_ZERO_SHIFT);
   const from = zero - INTENSIVE_DAMP_WINDOW;
   if (currentValue < from) return 1.0;
   return Math.max(0, (zero - currentValue) / INTENSIVE_DAMP_WINDOW);
@@ -291,7 +296,7 @@ export const TRAINING_MENUS = {
     // ⚠ スタミナは据え置き（やれば伸びるもの）
     // ⚠ 0.45 → **0.2**（2026-11-23、いしだ「3件とも直す」）。0.45 でも10年でリーグの制球が
     //    49→65 と伸び続け、選球眼（横ばい）との差で四球が半分になった。指導者の「長所を伸ばす」の
-    //    制球集中にも同じ係数を掛ける（`executeCampTraining` の `focusStatMult`）
+    //    制球集中にも同じ係数を掛けていた（2026-11-25 から集中では掛けない。上の「集中練習」の注の (2)）
     // ⚠ 0.2 → **0.4**（要望 2026-11-24「制球の成長をやや上げます → 現在は4クールでも1～2程度しか
     //    上がらず効果が低い」）。実測（人の球団の投手11人・4クール・20回の平均）:
     //    制球集中 +1.05 → +2.1、投げ込み +0.23 → +0.5。0.45 で四球が半分になった頃は、ストレッチの
@@ -331,7 +336,7 @@ export const TRAINING_MENUS = {
     targets: ['newpitch'],
     category: 'pitching'
   },
-  // 集中練習コース: 通常の式で出した伸びを1能力に集約（`INTENSIVE_FOCUS`）/ 25%で他1能力-1 / 25%で他2能力-1
+  // 集中練習コース: 通常の式で出した伸びを1能力に集約（`INTENSIVE_FOCUS`）/ 代償は対象の伸びの `INTENSIVE_COST`（4割）を他能力から
   intensive_power: {
     name: '長打集中',
     icon: '💥',
@@ -1610,8 +1615,8 @@ export function executeCampTraining(player, trainingType, newPitchType, staffBon
       //    4クールで+6は上がりすぎ。能力が低い場合はいまの伸びのままでOK」）。
       //    ここの `dampFactor` が掛かるのは `adjustedBaseGrowth` だけで、覚醒ぶんは
       //    上の `awakeningGrowth` で別に抑えてから足す（70未満は素通し）。
-      // ⚠ **曲線は `highStatDamp` が1本で持つ**（集中のときは始まりを+10・傾き1.5倍・下限0に
-      //    差し替える。上の「集中練習」の注の (3)）。しきい値と率を2箇所に書かないこと。
+      // ⚠ **曲線は `highStatDamp` が1本で持つ**（集中のときは「平らな帯のあとゼロへ」の形に
+      //    差し替える。上の「集中練習」の注の (3) と `INTENSIVE_ZERO_SHIFT`）。しきい値と率を2箇所に書かないこと。
       const isIntensive = !!(menu.intensive && menu.penaltyPool);
       let dampCurve;
       if (targetStat === 'velocity') {
@@ -1619,7 +1624,8 @@ export function executeCampTraining(player, trainingType, newPitchType, staffBon
         //    前は絶対値 155km からだったので、**肩の低い投手には天井が存在しなかった**
         //    （肩60の上限は137kmで、155に届かないため減衰が一度も効かない）。
         //    `getVelocityCap(肩)` の `VELOCITY_DAMP_WINDOW` km 手前から効かせると、
-        //    肩60でも肩100でも、集中でも満遍なくでも同じ形で上限手前で鈍る。
+        //    肩60でも肩100でも上限手前で鈍る。⚠ 集中では `highStatDamp` が集中用の形に直すので、
+        //    減り始めは上限の13.5km手前・ゼロは上限の2.5km先（満遍なくより少し早く鈍り、最後は0。監査16）。
         const armForDamp = getNestedValue(updatedPlayer, getStatPath('arm')) || 50;
         dampCurve = { from: getVelocityCap(armForDamp) - VELOCITY_DAMP_WINDOW, rate: 0.2, floor: 0.1 };
       } else if (isPhysical) {
@@ -1647,7 +1653,8 @@ export function executeCampTraining(player, trainingType, newPitchType, staffBon
       //    上の技術系・フィジカル系の判定を**上書きする**ので、順番を変えないこと
       const effort = EFFORT_DAMP[targetStat];
       if (effort) dampCurve = effort;
-      const dampFactor = highStatDamp(currentValue, dampCurve, isIntensive);
+      const dampFactor = highStatDamp(currentValue, dampCurve, isIntensive,
+        targetStat === 'velocity' ? Infinity : INTENSIVE_ZERO_MAX);
       const adjustedBaseGrowth = Math.max(0, stochasticRound(rawGrowth * growthMult * dampFactor));
 
       let totalGrowth = Math.max(0, adjustedBaseGrowth + awakeningGrowth);
@@ -1668,16 +1675,20 @@ export function executeCampTraining(player, trainingType, newPitchType, staffBon
       // ⚠ **球速は1クールの伸びを `VELOCITY_PER_ROUND_MAX` km で止める**（いしだ 2026-11-25
       //    「球速集中効果の上限は1クール4kmとしましょう」）。
       //    肩の上限までの距離が大きいと、追いつき倍率（`getVelocityCatchupMult` は差38kmで2.65倍）と
-      //    集中練習の倍率（3.7）が掛け算になり、肩90・球速120 の投手が**1クールで+7.0km**
+      //    集中練習の倍率（当時3.7、いまは2.4）が掛け算になり、肩90・球速120 の投手が**1クールで+7.0km**
       //    （4クールで+23km・1年で120→143.6km）伸びていた。
       //    ⚠ 天井（`dampCurve`）は上限の手前10kmからしか効かないので、そこへ届くまでの帯は
-      //      この1クールの上限だけが止める。球速練習は 1クール1.2km 程度なので実際には掛からない。
+      //      この1クールの上限だけが止める。球速練習もふつうは 1クール1.2km 程度で掛からないが、
+      //      肩の上限との差が大きい投手（肩100・球速110 など）では球速練習にも掛かる（監査16 で確かめた。そのままにしてある）。
       if (targetStat === 'velocity' && totalGrowth > VELOCITY_PER_ROUND_MAX)
         totalGrowth = VELOCITY_PER_ROUND_MAX;
       const armForCap = getNestedValue(updatedPlayer, getStatPath('arm')) || 50;
       // ⚠ 1〜99 の物差しの能力は ABILITY_CAP で止める（100 で止めていて、98 から練習すると100になった。2026-11-20 監査）
       const maxValue = targetStat === 'velocity' ? getVelocityCap(armForCap) : targetStat === 'stamina' ? 200 : ABILITY_CAP;
-      const newValue = Math.min(maxValue, currentValue + totalGrowth);
+      // ⚠ 上限で切るのは**伸びるときだけ**。球速が肩の上限より上にある投手（初期の世界で投手の約6%）は、
+      //    `min(上限, 今+伸び)` だと練習するたびに上限まで落とされ、その落ちが連動で肩も下げ、
+      //    肩が下がると上限も下がる下向きの連鎖になっていた（肩60・球速145 が4クールで球速-11km・肩-5。監査16）
+      const newValue = Math.max(currentValue, Math.min(maxValue, currentValue + totalGrowth));
       updatedPlayer = setNestedValue(updatedPlayer, statPath, newValue);
       growthReport.push({
         stat: targetStat,
@@ -1709,7 +1720,9 @@ export function executeCampTraining(player, trainingType, newPitchType, staffBon
             * highStatDamp(currentArm, { from: 80, rate: 0.03, floor: 0.1 }, false))
           : Math.round(rawArm);
         if (armChange !== 0) {
-          const newArm = Math.max(1, Math.min(99, currentArm + armChange));
+          // ⚠ 上がる側で今の値より下げない（遠投では肩が100まで上がるので、99 で切ると肩100の投手が
+          //    球速を伸ばして肩99に下がっていた。監査16）
+          const newArm = Math.max(1, Math.min(Math.max(ABILITY_CAP, currentArm), currentArm + armChange));
           if (newArm !== currentArm) {
             updatedPlayer = setNestedValue(updatedPlayer, armPath, newArm);
             growthReport.push({ stat: 'arm', statName: getStatName('arm'), before: currentArm, after: newArm, growth: newArm - currentArm, isAwakening: false, isLinked: true });
