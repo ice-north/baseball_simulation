@@ -231,6 +231,18 @@ export const TALENT_STAT_MULTIPLIERS = {
  *    才能で決まるミート・パワーとは別の物差しにする。
  */
 const EFFORT_DAMP = {
+  // 体幹: 60までは素通し、そこから4%/pt で **85で0**（下限なし）。
+  // ⚠ **減衰がまったく無かった**（2026-11-26 の実測。ウエイト4クールの伸びが
+  //    体幹42でも85でも +12.0 と完全に平らで、42から**5年で99**に到達した）。
+  //    体幹は試合には効かず、パワー・走力・肩・球速・体力の**成長倍率**（0.5〜1.5倍）
+  //    専用の能力なので、上げ切ると「倍率そのものを買う」ことになる。
+  //    実測（打撃練習4クールのパワー）: 体幹42 +0.72 → 99 +1.10。
+  //    リーグ平均のパワーが上がり続ける一番太い供給路がここだった
+  //    （いしだ 2026-11-26「ホームランが出すぎな気がします」の調べで判明）。
+  // ⚠ **下限を0にする**のが要。下限が残るとクールを積めばいくらでも越えられる
+  //    （変化球・集中練習で同じ轍を踏んでいる）。60までは素通しなので、
+  //    ふつうの選手（生成時の平均42・σ10）が倍率1.1まで上げるところは今までどおり。
+  muscle: { from: 60, rate: 0.04, floor: 0 },
   // 守備70までは減衰ゼロ＝ノックが素直に効く。70から1点ごとに5%（85で25%・90で下限）
   //   実測の到達点（能力38の19歳から毎年4クールのノック・34歳まで）:
   //     意識90/器用80 → 88.8（技術系のままなら 79.9 / 今朝までの65から4%なら 86.3）
@@ -660,8 +672,12 @@ export function executeSubTraining(player, rawSubType, options = {}, staffBonus 
         //    スタミナまで付くぶん丸ごと上位互換だった。体幹を鍛えるのはウエイトの役
         const oldMuscle = player.physical.muscle ?? 50;
         if (oldMuscle < 100 && Math.random() < 0.5) {
-          player.physical.muscle = Math.min(ABILITY_CAP, oldMuscle + 1);
-          growthReport.push({ statName: '体幹', before: oldMuscle, after: player.physical.muscle, growth: player.physical.muscle - oldMuscle });
+          // ⚠ ウエイトと同じ減衰（`EFFORT_DAMP.muscle`）。片方だけ素通しにすると抜け道になる
+          const mGain = applyTechStatDecay(oldMuscle, 1, EFFORT_DAMP.muscle);
+          if (mGain > 0) {
+            player.physical.muscle = Math.min(ABILITY_CAP, oldMuscle + mGain);
+            growthReport.push({ statName: '体幹', before: oldMuscle, after: player.physical.muscle, growth: player.physical.muscle - oldMuscle });
+          }
         }
       }
       // 投手はスタミナ+1〜2も上昇
@@ -680,9 +696,12 @@ export function executeSubTraining(player, rawSubType, options = {}, staffBonus 
       if (player.physical) {
         const oldMuscle = player.physical.muscle ?? 50;
         if (oldMuscle < 100) {
-          const mGrowth = Math.floor(Math.random() * 3) + 2;
-          player.physical.muscle = Math.min(ABILITY_CAP, oldMuscle + mGrowth);
-          growthReport.push({ statName: '体幹', before: oldMuscle, after: player.physical.muscle, growth: player.physical.muscle - oldMuscle });
+          // ⚠ 高い体幹では鈍る（`EFFORT_DAMP.muscle`。85で0）
+          const mGrowth = applyTechStatDecay(oldMuscle, Math.floor(Math.random() * 3) + 2, EFFORT_DAMP.muscle);
+          if (mGrowth > 0) {
+            player.physical.muscle = Math.min(ABILITY_CAP, oldMuscle + mGrowth);
+            growthReport.push({ statName: '体幹', before: oldMuscle, after: player.physical.muscle, growth: player.physical.muscle - oldMuscle });
+          }
         }
         // 肩力 +0〜1（40%で+1）投手は球速連動
         if (Math.random() < 0.4) {

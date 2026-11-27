@@ -245,8 +245,13 @@ const ContractScreen = ({ seasonData, allTeams, onComplete }) => {
                     : pitchedAsFielder ? Math.max(batting.games || 0, pitching.games || 0)
                     : (batting.games || 0);
                   const avg = batting.atBats > 0 ? (batting.hits / batting.atBats).toFixed(3) : '-';
+                  // ⚠ 防御率は**ほかの画面と同じ式**（`自責点 × 27 ÷ アウト数`）で出す。
+                  //    ここだけ `自責点 ÷ (アウト数÷3) × 9` という別の順で計算していて、
+                  //    数としては同じでも**割る順が違うぶん丸めがずれ**、.xx5 の境目に乗った投手で
+                  //    キャンプの「前年成績」と 0.01 食い違っていた
+                  //    （`check:ui:yearend` の独立リーグで 3.82 対 3.83 で落ちた。2026-11-26）。
                   const era = pitching.inningsPitched > 0
-                    ? ((pitching.earnedRuns || 0) / (pitching.inningsPitched / 3) * 9).toFixed(2)
+                    ? ((pitching.earnedRuns || 0) * 27 / pitching.inningsPitched).toFixed(2)
                     : '-';
                   const pitchStr = `${pitching.wins || 0}勝${pitching.losses || 0}敗 ERA${era}`;
                   const batStr = `${avg} ${batting.homeruns || 0}HR ${batting.rbis || 0}打点`;
