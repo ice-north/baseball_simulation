@@ -123,6 +123,8 @@ const CHECKS = [
   { name: 'online-staff-moves-check', group: 'check', online: true, slow: 150 },
   // 指導者（監督・コーチ）。種・任せ方・人事・40年の入れ替わり・1年を通して翌年のキャンプまで
   { name: 'online-coach-check', group: 'check', online: true, slow: 200 },
+  // 監督の方針を球団の行動に（球団の穴・育成の的を数年続ける・球団の状況から時間軸。先方要望 #6・#7）
+  { name: 'online-vision-check', group: 'check', online: true, slow: 6 },
   // アプリが読む項目（mobile/tools/view-contract.mjs）が本物のサーバーの答えにあるか。開幕直後だけ（約20秒）
   { name: 'online-view-contract-check', group: 'check', online: true, slow: 22 },
   // 人どうしの関わり（ひとこと・取引の記録・おるすばん・予告先発・練習試合・得点経過）

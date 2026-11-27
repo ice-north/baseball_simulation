@@ -3,6 +3,7 @@ import { SEASON_TURNS } from './pyramidLeague.js';
 // ⚠ **保存された世界の形を変えたら上げること**。上げないと、古い形のリーグが
 //    `assertLeagueVersion` を素通りして読み込まれ、どこか遠くで落ちる。
 //    上げれば「ゲームのバージョンが対応していません」で止まるので原因が分かる。
+//    23 = 育成の的（選手の campAim）・時間軸の外れた年数（指導者の horizonMiss）、
 //    22 = 球団のロゴと色（人が作ったもの）、
 //    21 = 打撃フォーム（オープン/スクエア/クローズ）、
 //    20 = 試合記録の打席の行に塁の走者と打球の向き・飛距離・角度（打席速報）、
@@ -25,7 +26,7 @@ import { SEASON_TURNS } from './pyramidLeague.js';
 //    1 = 固定4球団・2人・1日7枠）。
 // ⚠ 上げてもリーグは**作り直せない**（`create` は既存リーグがあると拒む）。
 //    `docs/online/PRODUCTION_SETUP.md` の作り直し手順で制御行を空にすること。
-export const ONLINE_SCHEMA = 22;
+export const ONLINE_SCHEMA = 23;
 export const ONLINE_ENGINE_VERSION = 'online-1';
 
 // ---- ターンの長さ

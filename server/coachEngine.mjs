@@ -37,12 +37,16 @@ import {
   releaseBias,
   tradeFactor,
   campPlan,
+  shouldHorizon,
+  followHorizon,
   VIEWS,
   delegationOf,
   ROLE_LABELS,
 } from '../src/online/coaches.js';
 import { PYRAMID_LEAGUES } from '../src/online/pyramidLeague.js';
 import { requireOnline } from '../src/online/shared.js';
+import { teamNeeds, regularsOf } from '../src/online/teamNeeds.js';
+import { squadStrength } from '../src/online/tradeSearch.js';
 import { teamLabelIn } from '../src/online/membership.js';
 
 const KEEP_EVENTS = 40;
@@ -326,7 +330,25 @@ export function campPlanFor(league, teamName, roster) {
   if (!league.coaches) return null;
   const member = memberOf(league, teamName);
   if (member && effectiveStaffModes(league, member).camp === 'self') return null;
-  return campPlan(staffOf(league, teamName), roster, { strictSeats: !!member });
+  return campPlan(staffOf(league, teamName), roster, {
+    strictSeats: !!member,
+    needs: teamNeeds(roster, sameTierRosters(league, teamName)),
+    year: league.season?.year ?? 0,
+  });
+}
+
+/**
+ * 同じ部のほかの球団の名簿（球団の穴を比べる相手。`teamNeeds`）。
+ * ⚠ **保存された世界（`league.game`）から読む**。キャンプは球団ごとに順に回すので、
+ *    `TEAMS_DATA` を読むと先に練習した球団の伸びで穴が変わり、画面の案と締め切りの実行で的がずれる
+ */
+export function sameTierRosters(league, teamName) {
+  const tierOf = (name) => (league.teams || []).find((t) => t.name === name)?.league;
+  const tier = tierOf(teamName);
+  return (league.season?.settings?.teamNames || [])
+    .filter((name) => name !== teamName && (!tier || tierOf(name) === tier))
+    .map((name) => league.game?.teams?.[name]?.players)
+    .filter((r) => r?.length);
 }
 
 /** 人の任せ方を保存する */
@@ -699,6 +721,38 @@ function placeOf(entry, teamName) {
 }
 
 /**
+ * 球団ごとの、あるべき時間軸（`coaches.js` の `shouldHorizon`）。`{ 球団名: 'develop' | 'middle' | 'win' }`。
+ * 勝率は終わった年（`entry`）とその前の年、戦力は**いまの部**（昇降格の後）の中の位置、
+ * 主力の年齢はレギュラー（`regularsOf`）の平均。名簿が読めない球団は入れない。
+ */
+export function horizonWants(league, entry, rosterOf) {
+  const rate = (e, team) => {
+    const row = e?.standings?.find((s) => s.team === team);
+    return row && row.wins + row.losses > 0 ? row.wins / (row.wins + row.losses) : null;
+  };
+  const before = (league.history || []).at(-2);
+  const tierOf = (name) => (league.teams || []).find((t) => t.name === name)?.league || null;
+  const names = (league.season?.settings?.teamNames || []).filter((name) => rosterOf(name)?.length);
+  const strength = new Map(names.map((name) => [name, squadStrength(rosterOf(name))]));
+  const out = {};
+  for (const name of names) {
+    const winRate = rate(entry, name);
+    if (winRate == null) continue;
+    const peers = names.filter((n) => tierOf(n) === tierOf(name));
+    const weaker = peers.filter((n) => strength.get(n) < strength.get(name)).length;
+    const { hitters, pitchers } = regularsOf(rosterOf(name));
+    const ages = [...hitters, ...pitchers].map((p) => p.age).filter(Number.isFinite);
+    out[name] = shouldHorizon({
+      winRate,
+      lastWinRate: rate(before, name),
+      strength: peers.length > 1 ? weaker / (peers.length - 1) : 0.5,
+      coreAge: ages.length ? ages.reduce((a, b) => a + b, 0) / ages.length : 28,
+    });
+  }
+  return out;
+}
+
+/**
  * 年度更新での指導者の処理。**昇降格を当てたあと**に呼ぶ（`league.history` の最後が終わった年）。
  *
  * 1. 終わった年の成績を各人の通算に残す
@@ -712,7 +766,7 @@ function placeOf(entry, teamName) {
  * `rows`: `coachSeasonRows`（年度更新の前に取ったもの）
  * `retirees`: 引退した選手 [{ team, name, position, seasons, line, secondCareer, player }]
  */
-export function coachOffseason(league, { rows = {}, retirees = [] } = {}) {
+export function coachOffseason(league, { rows = {}, retirees = [], rosterOf = null } = {}) {
   const c = ensureCoaches(league);
   const entry = league.history?.at(-1);
   const year = entry?.year ?? league.season.year - 1;
@@ -824,6 +878,15 @@ export function coachOffseason(league, { rows = {}, retirees = [] } = {}) {
             reason: conflict >= RESIGN_CONFLICT && head ? `${head.name}監督と${CONFLICT_AREAS[role]}の考えが合わず` : null,
           });
         }
+      }
+    }
+    // 3') CPU球団の指導者が、球団の状況から見た時間軸へ寄る（こだわりの強さに応じて。先方要望 #7）。
+    //     ⚠ 進退の**後**（解任された人は寄せない。席が空いた球団は新しい人を呼んでから次の年に見る）
+    if (rosterOf) {
+      const wants = horizonWants(league, entry, rosterOf);
+      for (const [team, seats] of Object.entries(c.teams)) {
+        if (memberOf(league, team) || !wants[team]) continue;
+        for (const role of COACH_ROLES) followHorizon(c.people[seats[role]], wants[team]);
       }
     }
     // 4) 引退した選手が指導者の道へ

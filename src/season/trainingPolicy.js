@@ -137,6 +137,17 @@ const BROAD_BY_STAT = {
  */
 const broadFor = (stat, isPitcher) =>
   !isPitcher && stat === 'bodyStamina' ? 'baserunning' : BROAD_BY_STAT[stat] || 'batting';
+/**
+ * 決めた能力（`stat`）を伸ばすメイン練習。長所を伸ばすなら集中練習（無ければ幅広い練習）、
+ * 短所を埋めるなら幅広い練習。`resolveTraining` が長所・短所から選ぶのと同じ表を使う。
+ * ⚠ 育成の的（`coaches.js` の `campAim`）が、選んだ能力を練習に直すのに使う
+ */
+export function menuForStat(player, stat, direction = 'sharpen') {
+  const isPitcher = player?.position === 'pitcher';
+  return direction === 'sharpen'
+    ? INTENSIVE_BY_STAT[stat] || broadFor(stat, isPitcher)
+    : broadFor(stat, isPitcher);
+}
 const SUB_BY_PHASE = {
   physique: { sharpen: 'weight', balanced: 'physique', patch: 'physique' },
   // ⚠ 短所を埋める×技術は「守備補強」だったが、サブポジ練習にまとめた（2026-11-24。`SUB_MENU_ALIASES`）
