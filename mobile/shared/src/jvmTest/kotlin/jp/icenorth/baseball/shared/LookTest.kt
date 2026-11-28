@@ -9,6 +9,7 @@ import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.booleanOrNull
+import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import kotlinx.serialization.json.doubleOrNull
@@ -217,6 +218,16 @@ class LookTest {
         assertTrue(cases.size >= 10)
         for ((i, c) in cases.withIndex()) {
             val view = OnlineJson.decodeFromJsonElement(LeagueView.serializer(), JsonObject(base + c.at("patch").obj()!!))
+            val others = buildJsonArray {
+                for (g in otherGameCards(view)) add(
+                    buildJsonObject {
+                        put("id", g.id); put("home", g.home); put("away", g.away); put("city", g.city)
+                        put("homeRecord", g.homeRecord); put("awayRecord", g.awayRecord)
+                        put("homeStarter", g.homeStarter); put("awayStarter", g.awayStarter)
+                    },
+                )
+            }
+            same(c.at("others"), others, "ほかの試合$i ${c.at("patch")}")
             val card = todayGameCard(view)
             val want = c.at("card")
             if (want is JsonNull || want == null) {

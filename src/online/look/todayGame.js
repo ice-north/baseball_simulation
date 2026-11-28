@@ -122,3 +122,31 @@ export function todayGameCard(view) {
 
 /** 連勝はプラス・連敗はマイナス（客の入り） */
 const streakValue = (s) => (!s ? 0 : s.kind === 'W' ? s.count : s.kind === 'L' ? -s.count : 0);
+
+/**
+ * 同じ日のほかの試合（先方要望 #8「他のチームの対戦カードも数秒ごとに切り替えて見たい」）。
+ * 今日の一戦の札の下で、数秒ごとに1枚ずつめくって見せる（`TodayGame.jsx` の `OtherGames`）。
+ *
+ * ⚠ 試合はビューの `upcoming`（リーグ全体のこれからの試合。先発予定は名前だけ）から、
+ *    自球団の一戦と**同じ日**の、自球団の出ない試合。並びは `upcoming` のまま（日程の順）。
+ * ⚠ 自球団の試合が無ければ（札が出ないとき）空。
+ * @returns `[{ id, home, away, city, homeRecord, awayRecord, homeStarter, awayStarter }]`
+ *   （`*Record` は「1部2位　5勝4敗」、`*Starter` は先発予定の名前。未定なら null）
+ */
+export function otherGameCards(view) {
+  const me = view?.teamName;
+  const own = (view?.nextGames || []).find((g) => g.home === me || g.away === me);
+  if (!own) return [];
+  return (view.upcoming || [])
+    .filter((g) => g.home !== me && g.away !== me && sameDate(g.date, own.date))
+    .map((g) => ({
+      id: g.id ?? null,
+      home: g.home,
+      away: g.away,
+      city: view.teamLabels?.[g.home]?.city || '',
+      homeRecord: standingOf(view, g.home).record,
+      awayRecord: standingOf(view, g.away).record,
+      homeStarter: g.homeStarter || null,
+      awayStarter: g.awayStarter || null,
+    }));
+}

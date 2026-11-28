@@ -57,6 +57,7 @@ export const VIEW_CONTRACT = {
     { path: 'recentGames[].homeScore', live: true, why: '試合結果の通知・ウィジェット' },
     { path: 'recentGames[].lineScore', live: true, why: 'ウィジェットのスコア' },
     { path: 'nextGames[].home', live: true, why: 'ウィジェットの次の試合' },
+    { path: 'upcoming[].home', live: true, why: '今日の一戦のほかの試合（TodayGame.kt の otherGameCards）' },
     { path: 'teamLeagues', live: true, why: '通知・ウィジェットの順位' },
     { path: 'standings', live: true, why: '通知・ウィジェットの順位' },
     { path: 'currentDate.month', live: true, why: 'ウィジェットの日付' },
