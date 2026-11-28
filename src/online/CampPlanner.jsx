@@ -826,7 +826,8 @@ export default function CampPlanner({
   const policyOf = (p) => playerPolicy(p, policy, overrides);
   const [main, setMain] = useDraftState(
     phaseDraftName(phaseId, 'camp.main'),
-    () => camp?.plan?.main || {},
+    // ⚠ 指導者の案は、育成の的のある選手のメイン練習も持っている（`projection.mjs` の `suggested.main`）
+    () => camp?.plan?.main || camp?.suggested?.main || {},
   );
   const [sub, setSub] = useDraftState(
     phaseDraftName(phaseId, 'camp.sub'),

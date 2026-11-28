@@ -73,6 +73,13 @@ import { exhibitionsView } from './exhibition.mjs';
 import { proWatchList } from './proDraft.mjs';
 import { tryoutInterest, tryoutPickOrder } from '../src/online/tryoutPlan.js';
 
+/** 指導者のキャンプの案を画面に渡す形に（メイン練習は `main`、覚えさせる的 `aims` は渡さない） */
+const suggestedCamp = (plan) => {
+  if (!plan) return null;
+  const { assignments, aims, ...rest } = plan;
+  return { ...rest, main: assignments || {} };
+};
+
 /**
  * セット（24人）の選手。能力は全部、記録や経歴は載せない（まだ所属していない）。
  * ⚠ 20セット×24人＝480人。記録・経歴まで載せるとビューが重くなる。
@@ -878,9 +885,11 @@ export function projectLeague(bundle, userId, sessionId, adminId, shared = null)
                   //    いなければ、画面の下書きをこの案から始める。締め切りで回さなかった
                   //    クールに当たるのもこの案（`defaultPhasePlan` の camp）なので、
                   //    出さないと「おすすめ」を見ていたのに見たことのない案で回る
+                  // ⚠ 育成の的のある選手のメイン練習は `main` で渡す（実行済みの指示と同じ名前。
+                  //    Web の `CampPlanner` もアプリの `CampPanel` も `main` を読む）
                   suggested: phase.camp?.[userId]?.plan
                     ? null
-                    : campPlanFor(l, member.teamName, team.players),
+                    : suggestedCamp(campPlanFor(l, member.teamName, team.players)),
                   // ⚠ 伸びた能力（このクール・通算）。画面のまとめに使う
                   last: phase.camp?.[userId]?.last || null,
                   // クールごとの伸び（`recordCampRound`）。キャンプ後の選手ごとの内訳に使う

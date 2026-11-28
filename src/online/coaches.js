@@ -28,7 +28,8 @@
 import { getRandomSurname, getRandomGivenName } from '../data/playerNames.js';
 import { hashSeed, withSeededRandom } from '../game/rng.js';
 import { TACTIC_FIELDS, STRATEGY_FIELDS } from './tactics.js';
-import { poleStats, playerWish } from '../season/trainingPolicy.js';
+import { poleStats, playerWish, menuForStat } from '../season/trainingPolicy.js';
+import { NEED_STATS, needStatValue } from './teamNeeds.js';
 import { overallScore } from './tryoutPlan.js';
 
 /** 役職。⚠ 監督とコーチは同じ「指導者」。役職は配属で決まる（コーチから監督へも上がる） */
@@ -638,7 +639,8 @@ const PATCH_GAP = 15;
  *     尖った選手かどうかは選手の希望（`playerWish`）と同じ物差し（技術の長所と短所の開き）
  *   - 誰も尖らせない … 開きが大きければ「短所」、小さければ「全体」
  * ⚠ どれも人がキャンプの画面で選べる方針。伸びを足す効果は無い。
- * ⚠ 「何を伸ばすか」（メインの練習の割り当て）は次の段（いまは方針から練習を決める既定のまま）。
+ * ⚠ 「何を伸ばすか」（メインの練習の割り当て）は育成の的（`campAim`）が決める。的を覚えている選手は、
+ *    ここで出した方向より的の方向が先（`campPlan`）。
  */
 export function growthPolicy(coach, player) {
   const { who, line } = growthOf(coach);
@@ -659,28 +661,225 @@ export function growthPolicy(coach, player) {
   return { direction, phase };
 }
 
+// ------------------------------------------------------------
+// 球団の状況から見た時間軸（先方要望 #7「弱小チームの方針転換」。2026-11-27）
+//
+// 【なぜ要るか】時間軸（育成・中間・勝負）は人物に固定で、生まれたときの抽選のまま変わらなかった。
+//   最下位の球団でも「勝負」の監督なら勝ちに行き続け、何年負けても同じことを繰り返す。
+// 【どうしたか】年度更新で、球団の状況（勝率・前年の勝率・同じ部の中の戦力の位置・主力の年齢）から
+//   「あるべき時間軸」（`shouldHorizon`）を出し、指導者が**こだわりの強さに応じて**寄る
+//   （`followHorizon`）。柔軟な人はすぐ寄り、頑固な人は何年か外れ続けて初めて折れる。
+//   人物の個性（生まれの抽選）は残り、寄るのも1年に1段だけ（育成⇔中間⇔勝負）。
+// ⚠ CPU球団の指導者だけ（`coachEngine.coachOffseason`）。人の球団の指導者は人が選んだ人なので動かさない。
+// ⚠ 乱数を引かない。
+// ------------------------------------------------------------
+
+/** 勝率の物差し（117試合で1標準偏差くらい） */
+const HORIZON_RATE_SCALE = 0.08;
+/** これを越えたら勝負、下回ったら育成 */
+const HORIZON_LINE = 0.75;
+/** 主力がこの年齢以上で、状況が五分より悪ければ作り直し（育成） */
+const HORIZON_OLD_CORE = 31;
+
+/**
+ * 球団の状況から見た、あるべき時間軸（'develop' | 'middle' | 'win'）。
+ * - `winRate` … 終わった年の勝率、`lastWinRate` … その前の年（無ければ終わった年と同じに見る）
+ * - `strength` … 同じ部の中の戦力（`squadStrength`）の位置。1 が最強・0 が最弱
+ * - `coreAge` … 主力（レギュラー）の平均年齢
+ */
+export function shouldHorizon({ winRate = 0.5, lastWinRate = null, strength = 0.5, coreAge = 28 } = {}) {
+  const form =
+    (0.6 * (winRate - 0.5) + 0.4 * ((lastWinRate ?? winRate) - 0.5)) / HORIZON_RATE_SCALE;
+  const power = (strength - 0.5) * 3;
+  const score = 0.5 * form + 0.5 * power;
+  if (coreAge >= HORIZON_OLD_CORE && score < 0) return 'develop';
+  return score >= HORIZON_LINE ? 'win' : score <= -HORIZON_LINE ? 'develop' : 'middle';
+}
+
+const HORIZON_STEPS = ['develop', 'middle', 'win'];
+/** 何年外れ続けたら寄るか（こだわり: 柔軟 -1 以下は1年・ふつうは2年・頑固 1 以上は3年） */
+export const horizonPatience = (coach) => {
+  const stubborn = clampInt(coach?.personality?.stubborn);
+  return stubborn <= -1 ? 1 : stubborn >= 1 ? 3 : 2;
+};
+
+/**
+ * 指導者を、あるべき時間軸（`want`）へ寄せる。**その人を直接書き換える**。
+ * 外れた年数は `coach.horizonMiss`（`{ want, years }`）に数え、こだわりの年数（`horizonPatience`）に
+ * 届いたら1段だけ寄る。合っていれば数えを消す。寄ったら新しい時間軸を返す（寄らなければ null）。
+ * ⚠ 向きが変わったら（育成を求められていたのが勝負に）数え直す
+ */
+export function followHorizon(coach, want) {
+  if (!coach || !HORIZON_STEPS.includes(want)) return null;
+  const v = visionOf(coach);
+  if (v.horizon === want) {
+    delete coach.horizonMiss;
+    return null;
+  }
+  const prev = coach.horizonMiss;
+  const years = prev?.want === want ? (prev.years || 0) + 1 : 1;
+  if (years < horizonPatience(coach)) {
+    coach.horizonMiss = { want, years };
+    return null;
+  }
+  const at = HORIZON_STEPS.indexOf(v.horizon);
+  const next = HORIZON_STEPS[at + Math.sign(HORIZON_STEPS.indexOf(want) - at)];
+  coach.vision = { ...v, horizon: next };
+  delete coach.horizonMiss;
+  return next;
+}
+
+// ------------------------------------------------------------
+// 育成の的（先方要望 #6 第2段。2026-11-27）
+//
+// 【なぜ要るか】CPU の育成の方針は毎年その場の能力の開きから引き直していた（`playerWish` の
+//   開き 22・10 の線）。伸ばした結果で開きが変わると方針が切り替わり、何年たっても積み上がらない。
+//   人は「毎年同じ能力に集中練習を当て続ける」だけで勝率 .700 を超えていた（先方の計測）。
+// 【どうしたか】指導者がその選手で**何を伸ばすか**（的）を、
+//   「球団に足りないもの（`teamNeeds`）× 指導者の型の好み × その選手が伸ばせるもの」で決め、
+//   選手に覚えさせて（`player.campAim`）**数年持ち続ける**。下駄ではなく方針の一貫性。
+// ⚠ 伸びを足す効果は無い。当てるのは人がキャンプの画面で選べるメニュー（集中練習か幅広い練習）。
+// ⚠ 乱数を引かない（画面の案と締め切りの実行で同じ的になるように）。
+// ⚠ 時間軸で穴の重みが変わる: 勝負は穴を強く見る（今年の穴を埋める）、育成は弱く見る
+//   （その選手の長所を伸ばす）。
+// ------------------------------------------------------------
+
+/** 能力が試合に効く重み（`tradeSearch.js` の `battingPower`・`slotStrength` の重みに合わせた目安） */
+const AIM_WEIGHT = {
+  meet: 0.4,
+  power: 0.35,
+  speed: 0.2,
+  eye: 0.05,
+  control: 0.4,
+  velocity: 0.3,
+  stamina: 0.15,
+};
+/** 守備は守る位置で重みが違う（捕手・遊撃・二塁・中堅は重い） */
+const aimDefenseWeight = (player) =>
+  ['catcher', 'short', 'second', 'center'].includes(player?.position) ? 0.3 : 0.15;
+/** 長所を伸ばす的に選べる能力（集中練習がある能力）と、短所を埋める的に選べる能力 */
+const AIM_POOL = {
+  sharpen: { hitter: ['meet', 'power', 'eye', 'speed', 'defense'], pitcher: ['control', 'velocity'] },
+  patch: { hitter: NEED_STATS.hitter, pitcher: NEED_STATS.pitcher },
+};
+/** 型の好み（`prefsOf` の `pref`）→ 能力 */
+const PREF_STAT = {
+  contact: 'meet',
+  power: 'power',
+  speed: 'speed',
+  defense: 'defense',
+  control: 'control',
+  velocity: 'velocity',
+  stamina: 'stamina',
+};
+/** 的を持ち続ける年数。これを過ぎたら選び直す（同じ能力がまた選ばれることもある） */
+export const AIM_YEARS = 3;
+/** 長所を伸ばす的の上限（指導者の線が無いとき）。届いたら選び直す */
+const AIM_CAP = 85;
+/** 穴の重み（時間軸ごと） */
+const AIM_NEED_WEIGHT = { develop: 0.6, middle: 1.0, win: 1.5 };
+/** 型の好みの重み */
+const AIM_PREF_WEIGHT = 0.5;
+
+/** その指導者がこの能力をどれだけ好むか（0〜。看板の側は1、もう一方は控えめ。コーチは受け持ちの側だけ） */
+function aimPref(coach, player, stat, role) {
+  const only = ROLE_SIDE[role];
+  let w = 0;
+  for (const { pref, side, weight } of prefsOf(coach)[groupOf(player)]) {
+    if (only && side !== only) continue;
+    if (PREF_STAT[pref] === stat) w += weight * (only ? 1 : sideWeight(coach, side));
+  }
+  return w;
+}
+
+/** その選手の、的に選べる能力の平均（長所・短所の基準） */
+const aimBase = (player) => {
+  const xs = NEED_STATS[groupOf(player)].map((s) => needStatValue(player, s)).filter((v) => v != null);
+  return xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : null;
+};
+
+/** 覚えている的がまだ使えるか */
+function aimStillGood(player, aim, year, line) {
+  if (!aim || !['sharpen', 'patch'].includes(aim.mode)) return false;
+  if (!AIM_POOL[aim.mode][groupOf(player)].includes(aim.stat)) return false;
+  if (!Number.isFinite(aim.since) || year - aim.since >= AIM_YEARS || year < aim.since) return false;
+  const v = needStatValue(player, aim.stat);
+  if (v == null) return false;
+  if (aim.mode === 'sharpen') return v < (line ?? AIM_CAP);
+  // 短所が埋まった（平均を越えた）ら選び直す
+  const base = aimBase(player);
+  return base == null || v < base + 3;
+}
+
+/**
+ * その指導者がこの選手に当てる育成の的（`{ stat, mode, since }`）。当てないなら null。
+ *
+ * - 覚えている的（`player.campAim`）がまだ使えるなら**それを続ける**（年数・上限・短所が埋まったかを見る）
+ * - 無ければ `direction`（`growthPolicy` の方向）が「長所」「短所」のときだけ新しく選ぶ。
+ *   「全体」なら的を持たない（今までどおり幅広い練習）
+ * - 選び方: 試合に効く重み ×（1 ＋ 穴 × 時間軸の重み ＋ 型の好み × 0.5）× その選手の向き
+ *   （長所は平均より高いほど、短所は低いほど）
+ * `needs` は `teamNeeds` の結果（無ければ穴は0として選ぶ）。`role` はその選手を見る席。
+ */
+export function campAim(coach, player, { needs = null, year = 0, role = null, direction = 'balanced' } = {}) {
+  const { line } = growthOf(coach);
+  if (aimStillGood(player, player?.campAim, year, line)) {
+    const { stat, mode, since } = player.campAim;
+    return { stat, mode, since };
+  }
+  if (direction !== 'sharpen' && direction !== 'patch') return null;
+  const base = aimBase(player);
+  if (base == null) return null;
+  const needW = AIM_NEED_WEIGHT[visionOf(coach).horizon] ?? 1;
+  let best = null;
+  for (const stat of AIM_POOL[direction][groupOf(player)]) {
+    const v = needStatValue(player, stat);
+    if (v == null) continue;
+    if (direction === 'sharpen' ? v < base || v >= (line ?? AIM_CAP) : v > base) continue;
+    const weight = stat === 'defense' ? aimDefenseWeight(player) : AIM_WEIGHT[stat] ?? 0;
+    const pull = 1 + needW * (needs?.stats?.[stat] ?? 0) + AIM_PREF_WEIGHT * aimPref(coach, player, stat, role);
+    const lean = direction === 'sharpen' ? 1 + (v - base) / 20 : 1 + (base - v) / 40;
+    const score = weight * pull * lean;
+    if (!best || score > best.score) best = { stat, score };
+  }
+  return best ? { stat: best.stat, mode: direction, since: year } : null;
+}
+
 /**
  * キャンプの方針（選手ごとの上書き）。投手は投手コーチ、野手は野手コーチの育成観。
  * コーチが居なければ監督。誰も居なければ null（標準のまま）。
  * ⚠ **人の球団（`strictSeats`）は監督で埋めない**。コーチの居ない側の選手は上書きせず、
  *    全体の方針を「おすすめ」（「自分で」の既定と同じ）にして、その選手はおすすめで練習する。
  *    CPU球団はこれまでどおり（全員同じ「全体×技術」の上に上書き）
+ * ⚠ **育成の的**（`campAim`）がある選手は、方向を的に合わせ、メイン練習（`assignments`）を
+ *    的の能力の練習にする。的は `aims` に入れて返し、キャンプを回した側が選手に覚えさせる
+ *    （`runCampRound`）。`needs` は `teamNeeds`、`year` は今の年（的を持ち続ける年数を数える）
  */
-export function campPlan(staff, roster, { strictSeats = false } = {}) {
+export function campPlan(staff, roster, { strictSeats = false, needs = null, year = 0 } = {}) {
   const pick = (role) =>
-    staff?.[role] || (strictSeats ? null : staff?.manager) || null;
+    staff?.[role] ? { coach: staff[role], role } : !strictSeats && staff?.manager ? { coach: staff.manager, role: null } : null;
   const players = {};
+  const assignments = {};
+  const aims = {};
   let any = false;
   for (const player of roster || []) {
-    const coach = pick(player.position === 'pitcher' ? 'pitching' : 'batting');
-    if (!coach) continue;
+    const seat = pick(player.position === 'pitcher' ? 'pitching' : 'batting');
+    if (!seat) continue;
     any = true;
-    players[player.id] = growthPolicy(coach, player);
+    const own = growthPolicy(seat.coach, player);
+    const aim = campAim(seat.coach, player, { needs, year, role: seat.role, direction: own.direction });
+    if (aim) {
+      players[player.id] = { direction: aim.mode, phase: own.phase };
+      assignments[player.id] = menuForStat(player, aim.stat, aim.mode);
+      aims[player.id] = aim;
+    } else players[player.id] = own;
   }
   if (!any) return null;
   return {
     policy: strictSeats ? { mode: 'recommended' } : { mode: 'team', direction: 'balanced', phase: 'skill' },
     players,
+    assignments,
+    aims,
   };
 }
 

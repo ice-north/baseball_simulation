@@ -170,7 +170,15 @@ function seasonSnapshot() {
   const ages = all.map(({ p }) => p.age);
   const ageBins = {}; for (const a of ages) { const b = a <= 22 ? '〜22' : a <= 26 ? '23-26' : a <= 30 ? '27-30' : a <= 34 ? '31-34' : '35〜'; ageBins[b] = (ageBins[b] || 0) + 1; }
   const roster = names().map((n) => teams[n]?.players?.length || 0);
-  return { year: league.season.year, leagues, stats, abilities, growth, world, strength, humanStrength, age: { avg: r1(avg(ages)), max: Math.max(...ages), bins: ageBins }, roster: { min: Math.min(...roster), max: Math.max(...roster), avg: r1(avg(roster)) }, players: all.length };
+  // CPU球団の監督の時間軸（育成・中間・勝負の数）と、球団ごとの勝率（年をまたいだ順位の入れ替わりを見る）
+  const horizons = {};
+  for (const [team, seats] of Object.entries(league.coaches?.teams || {})) {
+    if (hs.has(team)) continue;
+    const h = league.coaches.people?.[seats.manager]?.vision?.horizon || 'none';
+    horizons[h] = (horizons[h] || 0) + 1;
+  }
+  const winRates = Object.fromEntries(league.season.standings.map((x) => [x.team, r3(x.wins / Math.max(1, x.wins + x.losses))]));
+  return { year: league.season.year, leagues, stats, abilities, growth, horizons, winRates, world, strength, humanStrength, age: { avg: r1(avg(ages)), max: Math.max(...ages), bins: ageBins }, roster: { min: Math.min(...roster), max: Math.max(...roster), avg: r1(avg(roster)) }, players: all.length };
 }
 
 function teamDiag(n) {
@@ -219,7 +227,7 @@ while (days < 20000) {
       years.push(snap);
       out(`\n=== ${snap.year}年 終わり（${snap.seconds}秒） ===`);
       out(JSON.stringify({ leagues: snap.leagues, stats: snap.stats }, null, 0));
-      out(JSON.stringify({ growth: snap.growth }));
+      out(JSON.stringify({ growth: snap.growth, horizons: snap.horizons }));
       out(JSON.stringify({ abilities: snap.abilities, world: snap.world, strength: snap.strength, humanStrength: snap.humanStrength, age: snap.age, roster: snap.roster, players: snap.players }));
       out(JSON.stringify(snap.size));
       if (OUT) writeFileSync(OUT, JSON.stringify({ seed: SEED, years, offseasons, phaseLog, issues: Object.fromEntries(issues) }, null, 1));

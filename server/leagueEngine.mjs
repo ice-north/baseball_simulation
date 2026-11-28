@@ -366,6 +366,8 @@ export function campFallbackPlan(member, plan) {
     players: plan?.players,
     main: plan?.assignments,
     sub: plan?.subAssignments,
+    // 指導者の育成の的（`coaches.js` の `campAim`）。回したら選手に覚えさせる
+    aims: plan?.aims,
   };
 }
 
@@ -423,7 +425,7 @@ export { campSubKey };
 export function runCampRound(
   league,
   teamName,
-  { policy, players: overrides, main, sub, subTarget } = {},
+  { policy, players: overrides, main, sub, subTarget, aims } = {},
   // ⚠ **最後のクールかどうかを渡す**。経験値の消費はキャンプで1回だけで、
   //    クールごとに減らすと覚醒率が1クール目だけのものになる
   //    （`executeCampTraining` の `spendExperience`）。
@@ -473,6 +475,13 @@ export function runCampRound(
     { spendExperience: lastRound },
   );
   TEAMS_DATA[teamName] = updatedTeam;
+  // ⚠ **育成の的を選手に覚えさせる**（`coaches.js` の `campAim`）。翌年のキャンプもこの的を続ける
+  //    （毎年引き直すと積み上がらない。先方要望 #6）。的の練習を実際に当てた選手だけ
+  for (const player of updatedTeam.players) {
+    const aim = aims?.[player.id];
+    if (aim && assignments[player.id] === main?.[player.id])
+      player.campAim = { stat: aim.stat, mode: aim.mode, since: aim.since };
+  }
   // 数字にならない出来事（フォーム改造・新球種・打席の変更）は文で残す
   // ⚠ 能力の覚醒（大きく伸びた）も `isAwakening` で来る。伸びた数は `gains` に
   //    あるので、ここは「覚醒した」ことだけ書く（「ミート 63」と今の値を並べない）
@@ -2623,7 +2632,12 @@ function resolvePhase(league, now) {
           line: lines.get(`${r.team}:${r.name}`)?.line || null,
           player: retireLooks.get(`${r.team}:${r.name}`) || null,
         }));
-      coachOffseason(league, { rows: coachRows, retirees });
+      coachOffseason(league, {
+        rows: coachRows,
+        retirees,
+        // 球団の状況（戦力・主力の年齢）は年度更新の後の名簿で見る（年を取り、引退した後）
+        rosterOf: (name) => TEAMS_DATA[name]?.players,
+      });
       // 指導者の道へ進んだ人は、引退の記録の「引退後」もそれに合わせる
       // ⚠ **肩書きの形（「〇〇の打撃コーチ」と同じ名詞）で書く**。アプリは
       //    「今後は${secondCareer}として球界に残る。」と組むので、「指導者の道へ」だと文が崩れる
