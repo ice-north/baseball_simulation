@@ -10,7 +10,7 @@ import { generatePyramidTeams } from '../../src/online/pyramidLeague.js';
 import { stadiumArt, fieldArt, crowdLevel, stadiumScene } from '../../src/online/look/sceneArt.js';
 import { liveScenes, highlightIndexes, playPhrase, basesText, hasLivePlays, orderPosition } from '../../src/online/look/playByPlay.js';
 import { playTone } from '../../src/online/gamePlays.js';
-import { todayGameCard } from '../../src/online/look/todayGame.js';
+import { todayGameCard, otherGameCards } from '../../src/online/look/todayGame.js';
 import { reporterOf, reporterChat, eventScene } from '../../src/online/look/story.js';
 import { leagueBaseline, statGrade } from '../../src/online/look/statGrade.js';
 import { logoArt, logoLayersFor, logoNeedsIcons } from '../../src/online/look/logoArt.js';
@@ -189,6 +189,14 @@ const baseView = {
     },
     { id: 8, date: day(9), home: third, away: foe, homeStarter: '名前だけ', awayStarterInfo: { id: 5, name: '先発え', wins: 3, losses: 2, era: 2.5, age: 22, condition: 4 } },
   ],
+  // リーグ全体のこれからの試合（ほかの試合。先方要望 #8）。自球団の試合・別の日の試合・先発未定・下位の部も混ぜる
+  upcoming: [
+    { id: 7, date: day(7), home: foe, away: own, homeStarter: '先発い', awayStarter: '先発あ' },
+    { id: 9, date: day(7), home: third, away: pyramid[3].name, homeStarter: '先発お', awayStarter: '先発か' },
+    { id: 10, date: day(7), home: pyramid[4].name, away: pyramid[5].name, homeStarter: '', awayStarter: null },
+    { id: 11, date: day(7), home: pyramid[6].name, away: pyramid[7].name, homeStarter: '先発き' },
+    { id: 12, date: day(8), home: pyramid[8].name, away: pyramid[9].name, homeStarter: '先発く', awayStarter: '先発け' },
+  ],
 };
 const tied = baseView.standings.map((s, i) => (i === 1 ? { ...s, wins: 10, losses: 0, winRate: 1 } : s));
 const today = [
@@ -205,15 +213,18 @@ const today = [
   { teamStreaks: { [own]: { kind: 'L', count: 2 }, [foe]: { kind: 'W', count: 9 } } },
   { teamName: third, standings: baseView.standings.filter((s) => s.team !== third) },
   { nextGames: [] },
+  { upcoming: [] },
+  { teamName: pyramid[10].name, nextGames: [{ ...baseView.nextGames[0], home: pyramid[10].name, date: day(8) }] },
   // 10月のプレーオフ（ターンの外）の今日の試合
   { currentDate: { year: 2026, month: 10, day: 12 }, nextGames: [{ ...baseView.nextGames[0], date: { year: 2026, month: 10, day: 12 } }] },
   // 防御率がちょうど半端（3自責・40アウト＝2.025、7自責・120アウト＝1.575）
   { nextGames: [{ ...baseView.nextGames[0], homeStarterInfo: { id: 3, name: '先発い', wins: 2, losses: 1, era: 81 / 40 }, awayStarterInfo: { id: 2, name: '先発あ', wins: 1, losses: 0, era: 189 / 120 } }] },
 ].map((patch) => {
   const card = todayGameCard({ ...baseView, ...patch });
-  if (!card) return { patch, card: null };
+  const others = otherGameCards({ ...baseView, ...patch });
+  if (!card) return { patch, card: null, others };
   const side = ({ team, record, standing, starter }) => ({ team, record, rank: standing.rank, teams: standing.teams, starter });
-  return { patch, card: { ...card, own: side(card.own), foe: side(card.foe) } };
+  return { patch, card: { ...card, own: side(card.own), foe: side(card.foe) }, others };
 });
 // 打席の色の種類（`gamePlays.js` の `playTone`）と、送りの並びでの位置
 const tones = ['本', '三', '二', '安', '四', '死', '振', '犠', '併', '失', '走', '刺', '凡', '飛', ''].flatMap((code) => [0, 1].map((runs) => ({ code, runs, tone: playTone(code, runs) })));

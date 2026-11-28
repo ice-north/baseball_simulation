@@ -40,6 +40,8 @@ data class LeagueView(
     /** 自球団の直近5試合（古い順。server/projection.mjs の ownRecentGames）。試合結果の通知に使う */
     val recentGames: List<OwnGame> = emptyList(),
     val nextGames: List<ScheduledGame> = emptyList(),
+    /** リーグ全体のこれからの試合（server/projection.mjs の upcoming。先発予定は名前だけ）。今日の一戦の「ほかの試合」に使う */
+    val upcoming: List<ScheduledGame> = emptyList(),
     val roster: List<Player> = emptyList(),
     val lineup: JsonObject? = null,
     val phase: Phase? = null,

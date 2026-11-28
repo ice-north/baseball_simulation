@@ -146,3 +146,42 @@ fun todayGameCard(view: LeagueView): TodayGame? {
         foe = foe,
     )
 }
+
+/** 同じ日のほかの試合の1枚（Web 版 `otherGameCards` の1件） */
+data class OtherGame(
+    val id: Long?,
+    val home: String,
+    val away: String,
+    val city: String,
+    /** 「1部2位　5勝4敗」。順位表に無ければ空 */
+    val homeRecord: String,
+    val awayRecord: String,
+    /** 先発予定の名前。未定なら null */
+    val homeStarter: String?,
+    val awayStarter: String?,
+)
+
+/**
+ * 同じ日のほかの試合（先方要望 #8）。Web 版 `otherGameCards`。
+ * ⚠ ビューの `upcoming` から、自球団の一戦と同じ日の、自球団の出ない試合（並びはそのまま）。
+ *    自球団の試合が無ければ空。
+ */
+fun otherGameCards(view: LeagueView): List<OtherGame> {
+    val me = view.teamName ?: return emptyList()
+    val own = view.nextGames.firstOrNull { it.home == me || it.away == me } ?: return emptyList()
+    val date = own.date ?: return emptyList()
+    return view.upcoming
+        .filter { it.home != me && it.away != me && it.date == date }
+        .map { g ->
+            OtherGame(
+                id = g.id,
+                home = g.home,
+                away = g.away,
+                city = view.teamLabels[g.home]?.city.orEmpty(),
+                homeRecord = view.standingOf(g.home).record,
+                awayRecord = view.standingOf(g.away).record,
+                homeStarter = g.homeStarter?.takeIf { it.isNotEmpty() },
+                awayStarter = g.awayStarter?.takeIf { it.isNotEmpty() },
+            )
+        }
+}

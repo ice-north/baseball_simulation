@@ -173,6 +173,25 @@ await withDeadline(
       assert.equal(await today.locator('.online-stadium-art').count(), 1, '札に球場の絵が無い');
       assert.equal(await today.locator('.online-today-side .online-team-mark').count(), 2, '札に両球団のマークが無い');
       assert.ok((await today.locator('.online-today-starter .online-face').count()) >= 1, '札に先発の顔が無い');
+      // 縦を詰めた（先方要望 #8）。前は 320px
+      assert.ok((await today.boundingBox()).height <= 230, `今日の一戦の札が縦に長い: ${(await today.boundingBox()).height}px`);
+      // 同じ日のほかの試合: 重ねたカードの手前は1枚、点を押すとその試合が手前に来る。数秒ごとにめくる
+      const others = p.locator('.online-today-others');
+      await others.waitFor();
+      const otherCount = await others.locator('.online-today-other').count();
+      assert.ok(otherCount >= 2, `ほかの試合が ${otherCount} 件`);
+      assert.equal(await others.locator('.online-today-other.is-front').count(), 1, 'ほかの試合の手前が1枚でない');
+      const frontText = () => others.locator('.online-today-other.is-front').textContent();
+      const first = await frontText();
+      await others.locator('.online-today-dots button').nth(1).click();
+      assert.notEqual(await frontText(), first, '点を押しても手前の試合が変わらない');
+      await p.mouse.move(0, 0);
+      const second = await frontText();
+      await p.waitForFunction(
+        (text) => document.querySelector('.online-today-other.is-front')?.textContent !== text,
+        second,
+        { timeout: 9000 },
+      );
       // 段4: 番記者のメモ（背広の顔とひとこと）
       const memo = p.locator('.online-reporter-memo');
       await memo.waitFor();

@@ -1,5 +1,16 @@
 package jp.icenorth.baseball.app.ui
 
+import jp.icenorth.baseball.shared.otherGameCards
+import jp.icenorth.baseball.shared.OtherGame
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.clickable
+import androidx.compose.animation.togetherWith
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -117,6 +128,9 @@ fun PlayField(scene: LiveScene, home: String, modifier: Modifier = Modifier) {
 
 /**
  * 「今日の一戦」の札（試合タブの頭）。今日の試合が無い日は次の試合を「次の一戦」として出す。
+ * ⚠ 縦は詰めてある（先方要望 #8）。球団は横並び（マーク・名前・順位）、ひとことは VS の下、
+ *    「スタメンを見る」は見出しの右。Web 版 `TodayGame.jsx` と同じ形
+ * ⚠ 札の下に、同じ日のほかの試合を重ねて見せ、数秒ごとにめくる（`OtherGamesStack`）
  * @param onLineup 「スタメンを見る」で開く画面（null ならボタンを出さない）
  */
 @Composable
@@ -124,75 +138,198 @@ fun TodayGameCard(view: LeagueView, onLineup: (() -> Unit)?) {
     val look = LocalLook.current
     if (!look.on) return
     val card = remember(view) { todayGameCard(view) } ?: return
-    Box(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(LookNight).testTag("today-game")) {
-        StadiumBackdrop(card.home, card.city, card.crowd, Modifier.matchParentSize())
-        Column {
-            Row(
-                Modifier.fillMaxWidth()
-                    .background(Brush.verticalGradient(listOf(Color.Black.copy(alpha = 0.7f), Color.Transparent)))
-                    .padding(start = 14.dp, end = 14.dp, top = 10.dp, bottom = 14.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(
-                    "${card.title}　${card.whenText}",
-                    style = MaterialTheme.typography.titleSmall,
-                    color = Color.White,
-                    modifier = Modifier.weight(1f),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                Text(card.place, fontSize = 12.sp, color = Slate300, maxLines = 1)
+    val others = remember(view) { otherGameCards(view) }
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Box(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(LookNight).testTag("today-game")) {
+            StadiumBackdrop(card.home, card.city, card.crowd, Modifier.matchParentSize())
+            Column {
+                Row(
+                    Modifier.fillMaxWidth()
+                        .background(Brush.verticalGradient(listOf(Color.Black.copy(alpha = 0.7f), Color.Transparent)))
+                        .padding(start = 12.dp, end = 8.dp, top = 6.dp, bottom = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            "${card.title}　${card.whenText}",
+                            style = MaterialTheme.typography.titleSmall,
+                            color = Color.White,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        Text(card.place, fontSize = 11.sp, color = Slate300, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    }
+                    if (onLineup != null) {
+                        Button(
+                            onClick = onLineup,
+                            colors = ButtonDefaults.buttonColors(containerColor = LookGold, contentColor = LookGoldInk),
+                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 2.dp),
+                            modifier = Modifier.height(30.dp),
+                        ) { Text("スタメンを見る ›", fontSize = 12.sp, fontWeight = FontWeight.Bold) }
+                    }
+                }
+                Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    TodaySideBlock(view, card.own, right = false, Modifier.weight(1f))
+                    Column(Modifier.widthIn(max = 96.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text(
+                            "VS",
+                            fontFamily = LookGraduate,
+                            fontSize = 26.sp,
+                            color = LookGold,
+                            style = TextStyle(shadow = Shadow(Color(0xFFB45309), androidx.compose.ui.geometry.Offset(0f, 4f), 0f)),
+                        )
+                        if (card.note.isNotEmpty()) {
+                            Text(
+                                card.note,
+                                fontSize = 10.sp,
+                                color = Color.White,
+                                textAlign = TextAlign.Center,
+                                maxLines = 2,
+                                modifier = Modifier.background(LookNight.copy(alpha = 0.8f), RoundedCornerShape(6.dp)).padding(horizontal = 6.dp, vertical = 2.dp),
+                            )
+                        }
+                    }
+                    TodaySideBlock(view, card.foe, right = true, Modifier.weight(1f))
+                }
+                Row(Modifier.fillMaxWidth().padding(8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    StarterBlock(card.own, right = false, Modifier.weight(1f))
+                    StarterBlock(card.foe, right = true, Modifier.weight(1f))
+                }
             }
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                TodaySideBlock(view, card.own, Modifier.weight(1f))
+        }
+        OtherGamesStack(view, others)
+    }
+}
+
+@Composable
+private fun TodaySideBlock(view: LeagueView, side: TodaySide, right: Boolean, modifier: Modifier) {
+    Row(
+        modifier.padding(vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = if (right) Arrangement.spacedBy(6.dp, Alignment.End) else Arrangement.spacedBy(6.dp),
+    ) {
+        if (!right) TeamMark(side.team, size = 46.dp)
+        Column(Modifier.weight(1f, fill = false), horizontalAlignment = if (right) Alignment.End else Alignment.Start) {
+            Text(
+                view.teamLabel(side.team),
+                style = MaterialTheme.typography.titleSmall.copy(shadow = LookShadow),
+                color = Color.White,
+                textAlign = if (right) TextAlign.End else TextAlign.Start,
+                maxLines = 2,
+            )
+            if (side.record.isNotEmpty()) {
                 Text(
-                    "VS",
-                    fontFamily = LookGraduate,
-                    fontSize = 34.sp,
-                    color = LookGold,
-                    style = TextStyle(shadow = Shadow(Color(0xFFB45309), androidx.compose.ui.geometry.Offset(0f, 5f), 0f)),
+                    side.record,
+                    fontSize = 10.sp,
+                    color = Color(0xFFE2E8F0),
+                    style = TextStyle(shadow = LookShadow),
+                    textAlign = if (right) TextAlign.End else TextAlign.Start,
+                    maxLines = 2,
                 )
-                TodaySideBlock(view, card.foe, Modifier.weight(1f))
             }
-            Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                if (card.note.isNotEmpty()) {
-                    Text(
-                        card.note,
-                        fontSize = 12.sp,
-                        color = Color.White,
-                        modifier = Modifier.background(LookNight.copy(alpha = 0.8f), RoundedCornerShape(8.dp)).padding(horizontal = 10.dp, vertical = 4.dp),
+        }
+        if (right) TeamMark(side.team, size = 46.dp)
+    }
+}
+
+/** ほかの試合をめくる間隔（Web 版 `OTHER_GAMES_MS` と同じ） */
+private const val OTHER_GAMES_MS = 4000L
+
+/**
+ * 同じ日のほかの試合。カードを重ねて1枚ずつ見せ、`OTHER_GAMES_MS` ごとに次へめくる（先方要望 #8）。
+ * ⚠ 点を押すとその試合へ（押したところから、また数秒ごとにめくる）
+ */
+@Composable
+private fun OtherGamesStack(view: LeagueView, games: List<OtherGame>) {
+    if (games.isEmpty()) return
+    val count = games.size
+    var index by remember(games) { mutableIntStateOf(0) }
+    val at = index % count
+    LaunchedEffect(games, index) {
+        if (count < 2) return@LaunchedEffect
+        delay(OTHER_GAMES_MS)
+        index = (index + 1) % count
+    }
+    Column(
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(LookNight).padding(horizontal = 10.dp, vertical = 8.dp).testTag("other-games"),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("ほかの試合", fontSize = 12.sp, color = Color.White, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+            Text("${at + 1}/$count", fontSize = 11.sp, color = Slate400)
+        }
+        // 後ろに重なっている札（2枚まで）の縁を少しずつずらして見せる
+        Box(Modifier.fillMaxWidth()) {
+            val behind = minOf(2, count - 1)
+            for (k in behind downTo 1) {
+                Box(
+                    Modifier.matchParentSize()
+                        .padding(start = (6 * k).dp, end = (6 * k).dp, top = (5 * k).dp)
+                        .offset(y = (5 * k).dp)
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(Color(0xFF1E293B).copy(alpha = if (k == 1) 0.7f else 0.4f)),
+                )
+            }
+            AnimatedContent(
+                targetState = at,
+                transitionSpec = {
+                    (slideInVertically { it / 3 } + fadeIn(tween(500))) togetherWith (slideOutVertically { -it / 2 } + fadeOut(tween(400)))
+                },
+                label = "ほかの試合",
+            ) { i -> OtherGameFace(view, games[i]) }
+        }
+        if (count > 1) {
+            Row(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally)) {
+                games.forEachIndexed { i, g ->
+                    Box(
+                        Modifier.size(width = if (i == at) 18.dp else 8.dp, height = 8.dp)
+                            .clip(CircleShape)
+                            .background(if (i == at) LookGold else Color(0xFF475569))
+                            .clickable { index = i }
+                            .semantics { contentDescription = "${view.teamLabel(g.away)}対${view.teamLabel(g.home)}" },
                     )
                 }
-                Spacer(Modifier.weight(1f))
-                if (onLineup != null) {
-                    Button(
-                        onClick = onLineup,
-                        colors = ButtonDefaults.buttonColors(containerColor = LookGold, contentColor = LookGoldInk),
-                        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 4.dp),
-                        modifier = Modifier.height(32.dp),
-                    ) { Text("スタメンを見る ›", fontSize = 13.sp, fontWeight = FontWeight.Bold) }
-                }
-            }
-            Row(Modifier.fillMaxWidth().padding(start = 10.dp, end = 10.dp, bottom = 10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                StarterBlock(card.own, right = false, Modifier.weight(1f))
-                StarterBlock(card.foe, right = true, Modifier.weight(1f))
             }
         }
     }
 }
 
 @Composable
-private fun TodaySideBlock(view: LeagueView, side: TodaySide, modifier: Modifier) {
-    Column(modifier.padding(vertical = 4.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(2.dp)) {
-        TeamMark(side.team, size = 68.dp)
+private fun OtherGameFace(view: LeagueView, g: OtherGame) {
+    Column(
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(Color(0xFF273449)).padding(horizontal = 10.dp, vertical = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                TeamMark(g.away, size = 28.dp)
+                Column {
+                    Text(view.teamLabel(g.away), fontSize = 13.sp, color = Color.White, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(g.awayRecord, fontSize = 10.sp, color = Slate300, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
+            }
+            Column(Modifier.padding(horizontal = 6.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                Text("VS", fontFamily = LookGraduate, fontSize = 16.sp, color = LookGold)
+                Text(g.city.ifEmpty { "ホーム" }, fontSize = 10.sp, color = Slate400, maxLines = 1)
+            }
+            Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.End)) {
+                Column(Modifier.weight(1f, fill = false), horizontalAlignment = Alignment.End) {
+                    Text(view.teamLabel(g.home), fontSize = 13.sp, color = Color.White, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(g.homeRecord, fontSize = 10.sp, color = Slate300, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
+                TeamMark(g.home, size = 28.dp)
+            }
+        }
         Text(
-            view.teamLabel(side.team),
-            style = MaterialTheme.typography.titleSmall.copy(shadow = LookShadow),
-            color = Color.White,
+            "先発　${g.awayStarter ?: "未定"}　−　${g.homeStarter ?: "未定"}",
+            fontSize = 11.sp,
+            color = Slate300,
             textAlign = TextAlign.Center,
-            maxLines = 2,
+            modifier = Modifier.fillMaxWidth(),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
         )
-        if (side.record.isNotEmpty()) Text(side.record, fontSize = 11.sp, color = Color(0xFFE2E8F0), style = TextStyle(shadow = LookShadow))
     }
 }
 
